@@ -134,9 +134,10 @@ struct task_group {
 	struct cfs_rq **cfs_rq;
 	unsigned long shares;
 
-	atomic_t load_weight;
+#ifdef	CONFIG_SMP
 	atomic_long_t load_avg;
 	atomic_t runnable_avg;
+#endif
 #endif
 
 #ifdef CONFIG_RT_GROUP_SCHED
