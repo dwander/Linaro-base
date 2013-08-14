@@ -6,7 +6,6 @@
  * preempt_count (used for kernel preemption, interrupt count, etc.)
  */
 
-#include <linux/thread_info.h>
 #include <linux/linkage.h>
 #include <linux/list.h>
 
@@ -16,24 +15,7 @@
  */
 #define PREEMPT_NEED_RESCHED	0x80000000
 
-/*
- * We mask the PREEMPT_NEED_RESCHED bit so as not to confuse all current users
- * that think a non-zero value indicates we cannot preempt.
- */
-static __always_inline int preempt_count(void)
-{
-	return current_thread_info()->preempt_count;
-}
-
-static __always_inline int *preempt_count_ptr(void)
-{
-	return &current_thread_info()->preempt_count;
-}
-
-static __always_inline void preempt_count_set(int pc)
-{
-	*preempt_count_ptr() = pc;
-}
+#include <asm/preempt.h>
 
 #if defined(CONFIG_DEBUG_PREEMPT) || defined(CONFIG_PREEMPT_TRACER)
   extern void add_preempt_count(int val);
