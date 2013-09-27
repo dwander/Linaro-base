@@ -2588,6 +2588,11 @@ static inline bool __must_check current_clr_polling_and_test(void)
 }
 #endif
 
+static __always_inline bool need_resched(void)
+{
+	return unlikely(tif_need_resched());
+}
+
 /*
  * Thread group CPU time accounting.
  */
