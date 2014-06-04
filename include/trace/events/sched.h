@@ -430,6 +430,25 @@ TRACE_EVENT(sched_pi_setprio,
 			__entry->oldprio, __entry->newprio)
 );
 
+/*
+ * Tracepoint for waking a polling cpu without an IPI.
+ */
+TRACE_EVENT(sched_wake_idle_without_ipi,
+
+	TP_PROTO(int cpu),
+
+	TP_ARGS(cpu),
+
+	TP_STRUCT__entry(
+		__field(	int,	cpu	)
+	),
+
+	TP_fast_assign(
+		__entry->cpu	= cpu;
+	),
+
+	TP_printk("cpu=%d", __entry->cpu)
+);
 #endif /* _TRACE_SCHED_H */
 
 /* This part must be outside protection */
