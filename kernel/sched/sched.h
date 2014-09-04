@@ -11,6 +11,7 @@
 #include "cpuacct.h"
 
 struct rq;
+struct cpuidle_state;
 
 extern __read_mostly int scheduler_running;
 
@@ -510,6 +511,11 @@ struct rq {
 
 #ifdef CONFIG_SMP
 	struct llist_head wake_list;
+#endif
+
+#ifdef CONFIG_CPU_IDLE
+	/* Must be inspected within a rcu lock section */
+	struct cpuidle_state *idle_state;
 #endif
 };
 
@@ -1039,6 +1045,30 @@ extern void idle_exit_fair(struct rq *this_rq);
 static inline void idle_enter_fair(struct rq *rq) { }
 static inline void idle_exit_fair(struct rq *rq) { }
 
+#endif
+
+#ifdef CONFIG_CPU_IDLE
+static inline void idle_set_state(struct rq *rq,
+				  struct cpuidle_state *idle_state)
+{
+	rq->idle_state = idle_state;
+}
+
+static inline struct cpuidle_state *idle_get_state(struct rq *rq)
+{
+	WARN_ON(!rcu_read_lock_held());
+	return rq->idle_state;
+}
+#else
+static inline void idle_set_state(struct rq *rq,
+				  struct cpuidle_state *idle_state)
+{
+}
+
+static inline struct cpuidle_state *idle_get_state(struct rq *rq)
+{
+	return NULL;
+}
 #endif
 
 extern void sysrq_sched_debug_show(void);
