@@ -22,6 +22,7 @@
 #include <linux/pagemap.h>
 #include <linux/export.h>
 #include <linux/hid.h>
+#include <linux/valign.h>
 #include <asm/unaligned.h>
 
 #include <linux/usb/composite.h>
@@ -1872,6 +1873,15 @@ error:
 	return ret;
 }
 
+static void __ffs_init_stringtabs(struct usb_gadget_strings **stringtabs,
+	struct usb_gadget_strings *t, unsigned len)
+{
+		do {
+			*stringtabs++ = t++;
+		} while (--len);
+		*stringtabs = NULL;
+}
+
 static int __ffs_data_got_strings(struct ffs_data *ffs,
 				  char *const _data, size_t len)
 {
@@ -1908,31 +1918,22 @@ static int __ffs_data_got_strings(struct ffs_data *ffs,
 
 	/* Allocate everything in one chunk so there's less maintenance. */
 	{
-		struct {
-			struct usb_gadget_strings *stringtabs[lang_count + 1];
-			struct usb_gadget_strings stringtab[lang_count];
-			struct usb_string strings[lang_count*(needed_count+1)];
-		} *d;
-		unsigned i = 0;
+		int strtabslen = paddedsize(0, lang_count+1,
+			struct usb_gadget_strings *, struct usb_gadget_strings);
+		int strtablen = paddedsize(strtabslen, lang_count,
+			struct usb_gadget_strings, struct usb_string);
+		int strlen = paddedsize(strtabslen + strtablen,
+			lang_count*(needed_count+1), struct usb_string, int);
 
-		d = kmalloc(sizeof *d, GFP_KERNEL);
-		if (unlikely(!d)) {
-			kfree(_data);
-			return -ENOMEM;
-		}
+		stringtabs = kmalloc(strtabslen + strtablen + strlen,
+			GFP_KERNEL);
 
-		stringtabs = d->stringtabs;
-		t = d->stringtab;
-		i = lang_count;
-		do {
-			*stringtabs++ = t++;
-		} while (--i);
-		*stringtabs = NULL;
-
-		stringtabs = d->stringtabs;
-		t = d->stringtab;
-		s = d->strings;
+		t = paddedstart(stringtabs, strtabslen,
+			struct usb_gadget_strings);
+		s = paddedstart(t, strtablen, struct usb_string);
 		strings = s;
+
+		__ffs_init_stringtabs(stringtabs, t, lang_count);
 	}
 
 	/* For each language */
