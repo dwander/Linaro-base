@@ -425,7 +425,7 @@ static int exynos_wkup_irq_set_type(struct irq_data *irqd, unsigned int type)
 	return 0;
 }
 
-static u64 exynos_eint_wake_mask = 0xffffffffffffffff;
+static u64 exynos_eint_wake_mask = 0xffffffffffffffffULL;
 
 u64 exynos_get_eint_wake_mask(void)
 {
