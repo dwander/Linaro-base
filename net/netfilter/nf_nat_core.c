@@ -123,8 +123,9 @@ hash_by_src(const struct net *net, u16 zone,
 	unsigned int hash;
 
 	/* Original src, to ensure we map it consistently if poss. */
-	hash = jhash2((u32 *)&tuple->src, sizeof(tuple->src) / sizeof(u32),
-		      tuple->dst.protonum ^ zone ^ nf_conntrack_hash_rnd);
+	hash = jhash_3words((__force u32)tuple->src.u3.ip,
+			    (__force u32)tuple->src.u3.all,
+			    tuple->dst.protonum, 0);
 	return ((u64)hash * net->ct.nat_htable_size) >> 32;
 }
 
@@ -254,9 +255,9 @@ find_best_ips_proto(u16 zone, struct nf_conntrack_tuple *tuple,
 	 * client coming from the same IP (some Internet Banking sites
 	 * like this), even across reboots.
 	 */
-	j = jhash2((u32 *)&tuple->src.u3, sizeof(tuple->src.u3) / sizeof(u32),
-		   range->flags & NF_NAT_RANGE_PERSISTENT ?
-			0 : (__force u32)tuple->dst.u3.all[max] ^ zone);
+	j = jhash_2words((__force u32)tuple->src.u3.ip,
+			 range->flags & NF_NAT_RANGE_PERSISTENT ?
+			      0 : (__force u32)tuple->dst.u3.ip, 0);
 
 	full_range = false;
 	for (i = 0; i <= max; i++) {
