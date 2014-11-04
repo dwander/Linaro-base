@@ -15,5 +15,7 @@ setup_machine_tags(phys_addr_t __atags_pointer, unsigned int machine_nr)
 	early_print("no ATAGS support: can't continue\n");
 	while (true);
 	unreachable();
+
+	return NULL;
 }
 #endif
