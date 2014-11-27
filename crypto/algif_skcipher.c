@@ -448,14 +448,20 @@ static int skcipher_recvmsg(struct kiocb *unused, struct socket *sock,
 		char __user *from = iov->iov_base;
 
 		while (seglen) {
-			used = ctx->used;
-			if (!used) {
+			sgl = list_first_entry(&ctx->tsgl,
+					       struct skcipher_sg_list, list);
+			sg = sgl->sg;
+
+			while (!sg->length)
+				sg++;
+
+			if (!ctx->used) {
 				err = skcipher_wait_for_data(sk, flags);
 				if (err)
 					goto unlock;
 			}
 
-			used = min_t(unsigned long, used, seglen);
+			used = min_t(unsigned long, ctx->used, seglen);
 
 			used = af_alg_make_sg(&ctx->rsgl, from, used, 1);
 			err = used;
