@@ -4401,7 +4401,7 @@ struct sg_lb_stats {
 	unsigned int idle_cpus;
 	unsigned int group_weight;
 	int group_imb; /* Is there an imbalance in the group ? */
-	int group_has_capacity; /* Is there extra capacity in the group? */
+	int group_has_free_capacity;
 };
 
 /*
@@ -4755,7 +4755,7 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 	sgs->group_capacity = sg_capacity(env, group);
 
 	if (sgs->group_capacity > sgs->sum_nr_running)
-		sgs->group_has_capacity = 1;
+		sgs->group_has_free_capacity = 1;
 }
 
 /**
@@ -4850,7 +4850,7 @@ static inline void update_sd_lb_stats(struct lb_env *env,
 		 * with a large weight task outweighs the tasks on the system).
 		 */
 		if (prefer_sibling && sds->local &&
-		    sds->local_stat.group_has_capacity)
+		    sds->local_stat.group_has_free_capacity)
 			sgs->group_capacity = min(sgs->group_capacity, 1U);
 
 		if (update_sd_pick_busiest(env, sds, sg, sgs)) {
@@ -5109,8 +5109,8 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 		goto force_balance;
 
 	/* SD_BALANCE_NEWIDLE trumps SMP nice when underutilized */
-	if (env->idle == CPU_NEWLY_IDLE && local->group_has_capacity &&
-	    !busiest->group_has_capacity)
+	if (env->idle == CPU_NEWLY_IDLE && local->group_has_free_capacity &&
+	    !busiest->group_has_free_capacity)
 		goto force_balance;
 
 	/*
