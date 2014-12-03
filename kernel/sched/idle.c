@@ -241,7 +241,7 @@ static void cpu_idle_loop(void)
 		 * means that clearing polling needs to be visible
 		 * before doing these things.
 		 */
-		smp_mb__after_atomic();
+		smp_mb();
 
 		sched_ttwu_pending();
 		schedule_preempt_disabled();
