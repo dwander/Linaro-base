@@ -98,7 +98,6 @@
  */
 
 #include <crypto/drbg.h>
-#include <linux/string.h>
 
 /***************************************************************
  * Backend cipher definitions available to DRBG
@@ -492,9 +491,9 @@ static int drbg_ctr_df(struct drbg_state *drbg,
 	ret = 0;
 
 out:
-	memzero_explicit(iv, drbg_blocklen(drbg));
-	memzero_explicit(temp, drbg_statelen(drbg));
-	memzero_explicit(pad, drbg_blocklen(drbg));
+	memset(iv, 0, drbg_blocklen(drbg));
+	memset(temp, 0, drbg_statelen(drbg));
+	memset(pad, 0, drbg_blocklen(drbg));
 	return ret;
 }
 
@@ -568,9 +567,9 @@ static int drbg_ctr_update(struct drbg_state *drbg, struct list_head *seed,
 	ret = 0;
 
 out:
-	memzero_explicit(temp, drbg_statelen(drbg) + drbg_blocklen(drbg));
+	memset(temp, 0, drbg_statelen(drbg) + drbg_blocklen(drbg));
 	if (2 != reseed)
-		memzero_explicit(df_data, drbg_statelen(drbg));
+		memset(df_data, 0, drbg_statelen(drbg));
 	return ret;
 }
 
@@ -628,7 +627,7 @@ static int drbg_ctr_generate(struct drbg_state *drbg,
 		len = ret;
 
 out:
-	memzero_explicit(drbg->scratchpad, drbg_blocklen(drbg));
+	memset(drbg->scratchpad, 0, drbg_blocklen(drbg));
 	return len;
 }
 
@@ -866,7 +865,7 @@ static int drbg_hash_df(struct drbg_state *drbg,
 	}
 
 out:
-	memzero_explicit(tmp, drbg_blocklen(drbg));
+	memset(tmp, 0, drbg_blocklen(drbg));
 	return ret;
 }
 
@@ -910,7 +909,7 @@ static int drbg_hash_update(struct drbg_state *drbg, struct list_head *seed,
 	ret = drbg_hash_df(drbg, drbg->C, drbg_statelen(drbg), &datalist2);
 
 out:
-	memzero_explicit(drbg->scratchpad, drbg_statelen(drbg));
+	memset(drbg->scratchpad, 0, drbg_statelen(drbg));
 	return ret;
 }
 
@@ -945,7 +944,7 @@ static int drbg_hash_process_addtl(struct drbg_state *drbg,
 		     drbg->scratchpad, drbg_blocklen(drbg));
 
 out:
-	memzero_explicit(drbg->scratchpad, drbg_blocklen(drbg));
+	memset(drbg->scratchpad, 0, drbg_blocklen(drbg));
 	return ret;
 }
 
@@ -992,7 +991,7 @@ static int drbg_hash_hashgen(struct drbg_state *drbg,
 	}
 
 out:
-	memzero_explicit(drbg->scratchpad,
+	memset(drbg->scratchpad, 0,
 	       (drbg_statelen(drbg) + drbg_blocklen(drbg)));
 	return len;
 }
@@ -1041,7 +1040,7 @@ static int drbg_hash_generate(struct drbg_state *drbg,
 	drbg_add_buf(drbg->V, drbg_statelen(drbg), u.req, 8);
 
 out:
-	memzero_explicit(drbg->scratchpad, drbg_blocklen(drbg));
+	memset(drbg->scratchpad, 0, drbg_blocklen(drbg));
 	return len;
 }
 
