@@ -5663,9 +5663,12 @@ static unsigned long scale_rt_capacity(int cpu)
 	 */
 	age_stamp = ACCESS_ONCE(rq->age_stamp);
 	avg = ACCESS_ONCE(rq->rt_avg);
+	delta = __rq_clock_broken(rq) - age_stamp;
 
-	total = sched_avg_period() + (rq_clock(rq) - age_stamp);
+	if (unlikely(delta < 0))
+		delta = 0;
 
+	total = sched_avg_period() + delta;
 	used = div_u64(avg, total);
 
 	if (likely(used < SCHED_CAPACITY_SCALE))
