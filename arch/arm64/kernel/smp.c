@@ -35,7 +35,6 @@
 #include <linux/clockchips.h>
 #include <linux/completion.h>
 #include <linux/of.h>
-#include <linux/irq_work.h>
 
 #include <asm/atomic.h>
 #include <asm/cacheflush.h>
@@ -63,7 +62,6 @@ enum ipi_msg_type {
 	IPI_CALL_FUNC_SINGLE,
 	IPI_CPU_STOP,
 	IPI_TIMER,
-	IPI_IRQ_WORK,
 };
 
 static DEFINE_RAW_SPINLOCK(boot_lock);
@@ -443,14 +441,6 @@ void arch_send_call_function_single_ipi(int cpu)
 	smp_cross_call(cpumask_of(cpu), IPI_CALL_FUNC_SINGLE);
 }
 
-#ifdef CONFIG_IRQ_WORK
-void arch_irq_work_raise(void)
-{
-	if (smp_cross_call)
-		smp_cross_call(cpumask_of(smp_processor_id()), IPI_IRQ_WORK);
-}
-#endif
-
 static const char *ipi_types[NR_IPI] = {
 #define S(x,s)	[x - IPI_RESCHEDULE] = s
 	S(IPI_RESCHEDULE, "Rescheduling interrupts"),
@@ -458,7 +448,6 @@ static const char *ipi_types[NR_IPI] = {
 	S(IPI_CALL_FUNC_SINGLE, "Single function call interrupts"),
 	S(IPI_CPU_STOP, "CPU stop interrupts"),
 	S(IPI_TIMER, "Timer broadcast interrupts"),
-	S(IPI_IRQ_WORK, "IRQ work interrupts"),
 };
 
 void show_ipi_list(struct seq_file *p, int prec)
@@ -548,14 +537,6 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	case IPI_TIMER:
 		irq_enter();
 		tick_receive_broadcast();
-		irq_exit();
-		break;
-#endif
-
-#ifdef CONFIG_IRQ_WORK
-	case IPI_IRQ_WORK:
-		irq_enter();
-		irq_work_run();
 		irq_exit();
 		break;
 #endif
