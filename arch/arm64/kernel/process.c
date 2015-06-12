@@ -132,7 +132,7 @@ void machine_restart(char *cmd)
 
 	/* Now call the architecture specific reboot code. */
 	if (arm_pm_restart)
-		arm_pm_restart(reboot_mode, cmd);
+		arm_pm_restart('h', cmd);
 
 	/*
 	 * Whoops - the architecture was unable to reboot.
