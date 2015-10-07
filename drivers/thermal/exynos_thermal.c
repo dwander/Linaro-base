@@ -67,6 +67,12 @@ static unsigned int GPU_TH_TEMP3 = 100;
 static unsigned int GPU_TH_TEMP4 = 105;
 static unsigned int GPU_TH_TEMP5 = 110;
 
+static unsigned int ISP_TH_TEMP1 = 85;
+static unsigned int ISP_TH_TEMP2 = 95;
+static unsigned int ISP_TH_TEMP3 = 100;
+static unsigned int ISP_TH_TEMP4 = 105;
+static unsigned int ISP_TH_TEMP5 = 110;
+
 module_param_named(tmu_cpu_normal, HOT_NORMAL_TEMP, uint, S_IWUSR | S_IRUGO);
 module_param_named(tmu_cpu_critical, HOT_CRITICAL_TEMP, uint, S_IWUSR | S_IRUGO);
 
@@ -78,6 +84,12 @@ module_param_named(tmu_gpu_temp2, GPU_TH_TEMP2, uint, S_IWUSR | S_IRUGO);
 module_param_named(tmu_gpu_temp3, GPU_TH_TEMP3, uint, S_IWUSR | S_IRUGO);
 module_param_named(tmu_gpu_temp4, GPU_TH_TEMP4, uint, S_IWUSR | S_IRUGO);
 module_param_named(tmu_gpu_temp5, GPU_TH_TEMP5, uint, S_IWUSR | S_IRUGO);
+
+module_param_named(tmu_isp_temp1, ISP_TH_TEMP1, uint, S_IWUSR | S_IRUGO);
+module_param_named(tmu_isp_temp2, ISP_TH_TEMP2, uint, S_IWUSR | S_IRUGO);
+module_param_named(tmu_isp_temp3, ISP_TH_TEMP3, uint, S_IWUSR | S_IRUGO);
+module_param_named(tmu_isp_temp4, ISP_TH_TEMP4, uint, S_IWUSR | S_IRUGO);
+module_param_named(tmu_isp_temp5, ISP_TH_TEMP5, uint, S_IWUSR | S_IRUGO);
 
 #ifdef CONFIG_ARM_EXYNOS_MP_CPUFREQ
 static struct cpumask mp_cluster_cpus[CA_END];
@@ -108,11 +120,13 @@ extern int gpu_is_power_on(void);
 static enum tmu_noti_state_t tmu_old_state = TMU_NORMAL;
 static enum gpu_noti_state_t gpu_old_state = GPU_NORMAL;
 static enum mif_noti_state_t mif_old_state = MIF_TH_LV1;
+static enum isp_noti_state_t isp_old_state = ISP_NORMAL;
 static bool is_suspending;
 static bool is_cpu_hotplugged_out;
 
 static BLOCKING_NOTIFIER_HEAD(exynos_tmu_notifier);
 static BLOCKING_NOTIFIER_HEAD(exynos_gpu_notifier);
+static BLOCKING_NOTIFIER_HEAD(exynos_isp_notifier);
 
 struct exynos_tmu_data {
 	struct exynos_tmu_platform_data *pdata;
@@ -547,6 +561,41 @@ static void exynos_check_gpu_noti_state(int temp)
 #endif
 
 	exynos_gpu_call_notifier(cur_state);
+}
+
+int exynos_tmu_isp_add_notifier(struct notifier_block *n)
+{
+	return blocking_notifier_chain_register(&exynos_isp_notifier, n);
+}
+
+void exynos_isp_call_notifier(enum isp_noti_state_t cur_state)
+{
+	if (cur_state != isp_old_state) {
+		pr_info("isp temperature state %d to %d\n", isp_old_state, cur_state);
+		blocking_notifier_call_chain(&exynos_isp_notifier, cur_state, &cur_state);
+		isp_old_state = cur_state;
+	}
+}
+
+static void exynos_check_isp_noti_state(int temp)
+{
+	enum isp_noti_state_t cur_state;
+
+	/* check current temperature state */
+	if (temp >= ISP_TH_TEMP5)
+		cur_state = ISP_TRIPPING;
+	else if (temp >= ISP_TH_TEMP4 && temp < ISP_TH_TEMP5)
+		cur_state = ISP_THROTTLING4;
+	else if (temp >= ISP_TH_TEMP3 && temp < ISP_TH_TEMP4)
+		cur_state = ISP_THROTTLING3;
+	else if (temp >= ISP_TH_TEMP2 && temp < ISP_TH_TEMP3)
+		cur_state = ISP_THROTTLING2;
+	else if (temp >= ISP_TH_TEMP1 && temp < ISP_TH_TEMP2)
+		cur_state = ISP_THROTTLING1;
+	else
+		cur_state = ISP_NORMAL;
+
+	exynos_isp_call_notifier(cur_state);
 }
 
 /* Get temperature callback functions for thermal zone */
@@ -1047,7 +1096,8 @@ static int exynos_tmu_read(struct exynos_tmu_data *data)
 	exynos_check_tmu_noti_state(max);
 	exynos_check_mif_noti_state(max);
 	exynos_check_gpu_noti_state(gpu_temp);
-
+	exynos_check_isp_noti_state(alltemp[3]);
+	
 	mutex_unlock(&data->lock);
 #if defined(CONFIG_CPU_THERMAL_IPA)
 	check_switch_ipa_on(max);

@@ -28,19 +28,21 @@
 #define MIF_TH_TEMP2		95
 #endif
 
-#if defined(CONFIG_SOC_EXYNOS5430_REV_1)
+#ifdef CONFIG_SOC_EXYNOS5430_REV_1
 #define GPU_TH_TEMP1		90
 #define GPU_TH_TEMP2		95
 #define GPU_TH_TEMP3		100
 #define GPU_TH_TEMP4		105
 #define GPU_TH_TEMP5		115
-#elif defined(CONFIG_SOC_EXYNOS5422)
+#endif
+#ifdef CONFIG_SOC_EXYNOS5422
 #define GPU_TH_TEMP1		80
 #define GPU_TH_TEMP2		90
 #define GPU_TH_TEMP3		95
 #define GPU_TH_TEMP4		100
 #define GPU_TH_TEMP5		110
-#elif defined(CONFIG_SOC_EXYNOS5433)
+#endif
+#if defined(CONFIG_SOC_EXYNOS5433)
 //
 #else
 #define GPU_TH_TEMP1		85
@@ -48,6 +50,18 @@
 #define GPU_TH_TEMP3		95
 #define GPU_TH_TEMP4		100
 #define GPU_TH_TEMP5		110
+#endif
+
+#if defined(CONFIG_SOC_EXYNOS5433)
+enum isp_noti_state_t {
+	ISP_NORMAL = 0,
+	ISP_COLD,
+	ISP_THROTTLING1,
+	ISP_THROTTLING2,
+	ISP_THROTTLING3,
+	ISP_THROTTLING4,
+	ISP_TRIPPING,
+};
 #endif
 
 enum tmu_status_t {
