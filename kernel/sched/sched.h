@@ -599,7 +599,6 @@ struct rq {
 	struct sched_domain *sd;
 
 	unsigned long cpu_capacity;
-	unsigned long cpu_capacity_orig;
 
 	unsigned char idle_balance;
 	/* For active balancing */
@@ -624,6 +623,7 @@ struct rq {
 	/* This is used to determine avg_idle's max value */
 	u64 max_idle_balance_cost;
 #endif
+	unsigned long cpu_capacity_orig;
 
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
 	u64 prev_irq_time;
