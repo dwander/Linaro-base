@@ -404,6 +404,8 @@ static ssize_t accessibility_store(struct device *dev,
 //gm
 void mdnie_toggle_negative(void)
 {
+	if(!g_mdnie->toggle_negative)
+		return;
 	mutex_lock(&g_mdnie->lock);
 	g_mdnie->accessibility = !g_mdnie->accessibility;
 	mutex_unlock(&g_mdnie->lock);
@@ -646,6 +648,36 @@ static ssize_t hmtColorTemp_store(struct device *dev,
 }
 #endif
 
+static ssize_t toggle_negative_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mdnie_info *mdnie = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%d\n", mdnie->toggle_negative);
+
+}
+
+static ssize_t toggle_negative_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mdnie_info *mdnie = dev_get_drvdata(dev);
+	unsigned int value;
+	int ret;
+	static unsigned int update;
+
+	ret = kstrtoul(buf, 0, (unsigned long *)&value);
+	if (ret < 0)
+		return ret;
+
+	dev_info(dev, "%s: value=%d\n", __func__, value);
+
+	mutex_lock(&mdnie->lock);
+	mdnie->toggle_negative = value;
+	mutex_unlock(&mdnie->lock);
+
+	return count;
+}
+
 static struct device_attribute mdnie_attributes[] = {
 	__ATTR(mode, 0664, mode_show, mode_store),
 	__ATTR(scenario, 0664, scenario_show, scenario_store),
@@ -654,6 +686,7 @@ static struct device_attribute mdnie_attributes[] = {
 	__ATTR(color_correct, 0444, color_correct_show, NULL),
 	__ATTR(bypass, 0664, bypass_show, bypass_store),
 	__ATTR(auto_brightness, 0664, auto_brightness_show, auto_brightness_store),
+	__ATTR(toggle_negative, 0664, toggle_negative_show, toggle_negative_store),
 	__ATTR(mdnie, 0444, mdnie_show, NULL),
 	__ATTR(sensorRGB, 0664, sensorRGB_show, sensorRGB_store),
 #ifdef CONFIG_LCD_HMT
