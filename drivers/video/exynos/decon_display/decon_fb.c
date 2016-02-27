@@ -29,6 +29,10 @@
 #include <linux/reboot.h>
 #include <linux/irq.h>
 
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
+#endif
+
 #include <mach/map.h>
 #include <mach/regs-clock.h>
 #include <plat/cpu.h>
@@ -1055,6 +1059,9 @@ static int s3c_fb_blank(int blank_mode, struct fb_info *info)
 			}
 		}
 #endif
+#ifdef CONFIG_POWERSUSPEND
+		set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
+#endif
 		break;
 
 	case FB_BLANK_UNBLANK:
@@ -1091,6 +1098,9 @@ static int s3c_fb_blank(int blank_mode, struct fb_info *info)
 			/* Check TUI State and decrease count */
 			trustedui_blank_dec();
 		}
+#endif
+#ifdef CONFIG_POWERSUSPEND
+		set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
 #endif
 		break;
 
