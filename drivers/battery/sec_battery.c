@@ -2098,10 +2098,15 @@ static void sec_bat_get_battery_info(
 			pr_info("%s : forced full-charged sequence for the capacity(%d)\n",
 				__func__, battery->capacity);
 		}
-		/* update capacity max */
-		value.intval = battery->capacity;
-		psy_do_property(battery->pdata->fuelgauge_name, set,
-			POWER_SUPPLY_PROP_CHARGE_FULL, value);
+
+		if (value.intval >= battery->pdata->full_condition_soc &&
+			battery->voltage_now >= (battery->pdata->recharge_condition_vcell - 50)) {
+			/* update capacity max */
+			value.intval = battery->capacity;
+			psy_do_property(battery->pdata->fuelgauge_name, set,
+				POWER_SUPPLY_PROP_CHARGE_FULL, value);
+		}
+
 		old_ts = c_ts;
 	}
 #else
