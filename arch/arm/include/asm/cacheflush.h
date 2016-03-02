@@ -213,6 +213,7 @@ extern void copy_to_user_page(struct vm_area_struct *, struct page *,
 static inline void __flush_icache_all(void)
 {
 	__flush_icache_preferred();
+	dsb();
 }
 
 /*
@@ -221,6 +222,12 @@ static inline void __flush_icache_all(void)
 #define flush_cache_louis()		__cpuc_flush_kern_louis()
 
 #define flush_cache_all()		__cpuc_flush_kern_all()
+
+#ifndef CONFIG_SMP
+#define flush_all_cpu_caches()		flush_cache_all()
+#else
+extern void flush_all_cpu_caches(void);
+#endif
 
 static inline void vivt_flush_cache_mm(struct mm_struct *mm)
 {

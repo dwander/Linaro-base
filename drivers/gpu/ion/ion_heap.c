@@ -23,6 +23,7 @@
 #include <linux/sched.h>
 #include <linux/scatterlist.h>
 #include <linux/vmalloc.h>
+
 #include "ion_priv.h"
 
 void *ion_heap_map_kernel(struct ion_heap *heap,
@@ -56,6 +57,9 @@ void *ion_heap_map_kernel(struct ion_heap *heap,
 	vaddr = vmap(pages, npages, VM_MAP, pgprot);
 	vfree(pages);
 
+	if (vaddr == NULL)
+		return ERR_PTR(-ENOMEM);
+
 	return vaddr;
 }
 
@@ -74,6 +78,14 @@ int ion_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 	struct scatterlist *sg;
 	int i;
 
+#ifdef CONFIG_TIMA_IOMMU_OPT
+        if (buffer->size) {
+		/* iommu optimization- needs to be turned ON from
+		 * the tz side.
+		 */
+                cpu_v7_tima_iommu_opt(vma->vm_start, vma->vm_end, (unsigned long)vma->vm_mm->pgd);
+        }
+#endif /* CONFIG_TIMA_IOMMU_OPT */
 	for_each_sg(table->sgl, sg, table->nents, i) {
 		struct page *page = sg_page(sg);
 		unsigned long remainder = vma->vm_end - addr;
@@ -134,8 +146,22 @@ end:
 	return ret;
 }
 
-void ion_heap_free_page(struct ion_buffer *buffer, struct page *page,
-		       unsigned int order)
+struct page *ion_heap_alloc_pages(struct ion_buffer *buffer, gfp_t gfp_flags,
+				  unsigned int order)
+{
+	struct page *page = alloc_pages(gfp_flags, order);
+
+	if (!page)
+		return page;
+
+	if (ion_buffer_fault_user_mappings(buffer))
+		split_page(page, order);
+
+	return page;
+}
+
+void ion_heap_free_pages(struct ion_buffer *buffer, struct page *page,
+			 unsigned int order)
 {
 	int i;
 
@@ -149,10 +175,10 @@ void ion_heap_free_page(struct ion_buffer *buffer, struct page *page,
 
 void ion_heap_freelist_add(struct ion_heap *heap, struct ion_buffer * buffer)
 {
-	rt_mutex_lock(&heap->lock);
+	spin_lock(&heap->free_lock);
 	list_add(&buffer->list, &heap->free_list);
 	heap->free_list_size += buffer->size;
-	rt_mutex_unlock(&heap->lock);
+	spin_unlock(&heap->free_lock);
 	wake_up(&heap->waitqueue);
 }
 
@@ -160,34 +186,41 @@ size_t ion_heap_freelist_size(struct ion_heap *heap)
 {
 	size_t size;
 
-	rt_mutex_lock(&heap->lock);
+	spin_lock(&heap->free_lock);
 	size = heap->free_list_size;
-	rt_mutex_unlock(&heap->lock);
+	spin_unlock(&heap->free_lock);
 
 	return size;
 }
 
 size_t ion_heap_freelist_drain(struct ion_heap *heap, size_t size)
 {
-	struct ion_buffer *buffer, *tmp;
+	struct ion_buffer *buffer;
 	size_t total_drained = 0;
+	bool by_shrinker = (size != 0);
 
 	if (ion_heap_freelist_size(heap) == 0)
 		return 0;
 
-	rt_mutex_lock(&heap->lock);
+	spin_lock(&heap->free_lock);
 	if (size == 0)
 		size = heap->free_list_size;
 
-	list_for_each_entry_safe(buffer, tmp, &heap->free_list, list) {
+	while (!list_empty(&heap->free_list)) {
 		if (total_drained >= size)
 			break;
+		buffer = list_first_entry(&heap->free_list, struct ion_buffer,
+					  list);
 		list_del(&buffer->list);
-		ion_buffer_destroy(buffer);
 		heap->free_list_size -= buffer->size;
 		total_drained += buffer->size;
+		spin_unlock(&heap->free_lock);
+		if (by_shrinker)
+			buffer->flags |= ION_FLAG_SHRINKER_FREE;
+		ion_buffer_destroy(buffer);
+		spin_lock(&heap->free_lock);
 	}
-	rt_mutex_unlock(&heap->lock);
+	spin_unlock(&heap->free_lock);
 
 	return total_drained;
 }
@@ -202,16 +235,16 @@ int ion_heap_deferred_free(void *data)
 		wait_event_freezable(heap->waitqueue,
 				     ion_heap_freelist_size(heap) > 0);
 
-		rt_mutex_lock(&heap->lock);
+		spin_lock(&heap->free_lock);
 		if (list_empty(&heap->free_list)) {
-			rt_mutex_unlock(&heap->lock);
+			spin_unlock(&heap->free_lock);
 			continue;
 		}
 		buffer = list_first_entry(&heap->free_list, struct ion_buffer,
 					  list);
 		list_del(&buffer->list);
 		heap->free_list_size -= buffer->size;
-		rt_mutex_unlock(&heap->lock);
+		spin_unlock(&heap->free_lock);
 		ion_buffer_destroy(buffer);
 	}
 
@@ -224,7 +257,7 @@ int ion_heap_init_deferred_free(struct ion_heap *heap)
 
 	INIT_LIST_HEAD(&heap->free_list);
 	heap->free_list_size = 0;
-	rt_mutex_init(&heap->lock);
+	spin_lock_init(&heap->free_lock);
 	init_waitqueue_head(&heap->waitqueue);
 	heap->task = kthread_run(ion_heap_deferred_free, heap,
 				 "%s", heap->name);
@@ -254,6 +287,9 @@ struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)
 	case ION_HEAP_TYPE_CHUNK:
 		heap = ion_chunk_heap_create(heap_data);
 		break;
+	case ION_HEAP_TYPE_DMA:
+		heap = ion_cma_heap_create(heap_data);
+		break;
 	default:
 		pr_err("%s: Invalid heap type %d\n", __func__,
 		       heap_data->type);
@@ -269,6 +305,7 @@ struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)
 
 	heap->name = heap_data->name;
 	heap->id = heap_data->id;
+
 	return heap;
 }
 
@@ -289,6 +326,9 @@ void ion_heap_destroy(struct ion_heap *heap)
 		break;
 	case ION_HEAP_TYPE_CHUNK:
 		ion_chunk_heap_destroy(heap);
+		break;
+	case ION_HEAP_TYPE_DMA:
+		ion_cma_heap_destroy(heap);
 		break;
 	default:
 		pr_err("%s: Invalid heap type %d\n", __func__,

@@ -82,6 +82,8 @@
 #include <asm/paravirt.h>
 #endif
 
+#include <linux/sec_debug.h>
+
 #include "sched.h"
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
@@ -1615,21 +1617,13 @@ static void __sched_fork(struct task_struct *p)
  * load-balance).
  */
 #if defined(CONFIG_SMP) && defined(CONFIG_FAIR_GROUP_SCHED)
+	p->se.avg.remainder = 0;
+#ifdef CONFIG_SCHED_HMP
+	p->se.avg.hmp_last_up_migration = 0;
+	p->se.avg.hmp_last_down_migration = 0;
+#else
 	p->se.avg.runnable_avg_period = 0;
 	p->se.avg.runnable_avg_sum = 0;
-#ifdef CONFIG_SCHED_HMP
-	/* keep LOAD_AVG_MAX in sync with fair.c if load avg series is changed */
-#define LOAD_AVG_MAX 47742
-	if (p->mm) {
-		p->se.avg.hmp_last_up_migration = 0;
-		p->se.avg.hmp_last_down_migration = 0;
-		p->se.avg.load_avg_ratio = 1023;
-		p->se.avg.load_avg_contrib =
-				(1023 * scale_load_down(p->se.load.weight));
-		p->se.avg.runnable_avg_period = LOAD_AVG_MAX;
-		p->se.avg.runnable_avg_sum = LOAD_AVG_MAX;
-		p->se.avg.usage_avg_sum = LOAD_AVG_MAX;
-	}
 #endif
 #endif
 #ifdef CONFIG_SCHEDSTATS
@@ -2055,6 +2049,13 @@ unsigned long nr_running(void)
 
 	return sum;
 }
+
+#ifdef CONFIG_SCHED_HMP
+unsigned long nr_running_cpu(unsigned int cpu)
+{
+	return cpu_rq(cpu)->nr_running;
+}
+#endif
 
 unsigned long long nr_context_switches(void)
 {
@@ -3030,6 +3031,7 @@ need_resched:
 		 */
 		cpu = smp_processor_id();
 		rq = cpu_rq(cpu);
+		sec_debug_task_log(cpu, rq->curr);
 	} else
 		raw_spin_unlock_irq(&rq->lock);
 
@@ -3841,9 +3843,8 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	if (rt_prio(p->prio)) {
 		p->sched_class = &rt_sched_class;
 #ifdef CONFIG_SCHED_HMP
-		if (!cpumask_empty(&hmp_slow_cpu_mask))
-			if (cpumask_equal(&p->cpus_allowed, cpu_all_mask))
-				do_set_cpus_allowed(p, &hmp_slow_cpu_mask);
+		if (cpumask_equal(&p->cpus_allowed, cpu_all_mask))
+			do_set_cpus_allowed(p, &hmp_slow_cpu_mask);
 #endif
 	}
 	else
@@ -4748,6 +4749,10 @@ void __cpuinit init_idle(struct task_struct *idle, int cpu)
 	raw_spin_lock_irqsave(&rq->lock, flags);
 
 	__sched_fork(idle);
+#ifdef CONFIG_SCHED_HMP
+	idle->se.avg.runnable_avg_period = 0;
+	idle->se.avg.runnable_avg_sum = 0;
+#endif
 	idle->state = TASK_RUNNING;
 	idle->se.exec_start = sched_clock();
 
@@ -6933,6 +6938,9 @@ void __init sched_init(void)
 {
 	int i, j;
 	unsigned long alloc_size = 0, ptr;
+
+	sec_gaf_supply_rqinfo(offsetof(struct rq, curr),
+			      offsetof(struct cfs_rq, rq));
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);

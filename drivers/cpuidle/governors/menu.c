@@ -125,7 +125,7 @@ struct menu_device {
 
 #define LOAD_INT(x) ((x) >> FSHIFT)
 #define LOAD_FRAC(x) LOAD_INT(((x) & (FIXED_1-1)) * 100)
-
+/*
 static int get_loadavg(void)
 {
 	unsigned long this = this_cpu_load();
@@ -133,6 +133,7 @@ static int get_loadavg(void)
 
 	return LOAD_INT(this) * 10 + LOAD_FRAC(this) / 10;
 }
+*/
 
 static inline int which_bucket(unsigned int duration)
 {
@@ -256,6 +257,11 @@ again:
 	}
 }
 
+/* In some cases, idle should return RIGHT index to enter
+ * correct idle states.
+ */
+#define CONFIG_SKIP_IDLE_CORRELATION
+
 /**
  * menu_select - selects the next idle state to enter
  * @drv: cpuidle driver containing state data
@@ -291,6 +297,11 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 
 	multiplier = performance_multiplier();
 
+#ifdef CONFIG_SKIP_IDLE_CORRELATION
+       if (dev->skip_idle_correlation)
+               data->correction_factor[data->bucket] = RESOLUTION * DECAY;
+#endif
+
 	/*
 	 * if the correction factor is 0 (eg first time init or cpu hotplug
 	 * etc), we actually want to start out with a unity factor.
@@ -302,7 +313,17 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	data->predicted_us = div_round64(data->expected_us * data->correction_factor[data->bucket],
 					 RESOLUTION * DECAY);
 
+	/* This patch is not checked */
+#ifndef CONFIG_CPU_THERMAL_IPA
 	get_typical_interval(data);
+#else
+	/*
+	 * HACK - Ignore repeating patterns when we're
+	 * forecasting a very large idle period.
+	 */
+	if(data->predicted_us < MAX_INTERESTING)
+		get_typical_interval(data);
+#endif
 
 	/*
 	 * We want to default to C1 (hlt), not to busy polling
@@ -349,6 +370,7 @@ static void menu_reflect(struct cpuidle_device *dev, int index)
 {
 	struct menu_device *data = &__get_cpu_var(menu_devices);
 	data->last_state_idx = index;
+
 	if (index >= 0)
 		data->needs_update = 1;
 }
