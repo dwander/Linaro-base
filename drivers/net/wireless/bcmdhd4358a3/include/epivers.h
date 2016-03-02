@@ -36,13 +36,13 @@
 
 #define	EPI_BUILD_NUMBER	0
 
-#define	EPI_VERSION		1, 47, 32, 0
+#define	EPI_VERSION		1, 47, 32, 0, 1
 
 #define	EPI_VERSION_NUM		0x012f2000
 
 #define EPI_VERSION_DEV		1.47.32
 
 /* Driver Version String, ASCII, 32 chars max */
-#define	EPI_VERSION_STR		"1.47.32 (r)"
+#define	EPI_VERSION_STR		"1.47.32.0.1 (r)"
 
 #endif /* _epivers_h_ */
