@@ -10,6 +10,11 @@ config BOOT_DEVICE_SPI
 	depends on SEC_MODEM_V1
 	default n
 
+config LINK_DEVICE_SPI
+	bool "link device: SPI"
+	depends on SEC_MODEM_V1
+	default n
+
 config LINK_DEVICE_MEMORY
 	bool "Memory-type (i.e. shared memory) interface medium"
 	depends on SEC_MODEM_V1
@@ -55,6 +60,10 @@ config SEC_MODEM_DEBUG
 config SEC_MODEM_DEBUGFS
 	bool "Samsung modem interface debugfs support"
 	depends on SEC_MODEM_DEBUG
+	default n
+
+config DEBUG_PKTLOG
+	bool "IPC pcap logging feature"
 	default n
 
 config LINK_DEVICE_C2C
@@ -113,7 +122,7 @@ config UMTS_MODEM_SS300
 
 config UMTS_MODEM_SS333
 	bool "Samsung SS333 modem"
-	select BOOT_DEVICE_SPI
+	select LINK_DEVICE_SPI
 	select LINK_DEVICE_LLI
 	select LINK_POWER_MANAGEMENT_WITH_FSM
 	select LINK_CONTROL_MSG_COMMAND

@@ -27,6 +27,10 @@
 #include "modem_prj.h"
 #include "modem_utils.h"
 
+static unsigned long cp_hold_time = CP_HOLD_TIME;
+module_param(cp_hold_time, ulong, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(cp_hold_time, "modem_v1 pm cp_hold_time");
+
 static inline void print_pm_event(struct modem_link_pm *pm, enum pm_event event)
 {
 	int cp2ap_wakeup;
@@ -131,7 +135,7 @@ static inline void schedule_cp_free(struct modem_link_pm *pm)
 		return;
 
 	queue_delayed_work(pm->wq, &pm->cp_free_dwork,
-			   msecs_to_jiffies(CP_HOLD_TIME));
+			   msecs_to_jiffies(cp_hold_time));
 }
 
 static inline void cancel_cp_free(struct modem_link_pm *pm)
@@ -517,7 +521,8 @@ static void run_pm_fsm(struct modem_link_pm *pm, enum pm_event event)
 			So, cp2ap_wakeup must always be checked before state
 			transition.
 			*/
-			if (!gpio_get_value(pm->gpio_cp2ap_wakeup)) {
+			if (!gpio_get_value(pm->gpio_cp2ap_wakeup) &&
+					!atomic_read(&pm->ref_cnt)) {
 				n_state = PM_STATE_CP_FREE;
 				pm->hold_requested = false;
 				release_ap2cp_wakeup(pm);

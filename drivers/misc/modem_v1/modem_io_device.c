@@ -169,7 +169,7 @@ static int queue_skb_to_iod(struct sk_buff *skb, struct io_device *iod)
 		goto enqueue;
 
 	if (rxq->qlen > MAX_IOD_RXQ_LEN) {
-		mif_err("%s: %s may be dead (rxq->qlen %d > %d)\n",
+		mif_err_limited("%s: %s may be dead (rxq->qlen %d > %d)\n",
 			iod->name, iod->app ? iod->app : "corresponding",
 			rxq->qlen, MAX_IOD_RXQ_LEN);
 		dev_kfree_skb_any(skb);
@@ -1413,12 +1413,7 @@ static ssize_t misc_write(struct file *filp, const char __user *data,
 		return ret;
 	}
 
-	if (ret != tx_bytes) {
-		mif_info("%s->%s: WARN! %s->send ret:%d (tx_bytes:%d len:%ld)\n",
-			iod->name, mc->name, ld->name, ret, tx_bytes, (long)count);
-	}
-
-	return count;
+	return ret - headroom - tailroom;
 }
 
 static ssize_t misc_read(struct file *filp, char *buf, size_t count,

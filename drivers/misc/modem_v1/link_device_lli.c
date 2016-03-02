@@ -1,11 +1,3 @@
-/**
-@file		link_device_lli.c
-@brief		functions for a pseudo shared-memory based on a chip-to-chip
-		(C2C) interface
-@date		2014/02/05
-@author		Hankook Jang (hankook.jang@samsung.com)
-*/
-
 /*
  * Copyright (C) 2010 Samsung Electronics.
  *
@@ -91,12 +83,11 @@ mem_link_device instance.
 static void forbid_cp_sleep(struct mem_link_device *mld)
 {
 	struct modem_link_pm *pm = &mld->link_dev.pm;
-	int ref_cnt;
 
-	ref_cnt = atomic_inc_return(&mld->ref_cnt);
-	mif_debug("ref_cnt %d\n", ref_cnt);
+	atomic_inc(&pm->ref_cnt);
+	mif_debug("ref_cnt %d\n", atomic_read(&pm->ref_cnt));
 
-	if (ref_cnt > 1)
+	if (atomic_read(&pm->ref_cnt) > 1)
 		return;
 
 	if (pm->request_hold)
@@ -118,16 +109,13 @@ than or equal to 0.
 static void permit_cp_sleep(struct mem_link_device *mld)
 {
 	struct modem_link_pm *pm = &mld->link_dev.pm;
-	int ref_cnt;
 
-	ref_cnt = atomic_dec_return(&mld->ref_cnt);
-	if (ref_cnt > 0)
+	if (atomic_dec_return(&pm->ref_cnt) > 0)
 		return;
 
-	if (ref_cnt < 0) {
-		mif_info("WARNING! ref_cnt %d < 0\n", ref_cnt);
-		atomic_set(&mld->ref_cnt, 0);
-		ref_cnt = 0;
+	if (atomic_read(&pm->ref_cnt) < 0) {
+		mif_err("[WARN] ref_cnt %d < 0\n", atomic_read(&pm->ref_cnt));
+		atomic_set(&pm->ref_cnt, 0);
 	}
 
 	if (pm->release_hold)
@@ -222,7 +210,7 @@ static int init_pm(struct mem_link_device *mld)
 	int ret;
 
 	spin_lock_init(&mld->sig_lock);
-	atomic_set(&mld->ref_cnt, 0);
+	atomic_set(&pm->ref_cnt, 0);
 
 	pm_svc = mipi_lli_get_pm_svc();
 
@@ -557,15 +545,10 @@ static int init_pm(struct mem_link_device *mld)
 #endif
 #endif
 
-static void lli_link_ready(struct link_device *ld)
-{
-	mif_err("%s: PM %s <%pf>\n", ld->name, FUNC, CALLER);
-	stop_pm(ld_to_mem_link_device(ld));
-}
-
 static void lli_link_reset(struct link_device *ld)
 {
 	mif_err("%s: PM %s <%pf>\n", ld->name, FUNC, CALLER);
+	mipi_lli_intr_enable();
 	mipi_lli_reset();
 }
 
@@ -578,8 +561,8 @@ static void lli_link_reload(struct link_device *ld)
 static void lli_link_off(struct link_device *ld)
 {
 	mif_err("%s: PM %s <%pf>\n", ld->name, FUNC, CALLER);
+	mipi_lli_intr_disable();
 	stop_pm(ld_to_mem_link_device(ld));
-	mipi_lli_reload();
 }
 
 static bool lli_link_unmounted(struct link_device *ld)
@@ -649,6 +632,7 @@ static struct mem_link_device *g_mld;
  * some hard-coded values are used to limit the size of line and row.
  * need to invent more neater and cleaner way.
  */
+#if 0
 static ssize_t dump_rb_frame(char *buf, size_t size, struct sbd_ring_buffer *rb)
 {
 	int idx;
@@ -730,7 +714,7 @@ static const struct file_operations dbgfs_frame_fops = {
 	.read = dbgfs_frame,
 	.owner = THIS_MODULE
 };
-
+#endif
 static inline void dev_debugfs_add(struct mem_link_device *mld)
 {
 	mld->dbgfs_dir = debugfs_create_dir("svnet", NULL);
@@ -741,8 +725,9 @@ static inline void dev_debugfs_add(struct mem_link_device *mld)
 	debugfs_create_blob("mem_dump", S_IRUGO, mld->dbgfs_dir,
 					&mld->mem_dump_blob);
 
-	mld->dbgfs_frame = debugfs_create_file("frame", S_IRUGO,
+/*	mld->dbgfs_frame = debugfs_create_file("frame", S_IRUGO,
 			mld->dbgfs_dir, mld, &dbgfs_frame_fops);
+*/
 }
 #else
 static inline void dev_debugfs_add(struct mem_link_device *mld) {}
@@ -791,7 +776,6 @@ struct link_device *lli_create_link_device(struct platform_device *pdev)
 
 	ld = &mld->link_dev;
 
-	ld->ready = lli_link_ready;
 	ld->reset = lli_link_reset;
 	ld->reload = lli_link_reload;
 	ld->off = lli_link_off;

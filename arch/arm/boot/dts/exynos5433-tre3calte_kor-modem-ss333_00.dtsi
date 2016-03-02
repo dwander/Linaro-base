@@ -196,7 +196,7 @@
 
 &pinctrl_5 {
 	sleep5: sleep-state {
-		PIN_SLP(gpr2-0, INPUT, DOWN);	/* AP_DUMP_INT */
+		PIN_SLP(gpr2-0, PREV, DOWN);	/* AP_DUMP_INT */
 
 		PIN_SLP(gpr3-1, PREV, NONE);	/* CP_ON */
 	};

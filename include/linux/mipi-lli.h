@@ -134,6 +134,7 @@ struct lli_driver {
 	int	(*debug_info)(struct mipi_lli *lli);
 
 	int	(*intr_enable)(struct mipi_lli *lli);
+	int	(*intr_disable)(struct mipi_lli *lli);
 	int     (*mask_sb_intr)(struct mipi_lli *lli, bool flag);
 
 	int	(*suspend)(struct mipi_lli *lli);
@@ -158,6 +159,7 @@ extern void mipi_lli_reset_interrupt(void);
 extern u32 mipi_lli_read_interrupt(void);
 extern void mipi_lli_debug_info(void);
 extern void mipi_lli_intr_enable(void);
+extern void mipi_lli_intr_disable(void);
 extern void mipi_lli_reset(void);
 extern void mipi_lli_reload(void);
 

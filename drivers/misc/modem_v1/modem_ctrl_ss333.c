@@ -179,8 +179,8 @@ static int ss333_on(struct modem_ctl *mc)
 		mif_err("%s->wake_lock locked\n", mc->name);
 	}
 
-	if (ld->ready)
-		ld->ready(ld);
+	if (ld->off)
+		ld->off(ld);
 
 	spin_unlock_irqrestore(&mc->lock, flags);
 
@@ -303,7 +303,6 @@ static void handle_no_response_cp_crash(unsigned long arg)
 	/* Change the modem state for RIL */
 	if (mc->iod)
 		mc->iod->modem_state_changed(mc->iod, STATE_CRASH_EXIT);
-
 	/* Change the modem state for CBD */
 	if (mc->bootd)
 		mc->bootd->modem_state_changed(mc->bootd, STATE_CRASH_EXIT);
@@ -312,6 +311,9 @@ static void handle_no_response_cp_crash(unsigned long arg)
 
 static int ss333_force_crash_exit(struct modem_ctl *mc)
 {
+	struct io_device *iod = mc->iod;
+	struct link_device *ld = get_current_link(iod);
+
 	mif_err("+++\n");
 
 	mif_add_timer(&mc->crash_ack_timer, FORCE_CRASH_ACK_TIMEOUT,
@@ -321,6 +323,9 @@ static int ss333_force_crash_exit(struct modem_ctl *mc)
 		wake_lock(mc->wake_lock);
 		mif_err("%s->wake_lock locked\n", mc->name);
 	}
+
+	if (ld->off)
+		ld->off(ld);
 
 	gpio_set_value(mc->gpio_ap_dump_int, 1);
 	mif_info("set ap_dump_int(%d) to high=%d\n",
@@ -352,8 +357,8 @@ static int ss333_dump_reset(struct modem_ctl *mc)
 		mif_err("%s->wake_lock locked\n", mc->name);
 	}
 
-	if (ld->ready)
-		ld->ready(ld);
+	if (ld->off)
+		ld->off(ld);
 
 	spin_unlock_irqrestore(&mc->lock, flags);
 

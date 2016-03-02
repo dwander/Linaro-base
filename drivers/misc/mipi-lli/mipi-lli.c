@@ -364,6 +364,18 @@ void mipi_lli_intr_enable(void)
 }
 EXPORT_SYMBOL(mipi_lli_intr_enable);
 
+/**
+ * mipi_lli_intr_disable
+ */
+void mipi_lli_intr_disable(void)
+{
+	if (!g_lli || !g_lli->driver || !g_lli->driver->intr_disable)
+		return;
+
+	g_lli->driver->intr_disable(g_lli);
+}
+EXPORT_SYMBOL(mipi_lli_intr_disable);
+
 static void mipi_lli_lock_link(void *owner)
 {
 	if (mipi_lli_get_link_status() == LLI_UNMOUNTED)

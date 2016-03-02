@@ -29,6 +29,7 @@
 
 #define EXYNOS_LLI_LINK_START		(0x4000)
 #define EXYNOS_LLI_INTR_ENABLED		(0x3FFFF)
+#define EXYNOS_LLI_INTR_DISABLED	(0x0)
 
 /*
  * 5ns, Default System Clock 100MHz
@@ -247,6 +248,11 @@ static inline void exynos_lli_set_intr_enable(struct mipi_lli *lli)
 	writel(EXYNOS_LLI_INTR_ENABLED, lli->regs + EXYNOS_DME_LLI_INTR_ENABLE);
 }
 
+static inline void exynos_lli_set_intr_disable(struct mipi_lli *lli)
+{
+	writel(EXYNOS_LLI_INTR_DISABLED, lli->regs + EXYNOS_DME_LLI_INTR_ENABLE);
+}
+
 static inline void exynos_lli_clear_intr_enable(struct mipi_lli *lli)
 {
 	writel(0x0, lli->regs + EXYNOS_DME_LLI_INTR_ENABLE);
@@ -339,8 +345,7 @@ static int exynos_lli_setting(struct mipi_lli *lli)
 
 	writel(0x40, lli->regs + EXYNOS_PA_NACK_RTT);
 	writel(0x0, lli->regs + EXYNOS_PA_MK0_INSERTION_ENABLE);
-#if defined(CONFIG_UMTS_MODEM_SS300) || defined(CONFIG_UMTS_MODEM_SS303) || \
-    defined(CONFIG_UMTS_MODEM_SS333)
+#if defined(CONFIG_UMTS_MODEM_SS300) || defined(CONFIG_UMTS_MODEM_SS303) || defined(CONFIG_UMTS_MODEM_SS333)
 	writel((128<<0) | (15<<8) | (1<<12), lli->regs + EXYNOS_PA_MK0_CONTROL);
 #else
 	writel((128<<0) | (1<<12), lli->regs + EXYNOS_PA_MK0_CONTROL);
@@ -422,11 +427,8 @@ static int exynos_lli_link_startup_mount(struct mipi_lli *lli)
 
 static int exynos_lli_get_status(struct mipi_lli *lli)
 {
-	u32 regs;
 
-	regs = readl(lli->regs + EXYNOS_DME_LLI_INTR_STATUS);
-
-	return regs;
+	return atomic_read(&lli->state);
 }
 
 static int exynos_lli_send_signal(struct mipi_lli *lli, u32 cmd)
@@ -569,6 +571,17 @@ static int exynos_lli_intr_enable(struct mipi_lli *lli)
 
 	if (exynos_lli_get_intr_enable(lli) != EXYNOS_LLI_INTR_ENABLED)
 		exynos_lli_set_intr_enable(lli);
+
+	return 0;
+}
+
+static int exynos_lli_intr_disable(struct mipi_lli *lli)
+{
+	if (mipi_lli_suspended())
+		return -1;
+
+	if (exynos_lli_get_intr_enable(lli) != EXYNOS_LLI_INTR_DISABLED)
+		exynos_lli_set_intr_disable(lli);
 
 	return 0;
 }
@@ -812,6 +825,7 @@ const struct lli_driver exynos_lli_driver = {
 	.loopback_test = exynos_lli_loopback_test,
 	.debug_info = exynos_lli_debug_info,
 	.intr_enable = exynos_lli_intr_enable,
+	.intr_disable = exynos_lli_intr_disable,
 	.mask_sb_intr = exynos_lli_mask_sb_intr,
 	.suspend = exynos_lli_suspend,
 	.resume = exynos_lli_resume,
