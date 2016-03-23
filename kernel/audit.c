@@ -592,9 +592,10 @@ out:
 static int audit_netlink_ok(struct sk_buff *skb, u16 msg_type)
 {
 	int err = 0;
+	struct user_namespace *user_ns = current_user_ns();
 
 	/* Only support the initial namespaces for now. */
-	if ((current_user_ns() != &init_user_ns) ||
+	if ((user_ns != &init_user_ns) ||
 	    (task_active_pid_ns(current) != &init_pid_ns))
 		return -EPERM;
 

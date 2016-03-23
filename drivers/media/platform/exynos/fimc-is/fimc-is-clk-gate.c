@@ -83,7 +83,7 @@ int fimc_is_wrap_clk_gate_set(struct fimc_is_core *core,
 	return 0;
 }
 
-inline bool fimc_is_group_otf(struct fimc_is_device_ischain *device, int group_id)
+static inline bool fimc_is_group_otf(struct fimc_is_device_ischain *device, int group_id)
 {
 	struct fimc_is_group *group;
 
