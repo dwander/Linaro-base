@@ -116,7 +116,7 @@ static int rx_buf_count_t;
 char *g_szSysTime;
 char *g_szRefTime;
 
-inline void UpdateTime(char *pchBuffer, int iLen)
+static inline void UpdateTime(char *pchBuffer, int iLen)
 {
 	struct timespec tSysTimespec;
 	char *pEnv[3];
