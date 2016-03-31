@@ -384,6 +384,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fdiagnostics-show-option -Werror \
 		   -std=gnu89
 
+KBUILD_CFLAGS	+= -fno-pic -pipe -march=armv8-a+crc
+KBUILD_CFLAGS	+= -Wno-unused-variable -Wno-maybe-uninitialized
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
