@@ -18,6 +18,23 @@
 
 #include "power.h"
 
+#include <linux/moduleparam.h>
+
+static int enable_sensorhub_ws = 1;
+static int enable_ssp_ws = 1;
+static int enable_bcm4773_ws = 1;
+static int enable_lli_pm_ws = 1;
+static int enable_radio_interface_ws = 1;
+static int enable_umts_ipc0_ws = 1;
+static int enable_power_manager_service_ws = 1;
+module_param(enable_sensorhub_ws, int, 0644);
+module_param(enable_ssp_ws, int, 0644);
+module_param(enable_bcm4773_ws, int, 0644);
+module_param(enable_lli_pm_ws, int, 0644);
+module_param(enable_radio_interface_ws, int, 0644);
+module_param(enable_umts_ipc0_ws, int, 0644);
+module_param(enable_power_manager_service_ws, int, 0644);
+
 /*
  * If set, the suspend/hibernate code will abort transitions to a sleep state
  * if wakeup events are registered during or immediately before the transition.
@@ -381,6 +398,41 @@ EXPORT_SYMBOL_GPL(device_set_wakeup_enable);
 static void wakeup_source_activate(struct wakeup_source *ws)
 {
 	unsigned int cec;
+
+	if (!enable_sensorhub_ws && !strcmp(ws->name, "ssp_sensorhub_wake_lock")) {
+		pr_info("wakeup source sensorhub activation skipped\n");
+		return;
+	}
+
+	if (!enable_ssp_ws && !strcmp(ws->name, "ssp_wake_lock")) {
+		pr_info("wakeup source ssp activation skipped\n");
+		return;
+	}
+
+	if (!enable_bcm4773_ws && !strcmp(ws->name, "bcm4773_wake_lock")) {
+		pr_info("wakeup source bcm4773 activation skipped\n");
+		return;
+	}
+
+	if (!enable_lli_pm_ws && !strcmp(ws->name, "lli_pm_wsock")) {
+		pr_info("wakeup source lli_pm activation skipped\n");
+		return;
+	}
+
+	if (!enable_radio_interface_ws && !strcmp(ws->name, "radio-interface")) {
+		pr_info("wakeup source radio-interface activation skipped\n");
+		return;
+	}
+
+	if (!enable_umts_ipc0_ws && !strcmp(ws->name, "umts_ipc0")) {
+		pr_info("wakeup source umts_ipc0 activation skipped\n");
+		return;
+	}
+
+	if (!enable_power_manager_service_ws && !strcmp(ws->name, "PowerManagerService.WakeLocks")) {
+		pr_info("wakeup source PowerManagerService.WakeLocks activation skipped\n");
+		return;
+	}
 
 	/*
 	 * active wakeup source should bring the system
