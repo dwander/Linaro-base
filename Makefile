@@ -349,10 +349,10 @@ endif
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   =
+CFLAGS_MODULE   = -mfpu=neon-vfpv4
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
+CFLAGS_KERNEL	= -mfpu=neon-vfpv4
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -384,7 +384,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fdiagnostics-show-option -Werror \
 		   -std=gnu89
 
-KBUILD_CFLAGS	+= -fno-pic -pipe -march=armv8-a+crc
+KBUILD_CFLAGS	+= -fno-pic -pipe -march=armv8-a+crc -mfpu=neon-vfpv4
 KBUILD_CFLAGS	+= -Wno-unused-variable -Wno-maybe-uninitialized
 
 KBUILD_AFLAGS_KERNEL :=
