@@ -678,9 +678,7 @@ void show_exynos_pmu(void)
 
 int __init exynos5430_pmu_init(void)
 {
-	unsigned int tmp;
-	int ret;
-
+	unsigned int tmp, ret;
 	/*
 	 * Set measure power on/off duration
 	 * Use SC_USE_FEEDBACK
@@ -735,6 +733,11 @@ int __init exynos5430_pmu_init(void)
 	tmp |= 0x40;
 	__raw_writel(tmp, EXYNOS_PMU_DEBUG);
 #endif
+
+	/* Clear automatic wakeup in BOOTLDO pad retention */
+	tmp = __raw_readl(EXYNOS5430_PAD_RETENTION_BOOTLDO_OPTION);
+	tmp &= ~AUTOMATIC_WAKEUP;
+	__raw_writel(tmp, EXYNOS5430_PAD_RETENTION_BOOTLDO_OPTION);
 
 	exynos_pmu_config = exynos5430_pmu_config;
 	exynos_cpu.power_up = exynos5430_secondary_up;

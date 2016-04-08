@@ -108,7 +108,11 @@ enum s3c_fb_pm_status {
 
 #ifdef CONFIG_SEC_PM
 
+#if defined(CONFIG_DISABLE_C2_BOOT) && !defined(CONFIG_SEC_FACTORY)
+#define CPUIDLE_ENABLE_MASK (ENABLE_C3_AFTR | ENABLE_C3_LPA | ENABLE_C3_DSTOP)
+#else
 #define CPUIDLE_ENABLE_MASK (ENABLE_C2 | ENABLE_C3_AFTR | ENABLE_C3_LPA | ENABLE_C3_DSTOP)
+#endif
 
 static enum {
 	ENABLE_C2	= BIT(0),
@@ -558,6 +562,7 @@ static int c2_finisher(unsigned long flags)
 {
 	unsigned int kind = OP_TYPE_CORE;
 	unsigned int param = 0;
+
 #if defined (CONFIG_SOC_EXYNOS5430_REV_1) && defined (CONFIG_EXYNOS_CLUSTER_POWER_DOWN)
 	unsigned int cpuid = smp_processor_id();
 #endif
@@ -829,6 +834,13 @@ static struct sleep_save exynos5_lpa_save[] = {
 	SAVE_ITEM(EXYNOS5430_SRC_ENABLE_TOP_DISP),
 };
 
+static struct sleep_save exynos5_lpa_save_before[] = {
+        SAVE_ITEM(EXYNOS5430_ENABLE_ACLK_MIF3),
+        SAVE_ITEM(EXYNOS5430_ENABLE_ACLK_TOP),
+        SAVE_ITEM(EXYNOS5430_SRC_SEL_BUS2),
+        SAVE_ITEM(EXYNOS5430_SRC_SEL_FSYS0),
+};
+
 static struct sleep_save exynos5_set_clksrc[] = {
 	{ .reg = EXYNOS5430_ENABLE_IP_FSYS0,	.val = 0x00007dfb, },
 	{ .reg = EXYNOS5430_ENABLE_IP_PERIC0,	.val = 0x1fffffff, },
@@ -837,6 +849,13 @@ static struct sleep_save exynos5_set_clksrc[] = {
 	{ .reg = EXYNOS5430_ENABLE_IP_KFC1,	.val = 0x00000fff, },
 	{ .reg = EXYNOS5430_ENABLE_IP_MIF1,	.val = 0x01fffff7, },
 	{ .reg = EXYNOS5430_ENABLE_IP_CPIF0,	.val = 0x000FF000, },
+};
+
+static struct sleep_save exynos5_set_clksrc_after[] = {
+        { .reg = EXYNOS5430_SRC_SEL_FSYS0,	.val = 0x00000000, },
+        { .reg = EXYNOS5430_SRC_SEL_BUS2,	.val = 0x00000000, },
+        { .reg = EXYNOS5430_ENABLE_ACLK_TOP,	.val = 0x03e8fffd, },
+        { .reg = EXYNOS5430_ENABLE_ACLK_MIF3,	.val = 0x00000003, },
 };
 
 static void exynos_save_mif_dll_status(void)
@@ -960,6 +979,10 @@ static int exynos_enter_core0_lpa(struct cpuidle_device *dev,
 	cpu_pm_enter();
 	exynos_lpa_enter();
 
+	s3c_pm_do_save(exynos5_lpa_save_before, ARRAY_SIZE(exynos5_lpa_save_before));
+	s3c_pm_do_restore_core(exynos5_set_clksrc_after,
+			       ARRAY_SIZE(exynos5_set_clksrc_after));
+
 	if (lp_mode == SYS_ALPA)
 		__raw_writel(0x1, EXYNOS5430_PMU_SYNC_CTRL);
 
@@ -997,6 +1020,9 @@ static int exynos_enter_core0_lpa(struct cpuidle_device *dev,
 	__raw_writel((1 << 28), EXYNOS5430_PAD_RETENTION_FSYSGENIO_OPTION);
 
 early_wakeup:
+	s3c_pm_do_restore_core(exynos5_lpa_save_before,
+			       ARRAY_SIZE(exynos5_lpa_save_before));
+
 	samsung_usb_lpa_resume();
 
 	if (lp_mode == SYS_ALPA)

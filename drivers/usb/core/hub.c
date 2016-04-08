@@ -1565,17 +1565,24 @@ static int hub_configure(struct usb_hub *hub,
 	if (hub->has_indicators && blinkenlights)
 		hub->indicator [0] = INDICATOR_CYCLE;
 
-	for (i = 0; i < hdev->maxchild; i++)
-		if (usb_hub_create_port_device(hub, i + 1) < 0)
+	for (i = 0; i < hdev->maxchild; i++) {
+		ret = usb_hub_create_port_device(hub, i + 1);
+		if (ret < 0) {
 			dev_err(hub->intfdev,
 				"couldn't create port%d device.\n", i + 1);
-
+			hdev->maxchild = i;
+			goto fail_keep_maxchild;
+		}
+	}
+	
 	usb_hub_adjust_deviceremovable(hdev, hub->descriptor);
 
 	hub_activate(hub, HUB_INIT);
 	return 0;
 
 fail:
+	hdev->maxchild = 0;
+fail_keep_maxchild:
 	dev_err (hub_dev, "config failed, %s (err %d)\n",
 			message, ret);
 	/* hub_disconnect() frees urb and descriptor */
@@ -2045,6 +2052,9 @@ void usb_disconnect(struct usb_device **pdev)
 	dev_info(&udev->dev, "USB disconnect, device number %d\n",
 			udev->devnum);
 
+#ifdef CONFIG_USB_HOST_NOTIFY
+	call_battery_notify(udev, 0);
+#endif
 	usb_lock_device(udev);
 
 	/* Free up all the children before we remove this device */
@@ -2350,7 +2360,9 @@ int usb_new_device(struct usb_device *udev)
 	if (udev->manufacturer)
 		add_device_randomness(udev->manufacturer,
 				      strlen(udev->manufacturer));
-
+#ifdef CONFIG_USB_HOST_NOTIFY
+	call_battery_notify(udev, 1);
+#endif
 	device_enable_async_suspend(&udev->dev);
 
 	/*
@@ -3083,6 +3095,13 @@ int usb_port_suspend(struct usb_device *udev, pm_message_t msg)
 	}
 
 	usb_mark_last_busy(hub->hdev);
+	
+#if defined(CONFIG_LINK_DEVICE_HSIC)
+	if (udev->quirks & USB_QUIRK_NO_REMOTE_WAKEUP && status == 0) {
+		udev->remote_wake = 0;
+	}
+#endif
+	
 	return status;
 }
 
@@ -3196,6 +3215,12 @@ static int finish_port_resume(struct usb_device *udev)
 		status = 0;
 	}
 done:
+
+#if defined(CONFIG_LINK_DEVICE_HSIC)
+	if (udev->quirks & USB_QUIRK_NO_REMOTE_WAKEUP && status == 0) {
+		udev->remote_wake = 1;
+	}
+#endif
 	return status;
 }
 
@@ -3333,7 +3358,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 		usb_enable_ltm(udev);
 		usb_unlocked_enable_lpm(udev);
 	}
-
+	
 	return status;
 }
 
@@ -3345,14 +3370,6 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 int usb_remote_wakeup(struct usb_device *udev)
 {
 	int	status = 0;
-
-#if defined(CONFIG_LINK_DEVICE_HSIC)
-	if (udev->quirks & USB_QUIRK_NO_REMOTE_WAKEUP) {
-		dev_dbg(&udev->dev, "%s: skip, state %d, rpm %d\n",
-			__func__, udev->state, udev->dev.power.runtime_status);
-		return 0;
-	}
-#endif
 	if (udev->state == USB_STATE_SUSPENDED) {
 		dev_dbg(&udev->dev, "usb %sresume\n", "wakeup-");
 		status = usb_autoresume_device(udev);

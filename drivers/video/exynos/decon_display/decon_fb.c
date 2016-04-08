@@ -2140,6 +2140,16 @@ static void s3c_set_win_update_config(struct s3c_fb *sfb,
 		sfb->need_update = true;
 	}
 
+	if (update_config->h == 0 || update_config->w == 0)
+		update_config->state = S3C_FB_WIN_STATE_DISABLED;
+
+	if (update_config->x < 0 || update_config->y < 0) {
+		update_config->state = S3C_FB_WIN_STATE_DISABLED;
+		pr_info("[WIN_UPDATE]size is abnormal: [%d %d %d %d]\n",
+			update_config->w, update_config->h,
+			update_config->x, update_config->y);
+	}
+
 	if (update_config->h & 0x3) {
 		update_config->h = ((update_config->h + 3) >> 2) << 2;
 		if (update_config->y + update_config->h > sfb->lcd_info->yres)
@@ -2462,7 +2472,7 @@ static int s3c_fb_set_win_config(struct s3c_fb *sfb,
 	}
 
 	regs->bandwidth = bw;
-
+	sfb->num_of_window = regs->num_of_window;
 	dev_dbg(sfb->dev, "Total BW = %d Mbits, Max BW per window = %d Mbits\n",
 			bw / (1024 * 1024), MAX_BW_PER_WINDOW / (1024 * 1024));
 
@@ -3043,22 +3053,6 @@ static void s3c_fb_update_regs(struct s3c_fb *sfb, struct s3c_reg_data *regs)
 #endif
 
 	do {
-#ifdef CONFIG_USE_VSYNC_SKIP
-		int vsync_wait_cnt = 0;
-		vsync_wait_cnt = s3c_fb_extra_vsync_wait_get();
-		s3c_fb_extra_vsync_wait_set(0);
-
-		if (vsync_wait_cnt < ERANGE && regs->num_of_window <= 2) {
-			while ((vsync_wait_cnt--) > 0) {
-				if((s3c_fb_extra_vsync_wait_get() >= ERANGE)) {
-					s3c_fb_extra_vsync_wait_set(0);
-					break;
-				}
-
-				s3c_fb_wait_for_vsync(sfb, VSYNC_TIMEOUT_MSEC);
-			}
-		}
-#endif /* CONFIG_USE_VSYNC_SKIP */
 		__s3c_fb_update_regs(sfb, regs);
 		s3c_fb_wait_for_vsync(sfb, VSYNC_TIMEOUT_MSEC);
 		wait_for_vsync = false;
@@ -3148,6 +3142,13 @@ static int s3c_fb_get_user_ion_handle(struct s3c_fb *sfb,
 	return 0;
 }
 #endif
+
+static ssize_t s3c_fb_read(struct fb_info *info, char __user *buf,
+			size_t count, loff_t *ppos)
+{
+	return 0;
+}
+
 
 static int s3c_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
@@ -3330,6 +3331,7 @@ static struct fb_ops s3c_fb_ops = {
 	.fb_imageblit	= cfb_imageblit,
 	.fb_pan_display	= s3c_fb_pan_display,
 	.fb_ioctl	= s3c_fb_ioctl,
+	.fb_read	= s3c_fb_read,
 	.fb_mmap	= s3c_fb_mmap,
 	.fb_release     = s3c_fb_release,
 };
@@ -4191,16 +4193,37 @@ static void s3c_fb_unregister_mc_wb_entities(struct s3c_fb *sfb)
 static int s3c_fb_wait_for_vsync_thread(void *data)
 {
 	struct s3c_fb *sfb = data;
-
+#ifdef CONFIG_USE_VSYNC_SKIP
+	int timestamp_skip_cnt = 0;
+#endif
 	while (!kthread_should_stop()) {
 		ktime_t timestamp = sfb->vsync_info.timestamp;
 		int ret = wait_event_interruptible(sfb->vsync_info.wait,
 			!ktime_equal(timestamp, sfb->vsync_info.timestamp) &&
 			sfb->vsync_info.active);
+#ifdef CONFIG_USE_VSYNC_SKIP
+		if (timestamp_skip_cnt <= 0) {
+			timestamp_skip_cnt = s3c_fb_extra_vsync_wait_get();
+			if (timestamp_skip_cnt >= ERANGE)
+				timestamp_skip_cnt = 0;
+			s3c_fb_extra_vsync_wait_set(0);
+		}
+		if((s3c_fb_extra_vsync_wait_get() >= ERANGE)) {
+			s3c_fb_extra_vsync_wait_set(0);
+			timestamp_skip_cnt = 0;
+		}
 
+		if ((timestamp_skip_cnt > 0) && (sfb->num_of_window <= 2)) {
+			timestamp_skip_cnt--;
+		} else if (!ret) {
+			sysfs_notify(&sfb->dev->kobj, NULL, "vsync");
+			timestamp_skip_cnt = 0;
+		}
+#else
 		if (!ret) {
 			sysfs_notify(&sfb->dev->kobj, NULL, "vsync");
 		}
+#endif
 	}
 
 	return 0;

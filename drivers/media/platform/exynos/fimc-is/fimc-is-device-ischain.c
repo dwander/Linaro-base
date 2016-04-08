@@ -3612,7 +3612,7 @@ static int fimc_is_ischain_s_chain0_size(struct fimc_is_device_ischain *device,
 	input_crop->crop_height = chain0_height;
 	input_crop->in_width = chain0_width;
 	input_crop->in_height = chain0_height;
-
+	if (test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state)) {		input_crop->out_width = chain0_width;		input_crop->out_height = chain0_height;	}
 	*lindex |= LOWBIT_OF(PARAM_SCALERC_INPUT_CROP);
 	*hindex |= HIGHBIT_OF(PARAM_SCALERC_INPUT_CROP);
 	(*indexes)++;
