@@ -1366,6 +1366,188 @@ static ssize_t show_cpufreq_table(struct kobject *kobj,
 
 	return count - 1;
 }
+
+static ssize_t show_cpufreq_min_limit(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	ssize_t	nsize = 0;
+	unsigned int cluster1_qos_min = pm_qos_request(qos_min_class[CL_ONE]);
+	unsigned int cluster0_qos_min = pm_qos_request(qos_min_class[CL_ZERO]);
+
+#ifdef CONFIG_SCHED_HMP
+	if (cluster1_qos_min > 0 && get_hmp_boost())
+#else
+	if (cluster1_qos_min > 0)
+#endif
+	{
+		if (cluster1_qos_min > freq_max[CL_ONE])
+			cluster1_qos_min = freq_max[CL_ONE];
+		else if (cluster1_qos_min < freq_min[CL_ONE])
+			cluster1_qos_min = freq_min[CL_ONE];
+		nsize = snprintf(buf, 10, "%u\n", cluster1_qos_min);
+	} else if (cluster0_qos_min > 0) {
+		if (cluster0_qos_min > freq_max[CL_ZERO])
+			cluster0_qos_min = freq_max[CL_ZERO];
+		if (cluster0_qos_min < freq_min[CL_ZERO])
+			cluster0_qos_min = freq_min[CL_ZERO];
+		nsize = snprintf(buf, 10, "%u\n", cluster0_qos_min / LIMIT_FREQ_DIVIDER);
+	} else if (cluster0_qos_min == 0) {
+		cluster0_qos_min = freq_min[CL_ZERO];
+		nsize = snprintf(buf, 10, "%u\n", cluster0_qos_min / LIMIT_FREQ_DIVIDER);
+	}
+
+	return nsize;
+}
+
+static void save_cpufreq_min_limit(int input)
+{
+	int cluster1_input = input, cluster0_input;
+
+	if (cluster1_input >= (int)freq_min[CL_ONE]) {
+#ifdef CONFIG_SCHED_HMP
+		if (!hmp_boosted) {
+			if (set_hmp_boost(1) < 0)
+				pr_err("%s: failed HMP boost enable\n",
+							__func__);
+			else
+				hmp_boosted = true;
+		}
+#endif
+		cluster1_input = min(cluster1_input, (int)freq_max[CL_ONE]);
+		if (exynos_info[CL_ZERO]->boost_freq)
+			cluster0_input = exynos_info[CL_ZERO]->boost_freq;
+		else
+			cluster0_input = core_max_qos_const[CL_ZERO].default_value;
+	} else if (cluster1_input < (int)freq_min[CL_ONE]) {
+#ifdef CONFIG_SCHED_HMP
+		if (hmp_boosted) {
+			if (set_hmp_boost(0) < 0)
+				pr_err("%s: failed HMP boost disable\n",
+							__func__);
+			else
+				hmp_boosted = false;
+		}
+#endif
+		if (cluster1_input < 0) {
+			cluster1_input = qos_min_default_value[CL_ONE];
+			cluster0_input = qos_min_default_value[CL_ZERO];
+		} else {
+			cluster0_input = cluster1_input * LIMIT_FREQ_DIVIDER;
+			if (cluster0_input > 0)
+				cluster0_input = min(cluster0_input, (int)freq_max[CL_ZERO]);
+			cluster1_input = qos_min_default_value[CL_ONE];
+		}
+	}
+
+	if (pm_qos_request_active(&core_min_qos[CL_ONE]))
+		pm_qos_update_request(&core_min_qos[CL_ONE], cluster1_input);
+	if (pm_qos_request_active(&core_min_qos[CL_ZERO]))
+		pm_qos_update_request(&core_min_qos[CL_ZERO], cluster0_input);
+}
+
+static ssize_t store_cpufreq_min_limit(struct kobject *kobj, struct attribute *attr,
+					const char *buf, size_t count)
+{
+	int cluster1_input;
+
+	if (!sscanf(buf, "%8d", &cluster1_input))
+		return -EINVAL;
+
+	save_cpufreq_min_limit(cluster1_input);
+
+	return count;
+}
+
+static ssize_t show_cpufreq_max_limit(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	ssize_t	nsize = 0;
+	unsigned int cluster1_qos_max = pm_qos_request(qos_max_class[CL_ONE]);
+	unsigned int cluster0_qos_max = pm_qos_request(qos_max_class[CL_ZERO]);
+
+	if (cluster1_qos_max > 0) {
+		if (cluster1_qos_max < freq_min[CL_ONE])
+			cluster1_qos_max = freq_min[CL_ONE];
+		else if (cluster1_qos_max > freq_max[CL_ONE])
+			cluster1_qos_max = freq_max[CL_ONE];
+		nsize = snprintf(buf, 10, "%u\n", cluster1_qos_max);
+	} else if (cluster0_qos_max > 0) {
+		if (cluster0_qos_max < freq_min[CL_ZERO])
+			cluster0_qos_max = freq_min[CL_ZERO];
+		if (cluster0_qos_max > freq_max[CL_ZERO])
+			cluster0_qos_max = freq_max[CL_ZERO];
+		nsize = snprintf(buf, 10, "%u\n", cluster0_qos_max / LIMIT_FREQ_DIVIDER);
+	} else if (cluster0_qos_max == 0) {
+		cluster0_qos_max = freq_min[CL_ZERO];
+		nsize = snprintf(buf, 10, "%u\n", cluster0_qos_max / LIMIT_FREQ_DIVIDER);
+	}
+
+	return nsize;
+}
+
+static void enable_nonboot_cluster_cpus(void)
+{
+	pm_qos_update_request(&cpufreq_cpu_hotplug_max_request, NR_CPUS);
+}
+
+static void disable_nonboot_cluster_cpus(void)
+{
+	pm_qos_update_request(&cpufreq_cpu_hotplug_max_request, NR_CLUST1_CPUS);
+}
+
+static void save_cpufreq_max_limit(int input)
+{
+	int cluster1_input = input, cluster0_input;
+
+	if (cluster1_input >= (int)freq_min[CL_ONE]) {
+		if (cluster1_hotplugged) {
+			enable_nonboot_cluster_cpus();
+			cluster1_hotplugged = false;
+		}
+
+		cluster1_input = max(cluster1_input, (int)freq_min[CL_ONE]);
+		cluster0_input = core_max_qos_const[CL_ZERO].default_value;
+	} else if (cluster1_input < (int)freq_min[CL_ONE]) {
+		if (cluster1_input < 0) {
+			if (cluster1_hotplugged) {
+				enable_nonboot_cluster_cpus();
+				cluster1_hotplugged = false;
+			}
+
+			cluster1_input = core_max_qos_const[CL_ONE].default_value;
+			cluster0_input = core_max_qos_const[CL_ZERO].default_value;
+		} else {
+			cluster0_input = cluster1_input * LIMIT_FREQ_DIVIDER;
+			if (cluster0_input > 0)
+				cluster0_input = max(cluster0_input, (int)freq_min[CL_ZERO]);
+			cluster1_input = qos_min_default_value[CL_ONE];
+
+			if (!cluster1_hotplugged) {
+				disable_nonboot_cluster_cpus();
+				cluster1_hotplugged = true;
+			}
+		}
+	}
+
+	if (pm_qos_request_active(&core_max_qos[CL_ONE]))
+		pm_qos_update_request(&core_max_qos[CL_ONE], cluster1_input);
+	if (pm_qos_request_active(&core_max_qos[CL_ZERO]))
+		pm_qos_update_request(&core_max_qos[CL_ZERO], cluster0_input);
+}
+
+static ssize_t store_cpufreq_max_limit(struct kobject *kobj, struct attribute *attr,
+					const char *buf, size_t count)
+{
+	int cluster1_input;
+
+	if (!sscanf(buf, "%8d", &cluster1_input))
+		return -EINVAL;
+
+	save_cpufreq_max_limit(cluster1_input);
+
+	return count;
+}
+>>>>>>> 1f560a611939... dvfs: separate min, max store function
 #endif
 
 #ifdef CONFIG_SW_SELF_DISCHARGING
