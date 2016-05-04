@@ -189,6 +189,9 @@ struct max77843_charger_data {
 	int		siop_level;
 	int uvlo_attach_flag;
 	int uvlo_attach_cable_type;
+#if defined(CONFIG_BATTERY_SWELLING)
+	unsigned int swelling_chg_current;
+#endif
 
 	int		irq_bypass;
 	int		irq_batp;

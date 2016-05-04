@@ -988,6 +988,9 @@ static int max77843_chg_set_property(struct power_supply *psy,
 
 		charger->cable_type = val->intval;
 		max77843_charger_function_control(charger);
+#if defined(CONFIG_BATTERY_SWELLING)
+		charger->swelling_chg_current = charger->charging_current;
+#endif
 		break;
 	/* val->intval : input charging current */
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
@@ -995,13 +998,25 @@ static int max77843_chg_set_property(struct power_supply *psy,
 		break;
 	/*  val->intval : charging current */
 	case POWER_SUPPLY_PROP_CURRENT_AVG:
+#if defined(CONFIG_BATTERY_SWELLING)
+		charger->swelling_chg_current = val->intval;
+		if (charger->swelling_chg_current > 
+			(charger->charging_current * charger->siop_level / 100)) {
+			break;
+		}
+		max77843_set_charge_current(charger, val->intval);
+#else
 		charger->charging_current = val->intval;
+#endif
 		break;
 	/* val->intval : charging current */
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		charger->charging_current = val->intval;
 		max77843_set_charge_current(charger,
 					    charger->charging_current);
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_FULL:
+		max77843_set_topoff_current(charger, val->intval, (70 * 60));
 		break;
 #if defined(CONFIG_AFC_CHARGER_MODE)
 	case POWER_SUPPLY_PROP_AFC_CHARGER_MODE:
@@ -1075,6 +1090,11 @@ static int max77843_chg_set_property(struct power_supply *psy,
 						set_charging_current_max);
 			}
 
+#if defined(CONFIG_BATTERY_SWELLING)
+			psy_do_property("battery", get, POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, value);
+			if (value.intval && current_now > charger->swelling_chg_current)
+				current_now = charger->swelling_chg_current;
+#endif
 			max77843_set_charge_current(charger, current_now);
 
 		}

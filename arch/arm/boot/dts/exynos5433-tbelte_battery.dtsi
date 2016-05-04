@@ -99,19 +99,19 @@
 		battery,temp_highlimit_threshold_event = <800>;
 		battery,temp_highlimit_recovery_event = <750>;
 		battery,temp_high_threshold_event = <700>;
-		battery,temp_high_recovery_event = <460>;
+		battery,temp_high_recovery_event = <530>;
 		battery,temp_low_threshold_event = <(-30)>;
 		battery,temp_low_recovery_event = <0>;
 		battery,temp_highlimit_threshold_normal = <800>;
 		battery,temp_highlimit_recovery_normal = <750>;
-		battery,temp_high_threshold_normal = <600>;
-		battery,temp_high_recovery_normal = <460>;
+		battery,temp_high_threshold_normal = <580>;
+		battery,temp_high_recovery_normal = <530>;
 		battery,temp_low_threshold_normal = <(-50)>;
 		battery,temp_low_recovery_normal = <0>;
 		battery,temp_highlimit_threshold_lpm = <800>;
 		battery,temp_highlimit_recovery_lpm = <750>;
-		battery,temp_high_threshold_lpm = <600>;
-		battery,temp_high_recovery_lpm = <460>;
+		battery,temp_high_threshold_lpm = <580>;
+		battery,temp_high_recovery_lpm = <530>;
 		battery,temp_low_threshold_lpm = <(-50)>;
 		battery,temp_low_recovery_lpm = <0>;
 		battery,full_check_type = <7>; /* SEC_BATTERY_FULLCHARGED_CHGPSY */
@@ -141,6 +141,17 @@
 		battery,charging_total_time = <21600>;
 		battery,recharging_total_time = <5400>;
 		battery,charging_reset_time = <0>;
+
+		battery,swelling_high_temp_block = <500>;
+		battery,swelling_high_temp_recov = <450>;
+		battery,swelling_low_temp_block = <50>;
+		battery,swelling_low_temp_recov = <100>;
+		battery,swelling_chg_current = <1600>;
+		battery,swelling_topoff_current = <200>;
+		battery,swelling_drop_float_voltage = <4200>;
+		battery,swelling_high_rechg_voltage = <4150>;
+		battery,swelling_low_rechg_voltage = <4050>;
+		battery,swelling_block_time = <600>;
 
 		io-channels = <&exynos_adc 1>, <&exynos_adc 2>;
 		io-channel-names = "adc-temp", "chg-adc-temp";
