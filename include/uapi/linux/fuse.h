@@ -244,6 +244,8 @@ struct fuse_file_lock {
  */
 #define CUSE_UNRESTRICTED_IOCTL	(1 << 0)
 
+#define FUSE_STACKED_IO	(1 << 18)
+
 /**
  * Release flags
  */
@@ -459,7 +461,7 @@ struct fuse_create_in {
 struct fuse_open_out {
 	uint64_t	fh;
 	uint32_t	open_flags;
-	uint32_t	padding;
+	int32_t         lower_fd;
 };
 
 struct fuse_release_in {
