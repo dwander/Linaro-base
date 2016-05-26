@@ -229,6 +229,27 @@ extern int __cpufreq_driver_getavg(struct cpufreq_policy *policy,
 int cpufreq_register_governor(struct cpufreq_governor *governor);
 void cpufreq_unregister_governor(struct cpufreq_governor *governor);
 
+static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy, unsigned int min, unsigned int max)
+{
+	if (policy->min < min)
+		policy->min = min;
+	if (policy->max < min)
+		policy->max = min;
+	if (policy->min > max)
+		policy->min = max;
+	if (policy->max > max)
+		policy->max = max;
+	if (policy->min > policy->max)
+		policy->min = policy->max;
+	return;
+}
+
+static inline void
+cpufreq_verify_within_cpu_limits(struct cpufreq_policy *policy)
+{
+	cpufreq_verify_within_limits(policy, policy->cpuinfo.min_freq,
+			policy->cpuinfo.max_freq);
+}
 
 /*********************************************************************
  *                      CPUFREQ DRIVER INTERFACE                     *
@@ -291,21 +312,6 @@ int cpufreq_unregister_driver(struct cpufreq_driver *driver_data);
 
 void cpufreq_notify_transition(struct cpufreq_policy *policy,
 		struct cpufreq_freqs *freqs, unsigned int state);
-
-static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy, unsigned int min, unsigned int max)
-{
-	if (policy->min < min)
-		policy->min = min;
-	if (policy->max < min)
-		policy->max = min;
-	if (policy->min > max)
-		policy->min = max;
-	if (policy->max > max)
-		policy->max = max;
-	if (policy->min > policy->max)
-		policy->min = policy->max;
-	return;
-}
 
 struct freq_attr {
 	struct attribute attr;
