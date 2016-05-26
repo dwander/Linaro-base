@@ -140,13 +140,13 @@ static void powernow_k6_set_state(struct cpufreq_policy *policy,
 {
 	struct cpufreq_freqs freqs;
 
-	if (clock_ratio[best_i].index > max_multiplier) {
+	if (clock_ratio[best_i].driver_data > max_multiplier) {
 		printk(KERN_ERR PFX "invalid target frequency\n");
 		return;
 	}
 
 	freqs.old = busfreq * powernow_k6_get_cpu_multiplier();
-	freqs.new = busfreq * clock_ratio[best_i].index;
+	freqs.new = busfreq * clock_ratio[best_i].driver_data;
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
 
@@ -249,7 +249,7 @@ have_busfreq:
 
 	/* table init */
 	for (i = 0; (clock_ratio[i].frequency != CPUFREQ_TABLE_END); i++) {
-		f = clock_ratio[i].index;
+		f = clock_ratio[i].driver_data;
 		if (f > max_multiplier)
 			clock_ratio[i].frequency = CPUFREQ_ENTRY_INVALID;
 		else
