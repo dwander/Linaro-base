@@ -157,7 +157,7 @@ fw-shipped-$(CONFIG_SENSORS_SSP_ATMEL) += ssp_at.fw ssp_crashed_at.fw
 fw-shipped-$(CONFIG_SENSORS_MPU6500_BMI058_DUAL) += ssp_at_bmi.fw
 #for ice40
 fw-shipped-$(CONFIG_ICE40LM_FPGA) += ice40lm/k640.fw
-TSPFIRMWARE_DIRECTORY = firmware/tsp_synaptics
+TSPFIRMWARE_DIRECTORY = $(srctree)/firmware/tsp_synaptics
 ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_h.fw \
 	tsp_synaptics/synaptics_b0_fac.fw
@@ -188,7 +188,7 @@ fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_DSX2) +=  \
 						tsp_synaptics/synaptics_5807_gts28.fw \
 						tsp_synaptics/synaptics_5806_gts28.fw
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_stm
+TSPFIRMWARE_DIRECTORY = $(srctree)/firmware/tsp_stm
 ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS) += \
 						tsp_stm/stm_s.fw	\
