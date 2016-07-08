@@ -10,7 +10,7 @@
 
 	- make
 			$ cd kernel
-			$ make ARCH=arm exynos5433-tbelteskt_defconfig
+			$ make ARCH=arm exynos5433-trelteskt_defconfig
 			$ make ARCH=arm
 
 2. Output files
