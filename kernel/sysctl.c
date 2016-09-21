@@ -333,6 +333,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#ifdef TJK_HMP
 	{
 		.procname	= "sched_nr_migrate",
 		.data		= &sysctl_sched_nr_migrate,
@@ -364,6 +365,7 @@ static struct ctl_table kern_table[] = {
 		.extra2		= &one,
 	},
 #endif /* CONFIG_SMP */
+#endif /* CONFIG_TJK_HMP */
 #ifdef CONFIG_NUMA_BALANCING
 	{
 		.procname	= "numa_balancing_scan_delay_ms",
@@ -372,6 +374,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#ifdef TJK_HMP
 	{
 		.procname	= "numa_balancing_scan_period_min_ms",
 		.data		= &sysctl_numa_balancing_scan_period_min,
@@ -393,6 +396,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#endif
 	{
 		.procname	= "numa_balancing_scan_size_mb",
 		.data		= &sysctl_numa_balancing_scan_size,
@@ -400,6 +404,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#ifdef TJK_HMP
 	{
 		.procname       = "numa_balancing_settle_count",
 		.data           = &sysctl_numa_balancing_settle_count,
@@ -423,6 +428,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_rt_handler,
 	},
+#endif
 	{
 		.procname	= "sched_rr_timeslice_ms",
 		.data		= &sched_rr_timeslice,

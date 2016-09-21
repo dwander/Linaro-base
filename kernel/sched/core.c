@@ -1732,9 +1732,9 @@ void set_numabalancing_state(bool enabled)
 /*
  * fork()/clone()-time setup:
  */
-void sched_fork(struct task_struct *p)
+void sched_fork(unsigned long flags, struct task_struct *p)
 {
-	unsigned long flags;
+	//unsigned long flags;
 	int cpu = get_cpu();
 
 	__sched_fork(p);

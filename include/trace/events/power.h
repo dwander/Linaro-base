@@ -65,6 +65,12 @@ TRACE_EVENT(machine_suspend,
 	TP_printk("state=%lu", (unsigned long)__entry->state)
 );
 
+DEFINE_EVENT(cpu, cpu_capacity,
+
+	TP_PROTO(unsigned int capacity, unsigned int cpu_id),
+	TP_ARGS(capacity, cpu_id)
+);
+
 DECLARE_EVENT_CLASS(wakeup_source,
 
 	TP_PROTO(const char *name, unsigned int state),

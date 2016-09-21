@@ -1109,6 +1109,24 @@ static inline struct cpuidle_state *idle_get_state(struct rq *rq)
 }
 #endif
 
+extern unsigned long capacity_orig_of(int cpu);
+
+extern struct static_key __sched_energy_freq;
+static inline bool sched_energy_freq(void)
+{
+	return static_key_false(&__sched_energy_freq);
+}
+
+#ifdef CONFIG_CPU_FREQ_GOV_SCHED
+void cpufreq_sched_set_cap(int cpu, unsigned long util);
+void cpufreq_sched_reset_cap(int cpu);
+#else
+static inline void cpufreq_sched_set_cap(int cpu, unsigned long util)
+{ }
+static inline void cpufreq_sched_reset_cap(int cpu)
+{ }
+#endif
+ 
 extern void sysrq_sched_debug_show(void);
 extern void sched_init_granularity(void);
 extern void update_max_interval(void);
