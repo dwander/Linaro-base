@@ -2148,23 +2148,8 @@ static int wm_adsp2_ena(struct wm_adsp *dsp)
 		ret = regmap_update_bits(dsp->regmap, dsp->base + ADSP2_CONTROL,
 				 ADSP2_SYS_ENA, ADSP2_SYS_ENA);
 
-<<<<<<< HEAD
 		if (ret != 0)
 			return ret;
-=======
-	/* Wait for the RAM to start, should be near instantaneous */
-	for (count = 0; count < 10; ++count) {
-		ret = regmap_read(dsp->regmap, dsp->base + ADSP2_STATUS1,
-				  &val);
-		if (ret != 0)
-			return ret;
-
-		if (val & ADSP2_RAM_RDY)
-			break;
-
-		msleep(1);
-	}
->>>>>>> v3.10.103
 
 		/* Wait for the RAM to start, should be near instantaneous */
 		for (count = 0; count < 10; ++count) {
@@ -2972,7 +2957,6 @@ err_capt_buf:
 
 	return ret;
 }
-<<<<<<< HEAD
 EXPORT_SYMBOL_GPL(wm_adsp_stream_alloc);
 
 int wm_adsp_stream_free(struct wm_adsp *adsp)
@@ -3184,8 +3168,5 @@ int wm_adsp_stream_avail(const struct wm_adsp *adsp)
 			adsp->capt_buf_size);
 }
 EXPORT_SYMBOL_GPL(wm_adsp_stream_avail);
-=======
-EXPORT_SYMBOL_GPL(wm_adsp2_init);
->>>>>>> v3.10.103
 
 MODULE_LICENSE("GPL v2");

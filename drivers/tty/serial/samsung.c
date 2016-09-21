@@ -1297,7 +1297,6 @@ static void s3c24xx_serial_pm(struct uart_port *port, unsigned int level,
 			      unsigned int old)
 {
 	struct s3c24xx_uart_port *ourport = to_ourport(port);
-<<<<<<< HEAD
 	unsigned int umcon;
 
 	switch (level) {
@@ -1309,19 +1308,6 @@ static void s3c24xx_serial_pm(struct uart_port *port, unsigned int level,
 
 		if (ourport->domain == DOMAIN_AUD)
 			aud_uart_gpio_cfg(&ourport->pdev->dev, level);
-=======
-	int timeout = 10000;
-
-	ourport->pm_level = level;
-
-	switch (level) {
-	case 3:
-		while (--timeout && !s3c24xx_serial_txempty_nofifo(port))
-			udelay(100);
-
-		if (!IS_ERR(ourport->baudclk))
-			clk_disable_unprepare(ourport->baudclk);
->>>>>>> v3.10.103
 
 		clk_disable_unprepare(ourport->clk);
 		break;

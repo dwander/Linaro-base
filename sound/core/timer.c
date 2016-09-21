@@ -503,16 +503,8 @@ static int _snd_timer_stop(struct snd_timer_instance *timeri, int event)
 		return -ENXIO;
 
 	if (timeri->flags & SNDRV_TIMER_IFLG_SLAVE) {
-<<<<<<< HEAD
-		if (!keep_flag) {
-			spin_lock_irqsave(&slave_active_lock, flags);
-			timeri->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
-			list_del_init(&timeri->ack_list);
-			list_del_init(&timeri->active_list);
-=======
 		spin_lock_irqsave(&slave_active_lock, flags);
 		if (!(timeri->flags & SNDRV_TIMER_IFLG_RUNNING)) {
->>>>>>> v3.10.103
 			spin_unlock_irqrestore(&slave_active_lock, flags);
 			return -EBUSY;
 		}
@@ -734,13 +726,8 @@ void snd_timer_interrupt(struct snd_timer * timer, unsigned long ticks_left)
 			ti->cticks = ti->ticks;
 		} else {
 			ti->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
-<<<<<<< HEAD
-			if (--timer->running)
-				list_del_init(&ti->active_list);
-=======
 			--timer->running;
 			list_del_init(&ti->active_list);
->>>>>>> v3.10.103
 		}
 		if ((timer->hw.flags & SNDRV_TIMER_HW_TASKLET) ||
 		    (ti->flags & SNDRV_TIMER_IFLG_FAST))

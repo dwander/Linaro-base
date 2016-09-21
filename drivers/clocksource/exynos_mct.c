@@ -437,10 +437,7 @@ static int __cpuinit exynos4_local_timer_setup(struct clock_event_device *evt)
 	evt->set_mode = exynos4_tick_set_mode;
 	evt->features = CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT;
 	evt->rating = 450;
-<<<<<<< HEAD
 	tick_base_cnt = 0;
-=======
->>>>>>> v3.10.103
 
 	if (!soc_is_exynos5433()) {
 		tick_base_cnt = 1;
@@ -457,8 +454,6 @@ static int __cpuinit exynos4_local_timer_setup(struct clock_event_device *evt)
 	} else {
 		enable_percpu_irq(mct_irqs[MCT_L0_IRQ], 0);
 	}
-	clockevents_config_and_register(evt, clk_rate / (TICK_BASE_CNT + 1),
-					0xf, 0x7fffffff);
 
 	clockevents_config_and_register(evt, clk_rate / (tick_base_cnt + 1),
 					0xf, 0x7fffffff);

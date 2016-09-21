@@ -170,7 +170,16 @@ static const struct usb_device_id usb_quirk_list[] = {
 	/* INTEL VALUE SSD */
 	{ USB_DEVICE(0x8086, 0xf1a5), .driver_info = USB_QUIRK_RESET_RESUME },
 
-<<<<<<< HEAD
+	/* ASUS Base Station(T100) */
+	{ USB_DEVICE(0x0b05, 0x17e0), .driver_info =
+			USB_QUIRK_IGNORE_REMOTE_WAKEUP },
+
+	/* Blackmagic Design Intensity Shuttle */
+	{ USB_DEVICE(0x1edb, 0xbd3b), .driver_info = USB_QUIRK_NO_LPM },
+
+	/* Blackmagic Design UltraStudio SDI */
+	{ USB_DEVICE(0x1edb, 0xbd4f), .driver_info = USB_QUIRK_NO_LPM },
+
 	/* IMC XMM626x modem */
 	{ USB_DEVICE(0x1519, 0x0020),
 		.driver_info = USB_QUIRK_HSIC_TUNE | USB_QUIRK_NO_DPM_RESUME
@@ -199,17 +208,6 @@ static const struct usb_device_id usb_quirk_list[] = {
 	/* Ericsson M7450 modem */
 	{ USB_DEVICE(0x04cc, 0x2342),
 		.driver_info = USB_QUIRK_HSIC_TUNE},
-=======
-	/* ASUS Base Station(T100) */
-	{ USB_DEVICE(0x0b05, 0x17e0), .driver_info =
-			USB_QUIRK_IGNORE_REMOTE_WAKEUP },
-
-	/* Blackmagic Design Intensity Shuttle */
-	{ USB_DEVICE(0x1edb, 0xbd3b), .driver_info = USB_QUIRK_NO_LPM },
-
-	/* Blackmagic Design UltraStudio SDI */
-	{ USB_DEVICE(0x1edb, 0xbd4f), .driver_info = USB_QUIRK_NO_LPM },
->>>>>>> v3.10.103
 
 	{ }  /* terminating entry must be last */
 };

@@ -813,14 +813,11 @@ static bool new_idmap_permitted(const struct file *file,
 		if (cap_setid == CAP_SETUID) {
 			kuid_t uid = make_kuid(ns->parent, id);
 			if (uid_eq(uid, cred->euid))
-<<<<<<< HEAD
-=======
 				return true;
 		} else if (cap_setid == CAP_SETGID) {
 			kgid_t gid = make_kgid(ns->parent, id);
 			if (!(ns->flags & USERNS_SETGROUPS_ALLOWED) &&
 			    gid_eq(gid, cred->egid))
->>>>>>> v3.10.103
 				return true;
 		}
 	}
@@ -840,8 +837,6 @@ static bool new_idmap_permitted(const struct file *file,
 	return false;
 }
 
-<<<<<<< HEAD
-=======
 int proc_setgroups_show(struct seq_file *seq, void *v)
 {
 	struct user_namespace *ns = seq->private;
@@ -920,27 +915,18 @@ out_unlock:
 	goto out;
 }
 
->>>>>>> v3.10.103
 bool userns_may_setgroups(const struct user_namespace *ns)
 {
 	bool allowed;
 
-<<<<<<< HEAD
-	mutex_lock(&id_map_mutex);
-=======
 	mutex_lock(&userns_state_mutex);
->>>>>>> v3.10.103
 	/* It is not safe to use setgroups until a gid mapping in
 	 * the user namespace has been established.
 	 */
 	allowed = ns->gid_map.nr_extents != 0;
-<<<<<<< HEAD
-	mutex_unlock(&id_map_mutex);
-=======
 	/* Is setgroups allowed? */
 	allowed = allowed && (ns->flags & USERNS_SETGROUPS_ALLOWED);
 	mutex_unlock(&userns_state_mutex);
->>>>>>> v3.10.103
 
 	return allowed;
 }

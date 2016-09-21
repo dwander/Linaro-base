@@ -161,6 +161,8 @@ struct crypt_config {
 	 */
 	unsigned int dmreq_start;
 
+	unsigned int per_bio_data_size;
+
 	unsigned long flags;
 	unsigned int key_size;
 	unsigned int key_parts;
@@ -1391,14 +1393,9 @@ static void crypt_dtr(struct dm_target *ti)
 
 	if (cc->io_queue)
 		destroy_workqueue(cc->io_queue);
-<<<<<<< HEAD
 	if (cc->hw_fmp == 0)
 		if (cc->crypt_queue)
 			destroy_workqueue(cc->crypt_queue);
-=======
-	if (cc->crypt_queue)
-		destroy_workqueue(cc->crypt_queue);
->>>>>>> v3.10.103
 
 	crypt_free_tfms(cc);
 
@@ -1646,45 +1643,34 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		goto bad;
 	}
 
-<<<<<<< HEAD
 	if (cc->hw_fmp == 0) {
 		cc->dmreq_start = sizeof(struct ablkcipher_request);
 		cc->dmreq_start += crypto_ablkcipher_reqsize(any_tfm(cc));
-		cc->dmreq_start = ALIGN(cc->dmreq_start, crypto_tfm_ctx_alignment());
-		cc->dmreq_start += crypto_ablkcipher_alignmask(any_tfm(cc)) &
-				   ~(crypto_tfm_ctx_alignment() - 1);
+		cc->dmreq_start = ALIGN(cc->dmreq_start, __alignof__(struct dm_crypt_request));
+
+		if (crypto_ablkcipher_alignmask(any_tfm(cc)) < CRYPTO_MINALIGN) {
+			/* Allocate the padding exactly */
+			iv_size_padding = -(cc->dmreq_start + sizeof(struct dm_crypt_request))
+				& crypto_ablkcipher_alignmask(any_tfm(cc));
+		} else {
+			/*
+			 * If the cipher requires greater alignment than kmalloc
+			 * alignment, we don't know the exact position of the
+			 * initialization vector. We must assume worst case.
+			 */
+			iv_size_padding = crypto_ablkcipher_alignmask(any_tfm(cc));
+		}
 
 		cc->req_pool = mempool_create_kmalloc_pool(MIN_IOS, cc->dmreq_start +
-				sizeof(struct dm_crypt_request) + cc->iv_size);
+			sizeof(struct dm_crypt_request) + iv_size_padding + cc->iv_size);
 		if (!cc->req_pool) {
 			ti->error = "Cannot allocate crypt request mempool";
 			goto bad;
 		}
-=======
-	cc->dmreq_start = sizeof(struct ablkcipher_request);
-	cc->dmreq_start += crypto_ablkcipher_reqsize(any_tfm(cc));
-	cc->dmreq_start = ALIGN(cc->dmreq_start, __alignof__(struct dm_crypt_request));
 
-	if (crypto_ablkcipher_alignmask(any_tfm(cc)) < CRYPTO_MINALIGN) {
-		/* Allocate the padding exactly */
-		iv_size_padding = -(cc->dmreq_start + sizeof(struct dm_crypt_request))
-				& crypto_ablkcipher_alignmask(any_tfm(cc));
-	} else {
-		/*
-		 * If the cipher requires greater alignment than kmalloc
-		 * alignment, we don't know the exact position of the
-		 * initialization vector. We must assume worst case.
-		 */
-		iv_size_padding = crypto_ablkcipher_alignmask(any_tfm(cc));
-	}
-
-	cc->req_pool = mempool_create_kmalloc_pool(MIN_IOS, cc->dmreq_start +
-			sizeof(struct dm_crypt_request) + iv_size_padding + cc->iv_size);
-	if (!cc->req_pool) {
-		ti->error = "Cannot allocate crypt request mempool";
-		goto bad;
-	}
->>>>>>> v3.10.103
+		cc->per_bio_data_size = ti->per_bio_data_size =
+				sizeof(struct dm_crypt_io) + cc->dmreq_start +
+				sizeof(struct dm_crypt_request) + cc->iv_size;
 
 		cc->page_pool = mempool_create_page_pool(MIN_POOL_PAGES, 0);
 		if (!cc->page_pool) {

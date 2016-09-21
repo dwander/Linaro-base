@@ -299,11 +299,8 @@ static int evdev_release(struct inode *inode, struct file *file)
 	mutex_unlock(&evdev->mutex);
 
 	evdev_detach_client(evdev, client);
-<<<<<<< HEAD
 	if (client->use_wake_lock)
 		wake_lock_destroy(&client->wake_lock);
-=======
->>>>>>> v3.10.103
 
 	if (is_vmalloc_addr(client))
 		vfree(client);

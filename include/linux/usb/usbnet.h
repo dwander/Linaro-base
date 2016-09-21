@@ -60,6 +60,7 @@ struct usbnet {
 	struct mutex		interrupt_mutex;
 	struct usb_anchor	deferred;
 	struct work_struct	bh_w;
+	struct tasklet_struct	bh;
 
 	struct work_struct	kevent;
 	unsigned long		flags;

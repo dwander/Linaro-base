@@ -220,10 +220,7 @@ bool __get_page_tail(struct page *page)
 	unsigned long flags;
 	bool got = false;
 	struct page *page_head = compound_head(page);
-<<<<<<< HEAD
-=======
 
->>>>>>> v3.10.103
 	if (likely(page != page_head && get_page_unless_zero(page_head))) {
 		/* Ref to put_compound_page() comment. */
 		if (PageSlab(page_head) || PageHeadHuge(page_head)) {

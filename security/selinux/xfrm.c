@@ -163,16 +163,12 @@ int selinux_xfrm_state_pol_flow_match(struct xfrm_state *x, struct xfrm_policy *
 static int selinux_xfrm_skb_sid_ingress(struct sk_buff *skb,
 					u32 *sid, int ckall)
 {
-<<<<<<< HEAD
-	struct sec_path *sp;
+	struct sec_path *sp = skb->sp;
 #ifdef CONFIG_TIMA_RKP_RO_CRED
 	int rc;
 	if ((rc = security_integrity_current()))
 		return rc;
 #endif
-=======
-	struct sec_path *sp = skb->sp;
->>>>>>> v3.10.103
 
 	*sid = SECSID_NULL;
 

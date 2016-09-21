@@ -500,7 +500,6 @@ static inline cpumask_t *mm_cpumask(struct mm_struct *mm)
 	return mm->cpu_vm_mask_var;
 }
 
-<<<<<<< HEAD
 
 /* Return the name for an anonymous mapping or NULL for a file-backed mapping */
 static inline const char __user *vma_get_anon_name(struct vm_area_struct *vma)
@@ -510,7 +509,6 @@ static inline const char __user *vma_get_anon_name(struct vm_area_struct *vma)
 
 	return vma->shared.anon_name;
 }
-=======
 #if defined(CONFIG_NUMA_BALANCING) || defined(CONFIG_COMPACTION)
 /*
  * Memory barriers to keep this state in sync are graciously provided by
@@ -551,6 +549,5 @@ static inline void clear_tlb_flush_pending(struct mm_struct *mm)
 {
 }
 #endif
->>>>>>> v3.10.103
 
 #endif /* _LINUX_MM_TYPES_H */

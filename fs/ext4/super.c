@@ -404,11 +404,6 @@ static void ext4_handle_error(struct super_block *sb, char* buf)
 		ext4_msg(sb, KERN_CRIT, "Remounting filesystem read-only");
 		sb->s_flags |= MS_RDONLY;
 	}
-<<<<<<< HEAD
-	if (test_opt(sb, ERRORS_PANIC))
-		panic("EXT4-fs (device %s): panic! %s\n",
-			sb->s_id, buf?buf:"no message");
-=======
 	if (test_opt(sb, ERRORS_PANIC)) {
 		if (EXT4_SB(sb)->s_journal &&
 		  !(EXT4_SB(sb)->s_journal->j_flags & JBD2_REC_ERR))
@@ -416,7 +411,6 @@ static void ext4_handle_error(struct super_block *sb, char* buf)
 		panic("EXT4-fs (device %s): panic forced after error\n",
 			sb->s_id);
 	}
->>>>>>> v3.10.103
 }
 
 void __ext4_error(struct super_block *sb, const char *function,
@@ -4076,13 +4070,9 @@ no_journal:
 			 "available");
 	}
 
-<<<<<<< HEAD
 	atomic64_set(&sbi->s_r_blocks_count, ext4_r_blocks_count(es));
 
-	err = ext4_reserve_clusters(sbi, ext4_calculate_resv_clusters(sbi));
-=======
 	err = ext4_reserve_clusters(sbi, ext4_calculate_resv_clusters(sb));
->>>>>>> v3.10.103
 	if (err) {
 		ext4_msg(sb, KERN_ERR, "failed to reserve %llu clusters for "
 			 "reserved pool", ext4_calculate_resv_clusters(sb));

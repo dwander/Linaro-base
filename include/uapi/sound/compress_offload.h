@@ -80,11 +80,7 @@ struct snd_compr_tstamp {
 struct snd_compr_avail {
 	__u64 avail;
 	struct snd_compr_tstamp tstamp;
-<<<<<<< HEAD
-} __attribute__((packed, aligned(4)));
-=======
 } __attribute__((packed));
->>>>>>> v3.10.103
 
 enum snd_compr_direction {
 	SND_COMPRESS_PLAYBACK = 0,

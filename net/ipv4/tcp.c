@@ -815,17 +815,9 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 		gso_size = max_t(u32, gso_size,
 				 sysctl_tcp_min_tso_segs * mss_now);
 
-<<<<<<< HEAD
-		/* TSQ : try to have two TSO segments in flight */
-/* For_WiFi_Throughput_enhancement
-		xmit_size_goal = min_t(u32, xmit_size_goal,
-				       sysctl_tcp_limit_output_bytes >> 1);
-*/
-=======
 		xmit_size_goal = min_t(u32, gso_size,
 				       sk->sk_gso_max_size - 1 - hlen);
 
->>>>>>> v3.10.103
 		xmit_size_goal = tcp_bound_to_half_wnd(tp, xmit_size_goal);
 
 		/* We try hard to avoid divides here */

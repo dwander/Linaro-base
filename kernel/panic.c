@@ -22,7 +22,7 @@
 #include <linux/sysrq.h>
 #include <linux/init.h>
 #include <linux/nmi.h>
-<<<<<<< HEAD
+#include <linux/console.h>
 #include "sched/sched.h"
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
 #include <linux/sec_debug.h>
@@ -32,9 +32,6 @@
 #include <mach/coresight.h>
 #endif
 #include <mach/exynos-ss.h>
-=======
-#include <linux/console.h>
->>>>>>> v3.10.103
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18

@@ -284,11 +284,7 @@ void dst_release(struct dst_entry *dst)
 
 		newrefcnt = atomic_dec_return(&dst->__refcnt);
 		WARN_ON(newrefcnt < 0);
-<<<<<<< HEAD
-		if (unlikely(dst->flags & DST_NOCACHE) && !newrefcnt)
-=======
 		if (!newrefcnt && unlikely(nocache))
->>>>>>> v3.10.103
 			call_rcu(&dst->rcu_head, dst_destroy_rcu);
 	}
 }

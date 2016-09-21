@@ -982,6 +982,7 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 		unsigned long l[LONGS(EXTRACT_SIZE)];
 	} hash;
 	__u32 workspace[SHA_WORKSPACE_WORDS];
+	__u8 extract[64];
 	unsigned long flags;
 
 	/* Generate a hash across the pool, 16 words (512 bits) at a time */
@@ -1002,15 +1003,12 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	__mix_pool_bytes(r, hash.w, sizeof(hash.w));
 	spin_unlock_irqrestore(&r->lock, flags);
 
-<<<<<<< HEAD
-=======
 	/*
 	 * To avoid duplicates, we atomically extract a portion of the
 	 * pool while mixing, and hash one final time.
 	 */
 	sha_transform(hash.w, extract, workspace);
 	memzero_explicit(extract, sizeof(extract));
->>>>>>> v3.10.103
 	memzero_explicit(workspace, sizeof(workspace));
 
 	/*

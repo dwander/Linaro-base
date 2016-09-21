@@ -1844,15 +1844,6 @@ static int dwc3_gadget_start(struct usb_gadget *g,
 		goto err0;
 	}
 
-	irq = platform_get_irq(to_platform_device(dwc->dev), 0);
-	ret = request_threaded_irq(irq, dwc3_interrupt, dwc3_thread_interrupt,
-			IRQF_SHARED | IRQF_ONESHOT, "dwc3", dwc);
-	if (ret) {
-		dev_err(dwc->dev, "failed to request irq #%d --> %d\n",
-				irq, ret);
-		goto err0;
-	}
-
 	spin_lock_irqsave(&dwc->lock, flags);
 
 	if (dwc->gadget_driver) {
@@ -1861,62 +1852,9 @@ static int dwc3_gadget_start(struct usb_gadget *g,
 				dwc->gadget_driver->driver.name);
 		ret = -EBUSY;
 		goto err1;
-<<<<<<< HEAD
 	}
 
 	dwc->gadget_driver	= driver;
-=======
-	}
-
-	dwc->gadget_driver	= driver;
-
-	reg = dwc3_readl(dwc->regs, DWC3_DCFG);
-	reg &= ~(DWC3_DCFG_SPEED_MASK);
-
-	/**
-	 * WORKAROUND: DWC3 revision < 2.20a have an issue
-	 * which would cause metastability state on Run/Stop
-	 * bit if we try to force the IP to USB2-only mode.
-	 *
-	 * Because of that, we cannot configure the IP to any
-	 * speed other than the SuperSpeed
-	 *
-	 * Refers to:
-	 *
-	 * STAR#9000525659: Clock Domain Crossing on DCTL in
-	 * USB 2.0 Mode
-	 */
-	if (dwc->revision < DWC3_REVISION_220A)
-		reg |= DWC3_DCFG_SUPERSPEED;
-	else
-		reg |= dwc->maximum_speed;
-	dwc3_writel(dwc->regs, DWC3_DCFG, reg);
-
-	dwc->start_config_issued = false;
-
-	/* Start with SuperSpeed Default */
-	dwc3_gadget_ep0_desc.wMaxPacketSize = cpu_to_le16(512);
-
-	dep = dwc->eps[0];
-	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false);
-	if (ret) {
-		dev_err(dwc->dev, "failed to enable %s\n", dep->name);
-		goto err2;
-	}
-
-	dep = dwc->eps[1];
-	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false);
-	if (ret) {
-		dev_err(dwc->dev, "failed to enable %s\n", dep->name);
-		goto err3;
-	}
-
-	/* begin to receive SETUP packets */
-	dwc->ep0state = EP0_SETUP_PHASE;
-	dwc3_ep0_out_start(dwc);
-
-	dwc3_gadget_enable_irq(dwc);
->>>>>>> v3.10.103
 
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
@@ -1928,15 +1866,6 @@ static int dwc3_gadget_start(struct usb_gadget *g,
 
 	return 0;
 
-<<<<<<< HEAD
-=======
-err3:
-	__dwc3_gadget_ep_disable(dwc->eps[0]);
-
-err2:
-	dwc->gadget_driver = NULL;
-
->>>>>>> v3.10.103
 err1:
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
@@ -1965,12 +1894,9 @@ static int dwc3_gadget_stop(struct usb_gadget *g,
 
 	irq = platform_get_irq(to_platform_device(dwc->dev), 0);
 	free_irq(irq, dwc);
-<<<<<<< HEAD
 #ifdef CONFIG_USBIRQ_BALANCING_LTE_HIGHTP
 	unregister_netdevice_notifier(&rndis_notifier);
 #endif
-=======
->>>>>>> v3.10.103
 
 	return 0;
 }

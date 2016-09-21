@@ -272,7 +272,9 @@ static void mmc_select_card_type(struct mmc_card *card)
 	card->ext_csd.card_type = card_type;
 }
 
-<<<<<<< HEAD
+/* Minimum partition switch timeout in milliseconds */
+#define MMC_MIN_PART_SWITCH_TIME	300
+
 /* eMMC 5.0 or later only */
 /*
  * mmc_merge_ext_csd - merge some ext_csd field to a variable.
@@ -303,10 +305,6 @@ static unsigned long long mmc_merge_ext_csd(u8 *ext_csd, bool continuous, int co
 
 	return merge_ext_csd;
 }
-=======
-/* Minimum partition switch timeout in milliseconds */
-#define MMC_MIN_PART_SWITCH_TIME	300
->>>>>>> v3.10.103
 
 /*
  * Decode extended CSD.
