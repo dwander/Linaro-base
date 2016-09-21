@@ -25,6 +25,7 @@
 #include <linux/of.h>
 #include <linux/interrupt.h>
 #include <linux/bug.h>
+#include <linux/pci.h>
 
 #include <asm/machdep.h>
 #include <asm/firmware.h>
