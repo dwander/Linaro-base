@@ -1372,8 +1372,8 @@ static size_t get_freq_table_size(struct cpufreq_frequency_table *freq_table)
 }
 
 #ifdef CONFIG_SOC_EXYNOS5433
-#define KFC_MAX_VOLT 1200000
-#define EGL_MAX_VOLT 1300000
+#define KFC_MAX_VOLT 1300000
+#define EGL_MAX_VOLT 1312500
 #else
 #warning "Please define core maximum voltages for current SoC."
 #define KFC_MAX_VOLT 1300000
