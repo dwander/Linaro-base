@@ -909,7 +909,7 @@ static void cpufreq_interactive_boost(const struct cpufreq_policy *policy)
 	int anyboost = 0;
 	unsigned long flags[2];
 	struct cpufreq_interactive_cpuinfo *pcpu;
-	struct cpufreq_interactive_tunables *tunables;
+	struct cpufreq_interactive_tunables *tunables = NULL;
 	struct cpumask boost_mask;
 
 	spin_lock_irqsave(&speedchange_cpumask_lock, flags[0]);
