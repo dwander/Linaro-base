@@ -164,6 +164,7 @@ extern int nr_processes(void);
 extern unsigned long nr_running(void);
 extern unsigned long nr_iowait(void);
 extern unsigned long nr_iowait_cpu(int cpu);
+extern unsigned long avg_nr_running(void);
 extern unsigned long this_cpu_load(void);
 #ifdef CONFIG_SCHED_HMP
 extern unsigned long nr_running_cpu(unsigned int cpu);
@@ -1108,6 +1109,14 @@ struct sched_avg {
 #endif
 	u32 usage_avg_sum;
 };
+
+#ifdef CONFIG_SCHED_HMP
+/*
+ * We want to avoid boosting any processes forked from init (PID 1)
+ * and kthreadd (assumed to be PID 2).
+ */
+#define hmp_task_should_forkboost(task) ((task->parent && task->parent->pid > 2))
+#endif
 
 #ifdef CONFIG_SCHEDSTATS
 struct sched_statistics {
