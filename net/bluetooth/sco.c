@@ -459,9 +459,14 @@ static int sco_sock_bind(struct socket *sock, struct sockaddr *addr, int alen)
 	if (!addr || addr->sa_family != AF_BLUETOOTH)
 		return -EINVAL;
 
+<<<<<<< HEAD
 	memset(&sa, 0, sizeof(sa));
 	len = min_t(unsigned int, sizeof(sa), alen);
 	memcpy(&sa, addr, len);
+=======
+	if (addr_len < sizeof(struct sockaddr_sco))
+		return -EINVAL;
+>>>>>>> v3.10.103
 
 	lock_sock(sk);
 
@@ -717,7 +722,6 @@ static int sco_sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 	    test_bit(BT_SK_DEFER_SETUP, &bt_sk(sk)->flags)) {
 		sco_conn_defer_accept(pi->conn->hcon, 0);
 		sk->sk_state = BT_CONFIG;
-		msg->msg_namelen = 0;
 
 		release_sock(sk);
 		return 0;
@@ -876,7 +880,8 @@ static int sco_sock_shutdown(struct socket *sock, int how)
 		sco_sock_clear_timer(sk);
 		__sco_sock_close(sk);
 
-		if (sock_flag(sk, SOCK_LINGER) && sk->sk_lingertime)
+		if (sock_flag(sk, SOCK_LINGER) && sk->sk_lingertime &&
+		    !(current->flags & PF_EXITING))
 			err = bt_sock_wait_state(sk, BT_CLOSED,
 						 sk->sk_lingertime);
 	}
@@ -896,7 +901,8 @@ static int sco_sock_release(struct socket *sock)
 
 	sco_sock_close(sk);
 
-	if (sock_flag(sk, SOCK_LINGER) && sk->sk_lingertime) {
+	if (sock_flag(sk, SOCK_LINGER) && sk->sk_lingertime &&
+	    !(current->flags & PF_EXITING)) {
 		lock_sock(sk);
 		err = bt_sock_wait_state(sk, BT_CLOSED, sk->sk_lingertime);
 		release_sock(sk);

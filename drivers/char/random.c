@@ -1002,6 +1002,15 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	__mix_pool_bytes(r, hash.w, sizeof(hash.w));
 	spin_unlock_irqrestore(&r->lock, flags);
 
+<<<<<<< HEAD
+=======
+	/*
+	 * To avoid duplicates, we atomically extract a portion of the
+	 * pool while mixing, and hash one final time.
+	 */
+	sha_transform(hash.w, extract, workspace);
+	memzero_explicit(extract, sizeof(extract));
+>>>>>>> v3.10.103
 	memzero_explicit(workspace, sizeof(workspace));
 
 	/*
@@ -1527,12 +1536,11 @@ ctl_table random_table[] = {
 
 static u32 random_int_secret[MD5_MESSAGE_BYTES / 4] ____cacheline_aligned;
 
-static int __init random_int_secret_init(void)
+int random_int_secret_init(void)
 {
 	get_random_bytes(random_int_secret, sizeof(random_int_secret));
 	return 0;
 }
-late_initcall(random_int_secret_init);
 
 /*
  * Get a random word for internal kernel use only. Similar to urandom but

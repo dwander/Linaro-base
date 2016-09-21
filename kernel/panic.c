@@ -22,6 +22,7 @@
 #include <linux/sysrq.h>
 #include <linux/init.h>
 #include <linux/nmi.h>
+<<<<<<< HEAD
 #include "sched/sched.h"
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
 #include <linux/sec_debug.h>
@@ -31,6 +32,9 @@
 #include <mach/coresight.h>
 #endif
 #include <mach/exynos-ss.h>
+=======
+#include <linux/console.h>
+>>>>>>> v3.10.103
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -165,6 +169,8 @@ void panic(const char *fmt, ...)
 	atomic_notifier_call_chain(&panic_notifier_list, 0, buf);
 
 	bust_spinlocks(0);
+
+	console_flush_on_panic();
 
 	if (!panic_blink)
 		panic_blink = no_blink;

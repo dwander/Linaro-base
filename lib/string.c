@@ -598,7 +598,11 @@ EXPORT_SYMBOL(memset);
 void memzero_explicit(void *s, size_t count)
 {
 	memset(s, 0, count);
+<<<<<<< HEAD
 	OPTIMIZER_HIDE_VAR(s);
+=======
+	barrier();
+>>>>>>> v3.10.103
 }
 EXPORT_SYMBOL(memzero_explicit);
 

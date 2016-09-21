@@ -454,7 +454,7 @@ minstrel_aggr_check(struct ieee80211_sta *pubsta, struct sk_buff *skb)
 	if (skb_get_queue_mapping(skb) == IEEE80211_AC_VO)
 		return;
 
-	ieee80211_start_tx_ba_session(pubsta, tid, 5000);
+	ieee80211_start_tx_ba_session(pubsta, tid, 0);
 }
 
 static void
@@ -826,6 +826,9 @@ minstrel_ht_update_cck(struct minstrel_priv *mp, struct minstrel_ht_sta *mi,
 	int i;
 
 	if (sband->band != IEEE80211_BAND_2GHZ)
+		return;
+
+	if (!(mp->hw->flags & IEEE80211_HW_SUPPORTS_HT_CCK_RATES))
 		return;
 
 	mi->cck_supported = 0;
