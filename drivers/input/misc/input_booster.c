@@ -786,13 +786,13 @@ static void	input_booster_lookup_times(struct booster_dvfs *dvfs)
 }
 
 #ifdef BOOSTER_SYSFS
-static ssize_t input_booster_get_debug_level(struct class *dev,
+static ssize_t input_booster_get_level(struct class *dev,
 		struct class_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", dbg_level);
 }
 
-static ssize_t input_booster_set_debug_level(struct class *dev,
+static ssize_t input_booster_set_level(struct class *dev,
 		struct class_attribute *attr, const char *buf, size_t count)
 {
 	unsigned long val;
@@ -805,7 +805,7 @@ static ssize_t input_booster_set_debug_level(struct class *dev,
 	return count;
 }
 
-static CLASS_ATTR(debug_level, S_IRUGO | S_IWUSR, input_booster_get_debug_level, input_booster_set_debug_level);
+static CLASS_ATTR(level, S_IRUGO | S_IWUSR, input_booster_get_level, input_booster_set_level);
 
 static ssize_t input_booster_get_dvfs_level(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -994,7 +994,7 @@ static struct attribute_group dvfs_attr_group = {
 
 static void input_booster_free_sysfs(struct input_booster *data)
 {
-	class_remove_file(data->class, &class_attr_debug_level);
+	class_remove_file(data->class, &class_attr_level);
 	class_destroy(data->class);
 }
 
@@ -1009,7 +1009,7 @@ static int input_booster_init_sysfs(struct input_booster *data)
 		goto err_create_class;
 	}
 
-	ret = class_create_file(data->class, &class_attr_debug_level);
+	ret = class_create_file(data->class, &class_attr_level);
 	if (ret) {
 		dev_err(data->dev, "Failed to create class\n");
 		goto err_create_class_file;
