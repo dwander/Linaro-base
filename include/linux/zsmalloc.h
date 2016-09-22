@@ -15,7 +15,6 @@
 #define _ZS_MALLOC_H_
 
 #include <linux/types.h>
-#include <linux/mm_types.h>
 
 /*
  * zsmalloc mapping modes
@@ -35,23 +34,25 @@ enum zs_mapmode {
 	 */
 };
 
-struct zs_ops {
-	struct page * (*alloc)(gfp_t);
-	void (*free)(struct page *);
-};
-
 struct zs_pool;
 
-struct zs_pool *zs_create_pool(gfp_t flags);
+struct zs_ops {
+	int (*evict)(struct zs_pool *pool, unsigned long handle);
+};
+
+struct zs_pool *zs_create_pool(char *name, gfp_t flags, struct zs_ops *ops);
 void zs_destroy_pool(struct zs_pool *pool);
 
 unsigned long zs_malloc(struct zs_pool *pool, size_t size);
 void zs_free(struct zs_pool *pool, unsigned long obj);
+int zs_shrink(struct zs_pool *pool);
 
 void *zs_map_object(struct zs_pool *pool, unsigned long handle,
 			enum zs_mapmode mm);
 void zs_unmap_object(struct zs_pool *pool, unsigned long handle);
 
 unsigned long zs_get_total_pages(struct zs_pool *pool);
+unsigned long zs_compact(struct zs_pool *pool);
+bool zs_compactable(struct zs_pool *pool, unsigned int pages);
 
 #endif
