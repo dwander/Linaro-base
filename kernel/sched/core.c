@@ -1126,7 +1126,7 @@ unsigned long wait_task_inactive(struct task_struct *p, long match_state)
 			if (match_state && unlikely(cpu_relaxed_read_long
 				(&(p->state)) != match_state))
 				return 0;
-			cpu_relax();
+			cpu_read_relax();
 		}
 
 		/*
@@ -2967,7 +2967,7 @@ int idle_cpu(int cpu)
 		return 0;
 
 #ifdef CONFIG_SMP
-	if (!llist_empty(&rq->wake_list))
+	if (!llist_empty_relaxed(&rq->wake_list))
 		return 0;
 #endif
 
