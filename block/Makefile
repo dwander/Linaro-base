@@ -19,6 +19,7 @@ obj-$(CONFIG_IOSCHED_BFQ)	+= bfq-iosched.o
 obj-$(CONFIG_IOSCHED_FIOPS)     += fiops-iosched.o
 obj-$(CONFIG_IOSCHED_SIO)       += row-iosched.o
 obj-$(CONFIG_IOSCHED_SIO)       += sio-iosched.o
+obj-$(CONFIG_IOSCHED_SIOPLUS)	+= sioplus-iosched.o
 obj-$(CONFIG_IOSCHED_SIO)       += vr-iosched.o
 obj-$(CONFIG_IOSCHED_SIO)       += zen-iosched.o
 
