@@ -60,6 +60,14 @@ struct mmc_queue {
 	struct mmc_queue_req	mqrq[EMMC_MAX_QUEUE_DEPTH];
 	struct mmc_queue_req	*mqrq_cur;
 	struct mmc_queue_req	*mqrq_prev;
+#ifdef CONFIG_MMC_SIMULATE_MAX_SPEED
+	atomic_t max_write_speed;
+	atomic_t max_read_speed;
+	atomic_t cache_size;
+	/* i/o tracking */
+	atomic_long_t cache_used;
+	unsigned long cache_jiffies;
+#endif
 };
 
 #define IS_RT_CLASS_REQ(x)	\
