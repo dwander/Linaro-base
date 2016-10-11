@@ -15,11 +15,11 @@
  */
 
 #include <linux/err.h>
-#include <linux/ion.h>
 #include <linux/memory.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include "ion.h"
 #include "ion_priv.h"
 /*
  * This mapper is valid for any heap that allocates memory that already has

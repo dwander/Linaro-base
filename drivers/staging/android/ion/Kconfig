@@ -1,16 +1,14 @@
 menuconfig ION
-	tristate "Ion Memory Manager"
-	depends on ARM
+	bool "Ion Memory Manager"
+	depends on HAVE_MEMBLOCK
 	select GENERIC_ALLOCATOR
 	select DMA_SHARED_BUFFER
-	help
-	  Chose this option to enable the ION Memory Manager.
-
-config ION_TEGRA
-	tristate "Ion for Tegra"
-	depends on ARCH_TEGRA && ION
-	help
-	  Choose this option if you wish to use ion on an nVidia Tegra.
+	---help---
+	  Chose this option to enable the ION Memory Manager,
+	  used by Android to efficiently allocate buffers
+	  from userspace that can be shared between drivers.
+	  If you're not using Android its probably safe to
+	  say N here.
 
 config ION_EXYNOS
 	tristate "Ion for Exynos"
@@ -27,5 +25,5 @@ config ION_EXYNOS_STAT_LOG
 	  Say Y if you need to see some stats info via debugfs
 
 if ION_EXYNOS
-source drivers/gpu/ion/exynos/Kconfig
+source drivers/staging/android/ion/exynos/Kconfig
 endif

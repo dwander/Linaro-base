@@ -16,13 +16,13 @@
  */
 
 #include <linux/device.h>
-#include <linux/ion.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/dma-mapping.h>
 
 /* for ion_heap_ops structure */
+#include "ion.h"
 #include "ion_priv.h"
 
 #define ION_CMA_ALLOCATE_FAILED -1
@@ -203,3 +203,4 @@ void ion_cma_heap_destroy(struct ion_heap *heap)
 
 	kfree(cma_heap);
 }
+
