@@ -24,7 +24,6 @@
 #include <linux/pm_qos.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/irqreturn.h>
 #include <mach/videonode.h>
 #include <mach/smc.h>
 #include <mach/bts.h>
@@ -534,7 +533,7 @@ struct gsc_vb2 {
 	void *(*init)(struct gsc_dev *gsc);
 	void (*cleanup)(void *alloc_ctx);
 
-	unsigned long (*plane_addr)(struct vb2_buffer *vb, u32 plane_no, bool);
+	unsigned long (*plane_addr)(struct vb2_buffer *vb, u32 plane_no);
 
 	int (*resume)(void *alloc_ctx);
 	void (*suspend)(void *alloc_ctx);
@@ -647,8 +646,6 @@ extern const struct gsc_vb2 gsc_vb2_cma;
 extern const struct gsc_vb2 gsc_vb2_ion;
 #endif
 
-#define gsc_ctx_protected_content(ctx) !!((ctx)->gsc_ctrls.drm_en->cur.val)
-
 void gsc_set_prefbuf(struct gsc_dev *gsc, struct gsc_frame frm);
 void gsc_pm_qos_ctrl(struct gsc_dev *gsc, enum gsc_qos_status status,
 			int mem_val, int int_val);
@@ -693,7 +690,6 @@ int gsc_out_link_validate(const struct media_pad *source,
 int gsc_pipeline_s_stream(struct gsc_dev *gsc, bool on);
 void gsc_dump_registers(struct gsc_dev *gsc);
 void gsc_hw_dump_regs(void __iomem *base);
-irqreturn_t gsc_m2m_irq_handler(int irq, void *priv);
 
 static inline void gsc_ctx_state_lock_set(u32 state, struct gsc_ctx *ctx)
 {

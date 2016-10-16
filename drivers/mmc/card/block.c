@@ -2567,21 +2567,17 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	unsigned int cmd_flags = req ? req->cmd_flags : 0;
 	unsigned long flags;
 
-	if (card->ext_csd.cmdq_mode_en) {
-		mmc_claim_host(card->host);
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-		if (mmc_bus_needs_resume(card->host))
-			mmc_resume_bus(card->host);
+	if (mmc_bus_needs_resume(card->host))
+		mmc_resume_bus(card->host);
 #endif
-	} else {
-		if (req && !mq->mqrq_prev->req) {
+
+	if (card->ext_csd.cmdq_mode_en)
+		mmc_claim_host(card->host);
+	else {
+		if (req && !mq->mqrq_prev->req)
 			/* claim host only for the first request */
 			mmc_claim_host(card->host);
-#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-			if (mmc_bus_needs_resume(card->host))
-				mmc_resume_bus(card->host);
-#endif
-		}
 	}
 
 	ret = mmc_blk_part_switch(card, md);
@@ -3181,7 +3177,7 @@ static int mmc_blk_probe(struct mmc_card *card)
 	mmc_fixup_device(card, blk_fixups);
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-	if (card && mmc_card_sd(card))
+	if (card && mmc_card_mmc(card))
 		mmc_set_bus_resume_policy(card->host, 1);
 #endif
 	if (mmc_add_disk(md))
