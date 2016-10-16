@@ -348,7 +348,6 @@ struct dw_mci {
 	struct regulator	*vqmmc;
 	unsigned long		irq_flags; /* IRQ flags */
 	int			irq;
-	int			cd_irq;
 
 	/* Save request status */
 #define DW_MMC_REQ_IDLE		0

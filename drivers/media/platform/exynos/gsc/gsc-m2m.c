@@ -177,19 +177,14 @@ static void gsc_m2m_device_run(void *priv)
 
 	gsc = ctx->gsc_dev;
 
-	BUG_ON(in_irq());
+	if (in_irq())
+		ret = pm_runtime_get(&gsc->pdev->dev);
+	else
+		ret = pm_runtime_get_sync(&gsc->pdev->dev);
 
-	ret = pm_runtime_get_sync(&gsc->pdev->dev);
 	if (ret < 0) {
 		gsc_err("fail to pm_runtime_get");
 		return;
-	}
-
-	gsc_set_protected_content(gsc, ctx->gsc_ctrls.drm_en->cur.val);
-	if (ctx->gsc_ctrls.drm_en->cur.val) {
-		int id = gsc->id + 3;
-		exynos_smc(SMC_PROTECTION_SET, 0, id, 1);
-		gsc_dbg("DRM enable");
 	}
 
 	spin_lock_irqsave(&ctx->slock, flags);
@@ -328,48 +323,6 @@ put_device:
 	ctx->state &= ~GSC_PARAMS;
 	spin_unlock_irqrestore(&ctx->slock, flags);
 	pm_runtime_put_sync(&gsc->pdev->dev);
-}
-
-irqreturn_t gsc_m2m_irq_handler(int irq, void *priv)
-{
-	struct gsc_dev *gsc = priv;
-	struct vb2_buffer *src_vb, *dst_vb;
-	struct gsc_ctx *ctx = v4l2_m2m_get_curr_priv(gsc->m2m.m2m_dev);
-
-	if (!ctx || !ctx->m2m_ctx) {
-		gsc_err("ctx : 0x%p", ctx);
-		return IRQ_HANDLED;
-	}
-
-	if (ctx->gsc_ctrls.drm_en->cur.val) {
-		int id = gsc->id + 3;
-		exynos_smc(SMC_PROTECTION_SET, 0, id, 0);
-		gsc_dbg("DRM disable");
-	}
-
-	gsc_set_protected_content(gsc, false);
-
-	src_vb = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
-	dst_vb = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
-	if (src_vb && dst_vb) {
-		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
-		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
-		/* wake_up job_abort, stop_streaming */
-		spin_lock(&ctx->slock);
-		if (ctx->state & GSC_CTX_STOP_REQ) {
-			ctx->state &= ~GSC_CTX_STOP_REQ;
-			wake_up(&gsc->irq_queue);
-		}
-		spin_unlock(&ctx->slock);
-
-		if (test_and_clear_bit(ST_STOP_REQ, &gsc->state))
-			wake_up(&gsc->irq_queue);
-		else
-			v4l2_m2m_job_finish(gsc->m2m.m2m_dev, ctx->m2m_ctx);
-	}
-	pm_runtime_put(&gsc->pdev->dev);
-
-	return IRQ_HANDLED;
 }
 
 static int gsc_m2m_queue_setup(struct vb2_queue *vq, const struct v4l2_format *fmt,
@@ -599,6 +552,8 @@ static int gsc_m2m_reqbufs(struct file *file, void *fh,
 			gsc_ctx_state_lock_clear(GSC_DST_FMT, ctx);
 	}
 
+	gsc_set_protected_content(gsc, ctx->gsc_ctrls.drm_en->cur.val);
+
 	frame = ctx_get_frame(ctx, reqbufs->type);
 	frame->cacheable = ctx->gsc_ctrls.cacheable->val;
 	gsc->vb2->set_cacheable(gsc->alloc_ctx, frame->cacheable);
@@ -644,6 +599,12 @@ static int gsc_m2m_streamon(struct file *file, void *fh,
 
 	gsc_pm_qos_ctrl(gsc, GSC_QOS_ON, pdata->mif_min, pdata->int_min);
 
+	if (gsc->protected_content) {
+		int id = gsc->id + 3;
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 1);
+		gsc_dbg("DRM enable");
+	}
+
 	return v4l2_m2m_streamon(file, ctx->m2m_ctx, type);
 }
 
@@ -654,6 +615,12 @@ static int gsc_m2m_streamoff(struct file *file, void *fh,
 	struct gsc_dev *gsc = ctx->gsc_dev;
 
 	gsc_pm_qos_ctrl(gsc, GSC_QOS_OFF, 0, 0);
+
+	if (gsc->protected_content) {
+		int id = gsc->id + 3;
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 0);
+		gsc_dbg("DRM disable");
+	}
 
 	return v4l2_m2m_streamoff(file, ctx->m2m_ctx, type);
 }
@@ -880,6 +847,14 @@ static int gsc_m2m_release(struct file *file)
 
 	if (--gsc->m2m.refcnt <= 0)
 		clear_bit(ST_M2M_OPEN, &gsc->state);
+
+	/* This is unnormal case */
+	if (gsc->protected_content) {
+		int id = gsc->id + 3;
+		gsc_err("DRM should be disabled before device close");
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 0);
+		gsc_set_protected_content(gsc, false);
+	}
 
 	kfree(ctx);
 	return 0;
