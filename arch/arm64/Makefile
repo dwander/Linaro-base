@@ -24,8 +24,6 @@ KBUILD_CPPFLAGS	+= -mlittle-endian
 AS		+= -EL
 LD		+= -EL
 
-comma = ,
-
 CHECKFLAGS	+= -D__aarch64__
 
 # Default value
