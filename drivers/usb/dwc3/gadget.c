@@ -1709,6 +1709,7 @@ static int dwc3_gadget_vbus_session(struct usb_gadget *g, int is_active)
 			dwc3_gadget_run_stop(dwc, 1);
 		} else {
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+			dwc3_gadget_cable_connect(dwc,false);
 			dwc3_disconnect_gadget(dwc);
 			dwc->start_config_issued = false;
 			dwc->gadget.speed = USB_SPEED_UNKNOWN;

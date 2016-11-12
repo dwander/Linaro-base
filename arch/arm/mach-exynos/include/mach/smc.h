@@ -49,6 +49,9 @@
 /* For DTRNG Access */
 #define SMC_CMD_RANDOM		(0x81000030)
 
+#define EMMC0_FMP		(0x15541000)
+#define EMMC2_FMP		(0x15561000)
+
 /* MACRO for SMC_CMD_REG */
 #define SMC_REG_CLASS_CP15	(0x0 << 30)
 #define SMC_REG_CLASS_SFR_W	(0x1 << 30)

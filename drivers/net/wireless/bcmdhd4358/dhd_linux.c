@@ -4790,13 +4790,13 @@ dhd_remove_if(dhd_pub_t *dhdpub, int ifidx, bool need_rtnl_lock)
 					unregister_netdevice(ifp->net);
 			}
 			ifp->net = NULL;
+			dhdinfo->iflist[ifidx] = NULL;
 		}
 
 		dhd_if_del_sta_list(ifp);
 
-		dhdinfo->iflist[ifidx] = NULL;
 		MFREE(dhdinfo->pub.osh, ifp, sizeof(*ifp));
-
+		ifp = NULL;
 	}
 
 	return BCME_OK;
