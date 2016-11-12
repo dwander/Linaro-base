@@ -507,18 +507,24 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 {
 	int retval;
 	unsigned char retry;
+	unsigned char buf[length + 1];
 	unsigned char buf_page[PAGE_SELECT_LEN];
 	unsigned char page;
 
-	struct i2c_msg msg[2];
-	unsigned char *buf;
-	buf = kzalloc(length + 1, GFP_KERNEL);
-	if (!buf) {
-		dev_err(&rmi4_data->i2c_client->dev, 
-			"%s: Failed to alloc mem for buffer\n",
-			__func__);
-		return -ENOMEM;
-	}
+	struct i2c_msg msg[] = {
+		{
+			.addr = rmi4_data->i2c_client->addr,
+			.flags = 0,
+			.len = PAGE_SELECT_LEN,
+			.buf = buf_page,
+		},
+		{
+			.addr = rmi4_data->i2c_client->addr,
+			.flags = 0,
+			.len = length + 1,
+			.buf = buf,
+		}
+	};
 
 	page = ((addr >> 8) & MASK_8BIT);
 	buf_page[0] = MASK_8BIT;
@@ -532,15 +538,6 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 		retval = 0;
 		goto exit;
 	}
-
-	msg[0].addr = rmi4_data->i2c_client->addr;
-	msg[0].flags = 0;
-	msg[0].len = PAGE_SELECT_LEN;
-	msg[0].buf = buf_page;
-	msg[1].addr = rmi4_data->i2c_client->addr;
-	msg[1].flags = 0;
-	msg[1].len = length + 1;
-	msg[1].buf = buf;
 
 	buf[0] = addr & MASK_8BIT;
 	memcpy(&buf[1], &data[0], length);
@@ -565,7 +562,6 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 
 exit:
 	mutex_unlock(&(rmi4_data->rmi4_io_ctrl_mutex));
-	kfree(buf);
 
 	return retval;
 }
