@@ -222,18 +222,6 @@ DEFINE_EVENT(random__get_random_bytes, get_random_bytes_arch,
 	TP_ARGS(nbytes, IP)
 );
 
-DEFINE_EVENT(random__get_random_bytes, get_random_bytes,
-	TP_PROTO(int nbytes, unsigned long IP),
-
-	TP_ARGS(nbytes, IP)
-);
-
-DEFINE_EVENT(random__get_random_bytes, get_random_bytes_arch,
-	TP_PROTO(int nbytes, unsigned long IP),
-
-	TP_ARGS(nbytes, IP)
-);
-
 DECLARE_EVENT_CLASS(random__extract_entropy,
 	TP_PROTO(const char *pool_name, int nbytes, int entropy_count,
 		 unsigned long IP),
