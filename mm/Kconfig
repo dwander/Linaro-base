@@ -465,6 +465,28 @@ config CLEANCACHE
 
 	  If unsure, say Y to enable cleancache
 
+config ADAPTIVE_DIRTY_BACKGROUND_RATIO
+	bool "Adaptive dirty_background_ratio"
+	depends on POWERSUSPEND
+	default y
+	help
+	  Adaptively set the dirty_background_ratio value during screen on,
+	  whilst value is fixed in suspend. PowerSuspend driver required for
+	  screen suspend/resume functions.
+
+	  If unsure, say N to disable this feature
+
+config ADAPTIVE_VM_DIRTY_RATIO
+	bool "Adaptive vm_dirty_ratio"
+	depends on POWERSUSPEND
+	default y
+	help
+	  Adaptively set the vm_dirty_ratio value during screen on,
+	  whilst value is fixed in suspend. PowerSuspend driver required for
+	  screen suspend/resume functions.
+
+	  If unsure, say N to disable this feature
+
 config DYNAMIC_PAGE_WRITEBACK
 	bool "Dynamically manage the dirty page writebacks during suspend/resume"
 	depends on POWERSUSPEND
