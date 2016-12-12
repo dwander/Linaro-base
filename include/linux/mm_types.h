@@ -203,9 +203,6 @@ struct page {
 	int ptrack_curr[PTRACK_ITEM_NUM];
 #endif
 #endif
-#ifdef CONFIG_PKSM
-	void *pksm;
-#endif
 }
 /*
  * The struct page can be forced to be double word aligned so that atomic ops
