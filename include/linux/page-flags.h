@@ -109,6 +109,9 @@ enum pageflags {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	PG_compound_lock,
 #endif
+#ifdef CONFIG_PKSM
+	PG_pksm,
+#endif
 #ifdef CONFIG_SCFS_LOWER_PAGECACHE_INVALIDATION
 	PG_scfslower,
 	PG_nocache,
@@ -283,6 +286,11 @@ PAGEFLAG_FALSE(HWPoison)
 #ifdef CONFIG_SCFS_LOWER_PAGECACHE_INVALIDATION
 PAGEFLAG(Scfslower, scfslower)
 PAGEFLAG(Nocache, nocache)
+#endif
+
+#ifdef CONFIG_PKSM
+PAGEFLAG(PKSM, pksm) __CLEARPAGEFLAG(PKSM, pksm)
+TESTSCFLAG(PKSM, pksm)
 #endif
 
 u64 stable_page_flags(struct page *page);
@@ -509,6 +517,16 @@ static inline void ClearPageSlabPfmemalloc(struct page *page)
  * Flags checked when a page is freed.  Pages being freed should not have
  * these flags set.  It they are, there is a problem.
  */
+#ifdef CONFIG_PKSM
+#define PAGE_FLAGS_CHECK_AT_FREE \
+	(1 << PG_lru	 | 1 << PG_locked    | \
+	 1 << PG_private | 1 << PG_private_2 | \
+	 1 << PG_writeback | 1 << PG_reserved | \
+	 1 << PG_slab	 | 1 << PG_swapcache | 1 << PG_active | \
+	 1 << PG_unevictable | __PG_MLOCKED | __PG_HWPOISON | \
+	 1 << PG_pksm | \
+	 __PG_COMPOUND_LOCK)
+#else
 #define PAGE_FLAGS_CHECK_AT_FREE \
 	(1 << PG_lru	 | 1 << PG_locked    | \
 	 1 << PG_private | 1 << PG_private_2 | \
@@ -516,6 +534,7 @@ static inline void ClearPageSlabPfmemalloc(struct page *page)
 	 1 << PG_slab	 | 1 << PG_swapcache | 1 << PG_active | \
 	 1 << PG_unevictable | __PG_MLOCKED | __PG_HWPOISON | \
 	 __PG_COMPOUND_LOCK)
+#endif
 
 /*
  * Flags checked when a page is prepped for return by the page allocator.
