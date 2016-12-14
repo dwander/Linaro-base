@@ -735,7 +735,7 @@ static void dex_set_protected_content(struct dex_device *dex, bool enable)
 		return;
 
 	ret = exynos_smc(SMC_PROTECTION_SET, 0, DEV_DECON_TV, enable);
-	if (ret)
+	if (ret != 2)
 		WARN(1, "decon-tv protection Enable failed. ret(%d)\n", ret);
 	else
 		dex_dbg("DRM %s\n", enable ? "enabled" : "disabled");
