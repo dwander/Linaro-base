@@ -1130,6 +1130,7 @@ static struct notifier_block exynos_tmu_nb = {
 static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
 	unsigned int cur = get_cur_cluster(policy->cpu);
+	int ret;
 
 	pr_debug("%s: cpu[%d]\n", __func__, policy->cpu);
 
@@ -1148,7 +1149,14 @@ static int exynos_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		cpumask_copy(policy->related_cpus, &cluster_cpus[CA7]);
 	}
 
-	return cpufreq_frequency_table_cpuinfo(policy, exynos_info[cur]->freq_table);
+	ret = cpufreq_frequency_table_cpuinfo(policy, exynos_info[cur]->freq_table);
+	
+	if (!ret) {
+		policy->user_min = policy->min;
+		policy->user_max = policy->max;
+	}
+
+	return ret;
 }
 
 static struct cpufreq_driver exynos_driver = {
