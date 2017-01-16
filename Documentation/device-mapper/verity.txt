@@ -62,6 +62,11 @@ Construction Parameters
 <salt>
     The hexadecimal encoding of the salt value.
 
+ignore_zero_blocks
+    Do not verify blocks that are expected to contain zeroes and always return
+    zeroes instead. This may be useful if the partition contains unused blocks
+    that are not guaranteed to contain zeroes.
+
 use_fec_from_device
     Use forward error correction (FEC) to recover from corruption if hash
     verification fails. Use encoding data from the specified device. This
