@@ -91,6 +91,14 @@ config SEC_DEBUG_LMK_COUNT_INFO
 	help
 	  Show LMK execution count information when lmk invoked
 
+config ANDROID_LMK_ADJ_RBTREE
+	bool "Use RBTREE for Android Low Memory Killer"
+	depends on ANDROID_LOW_MEMORY_KILLER
+	default N
+	---help---
+	    Use oom_score_adj rbtree to select the best proecss to kill
+	    when system in low memory status.
+
 config ANDROID_INTF_ALARM_DEV
 	bool "Android alarm driver"
 	depends on RTC_CLASS
