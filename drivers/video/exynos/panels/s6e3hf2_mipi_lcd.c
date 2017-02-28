@@ -2508,7 +2508,7 @@ static int s6e3hf2_probe(struct mipi_dsim_device *dsim)
 	lcd->ldi_enable = 1;
 
 #if defined(CONFIG_DECON_MDNIE_LITE)
-	mdnie_register(&lcd->ld->dev, lcd, (mdnie_w)s6e3hf2_send_seq, (mdnie_r)s6e3hf2_read, &tune_info);
+	mdnie_register(&lcd->ld->dev, lcd, (mdnie_w)s6e3hf2_send_seq, (mdnie_r)s6e3hf2_read, lcd->coordinate, &tune_info);
 #endif
 
 	update_brightness(lcd, 1);
