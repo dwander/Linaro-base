@@ -8,8 +8,6 @@
  * published by the Free Software Foundation.
  */
 
-#include <asm-generic/processor.h>
-
 #ifndef __ASM_ARM_PROCESSOR_H
 #define __ASM_ARM_PROCESSOR_H
 
@@ -24,7 +22,6 @@
 #include <asm/hw_breakpoint.h>
 #include <asm/ptrace.h>
 #include <asm/types.h>
-#include <asm/atomic.h>
 
 #ifdef __KERNEL__
 #define STACK_TOP	((current->personality & ADDR_LIMIT_32BIT) ? \
@@ -116,7 +113,5 @@ static inline void prefetch(const void *ptr)
 #define HAVE_ARCH_PICK_MMAP_LAYOUT
 
 #endif
-
-#include <asm-generic/processor.h>
 
 #endif /* __ASM_ARM_PROCESSOR_H */
