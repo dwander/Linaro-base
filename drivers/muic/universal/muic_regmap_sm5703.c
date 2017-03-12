@@ -51,6 +51,7 @@
 enum sm5703_muic_reg_init_value {
 	REG_INTMASK1_VALUE	= (0xDC),
 	REG_INTMASK2_VALUE	= (0x00),
+	REG_INTMASK2_VBUS_VAL	= (0x81),
 	REG_TIMING1_VALUE	= (ADC_DETECT_TIME_200MS |
 				KEY_PRESS_TIME_100MS),
 };
@@ -693,6 +694,63 @@ int sm5703_detach_mmdock(struct regmap_desc *pdesc)
 	return ret;
 }
 
+static int sm5703_reset_vbus_path(struct regmap_desc *pdesc)
+{
+        int attr, value, intmask2_val;
+	int ret = 0;
+
+	pr_info("%s\n",__func__);
+
+	intmask2_val = muic_i2c_read_byte(pdesc->muic->i2c, REG_INTMASK2);
+
+	/* disable vbus interrupt */
+	value = intmask2_val | REG_INTMASK2_VBUS_VAL;
+	attr = REG_INTMASK2 | _ATTR_OVERWRITE_M;
+	ret = regmap_write_value(pdesc, attr, value);
+	if (ret < 0) {
+		pr_err("%s REG_INTMASK2 write fail.\n", __func__);
+		goto out;
+	} else
+		_REGMAP_TRACE(pdesc, 'w', ret, attr, value);	
+
+	/* vbus open */
+	value = _V_OPEN;
+	attr = MANSW1_VBUS_SW;
+	ret = regmap_write_value(pdesc, attr, value);
+	if (ret < 0) {
+		pr_err("%s MANSW1_VBUS_SW write fail.\n", __func__);
+		goto out;
+	} else
+		_REGMAP_TRACE(pdesc, 'w', ret, attr, value);
+
+	/* vbus set */
+	value = _V_CHARGER;
+	attr = MANSW1_VBUS_SW;
+	ret = regmap_write_value(pdesc, attr, value);
+	if (ret < 0) {
+		pr_err("%s MANSW1_VBUS_SW write fail.\n", __func__);
+		goto out;
+	} else
+		_REGMAP_TRACE(pdesc, 'w', ret, attr, value);
+
+	/* need to add delay for checking vbus interrupt and clear vbus interrupt */
+	msleep(50);
+	value = muic_i2c_read_byte(pdesc->muic->i2c, REG_INT2);
+	pr_info("%s:%s intr2=0x%x\n", MUIC_DEV_NAME, __func__, value);
+
+	/* enable vbus interrupt */
+	value = intmask2_val;
+	attr = REG_INTMASK2 | _ATTR_OVERWRITE_M;
+	ret = regmap_write_value(pdesc, attr, value);
+	if (ret < 0) {
+		pr_err("%s REG_INTMASK2 write fail.\n", __func__);
+		goto out;
+	} else
+		_REGMAP_TRACE(pdesc, 'w', ret, attr, value);
+
+out:
+	return ret;
+}
 
 static void sm5703_get_fromatted_dump(struct regmap_desc *pdesc, char *mesg)
 {
@@ -747,6 +805,7 @@ static struct vendor_ops sm5703_muic_vendor_ops = {
 	.get_vps_data = sm5703_get_vps_data,
 	.attach_mmdock = sm5703_attach_mmdock,
 	.detach_mmdock = sm5703_detach_mmdock,
+	.reset_vbus_path = sm5703_reset_vbus_path,
 };
 
 static struct regmap_desc sm5703_muic_regmap_desc = {

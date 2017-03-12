@@ -97,6 +97,7 @@ struct vendor_ops {
 	int (*muic_disable_accdet)(struct regmap_desc *);
 	int (*attach_mmdock)(struct regmap_desc  *, int);
 	int (*detach_mmdock)(struct regmap_desc  *);
+	int (*reset_vbus_path)(struct regmap_desc *);
 };
 
 struct regmap_desc {
