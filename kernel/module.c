@@ -174,7 +174,6 @@ typedef struct lkmauth_hash_s {
 	uint32_t cmd_id;
 	uint32_t hash_buf_start;	/* starting address of buf for ko hashes */
 	uint32_t hash_buf_len;	/* length of hash buf, should be multiples of 20 bytes */
-	uint8_t ko_num;		/* total number ko */
 } __attribute__ ((packed)) lkmauth_hash_t;
 
 typedef struct lkmauth_req_s {
@@ -2832,7 +2831,6 @@ static int lkmauth(Elf_Ehdr * hdr, int len)
 		 */
 		khashreq->hash_buf_start = (uint32_t) map_info.secure_virt_addr;
 		khashreq->hash_buf_len = buf_len;
-		khashreq->ko_num = (buf_len - TIMA_SIGN_LEN) / HASH_SIZE;	/* calculate the the ko number */
 
 		/* prepare the response buffer */
 		krsp = (struct lkmauth_rsp_s *)tci;

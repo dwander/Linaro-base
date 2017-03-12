@@ -1014,6 +1014,12 @@ static ssize_t mms_sys_cmd(struct device *dev, struct device_attribute *devattr,
 		goto ERROR;
 	}
 
+	if (strlen(buf) >= CMD_LEN) { 
+		dev_err(&info->client->dev, "%s: cmd length is over (%s,%d)!!\n", __func__, buf, (int)strlen(buf)); 
+		ret = -EINVAL;
+		goto ERROR; 
+	} 
+
 	dev_dbg(&info->client->dev, "%s [START]\n", __func__);
 	dev_dbg(&info->client->dev, "%s - input [%s]\n", __func__, buf);
 
@@ -1089,7 +1095,7 @@ static ssize_t mms_sys_cmd(struct device *dev, struct device_attribute *devattr,
 				param_cnt++;
 			}
 			cur++;
-		} while (cur - buf <= len);
+		} while ((cur - buf <= len) && (param_cnt < CMD_PARAM_NUM));
 	}
 
 	//print
