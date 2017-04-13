@@ -1350,6 +1350,23 @@ static void cpufreq_ironactive_nop_timer(unsigned long data)
 {
 }
 
+unsigned int cpufreq_ironactive_get_hispeed_freq(int cpu)
+{
+	struct cpufreq_ironactive_cpuinfo *pcpu =
+			&per_cpu(cpuinfo, cpu);
+	struct cpufreq_ironactive_tunables *tunables;
+
+	if (pcpu && pcpu->policy)
+		tunables = pcpu->policy->governor_data;
+	else
+		return 0;
+
+	if (!tunables)
+		return 0;
+
+	return tunables->hispeed_freq;
+}
+
 static int __init cpufreq_ironactive_init(void)
 {
 	unsigned int i;

@@ -975,20 +975,22 @@ static enum hotplug_cmd diagnose_condition(void)
 	unsigned int egl_cur_freq;
 #endif
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE)
-	normal_min_freq = cpufreq_interactive_get_hispeed_freq(0);
-	if (!normal_min_freq)
-		normal_min_freq = NORMALMIN_FREQ;
-#elif defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE)
-	normal_min_freq = cpufreq_cafactive_get_hispeed_freq(0);
-	if (!normal_min_freq)
-		normal_min_freq = NORMALMIN_FREQ;
+#ifdef CONFIG_ARM_EXYNOS_MP_CPUFREQ
+	policy = cpufreq_cpu_get(0);
+#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE) || defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE) \
+	|| defined(CONFIG_CPU_FREQ_GOV_IRONACTIVE) || defined(CONFIG_CPU_FREQ_GOV_IMPULSE)
+	if (strcmp(policy->governor->name, "interactive") == 1) {
+		normal_min_freq = cpufreq_interactive_get_hispeed_freq(0);
+	} else if (strcmp(policy->governor->name, "cafactive") == 1) {
+		normal_min_freq = cpufreq_cafactive_get_hispeed_freq(0);
+	} else if (strcmp(policy->governor->name, "ironactive") == 1) {
+		normal_min_freq = cpufreq_ironactive_get_hispeed_freq(0);
+	}
+	normal_min_freq = NORMALMIN_FREQ;
 #else
 	normal_min_freq = NORMALMIN_FREQ;
 #endif
 
-#ifdef CONFIG_ARM_EXYNOS_MP_CPUFREQ
-	policy = cpufreq_cpu_get(0);
 	if (!policy) {
 		kfc_max_freq = 0;
 	} else {

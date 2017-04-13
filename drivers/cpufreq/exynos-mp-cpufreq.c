@@ -1915,12 +1915,20 @@ static int exynos_kfc_min_qos_handler(struct notifier_block *b, unsigned long va
 	int cpu = boot_cluster ? NR_CA15 : 0;
 	unsigned int threshold_freq;
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE)
-	threshold_freq = cpufreq_interactive_get_hispeed_freq(0);
-	if (!threshold_freq)
-		threshold_freq = 1000000;	/* 1.0GHz */
-#elif defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE)
-	threshold_freq = cpufreq_cafactive_get_hispeed_freq(0);
+	policy = cpufreq_cpu_get(cpu);
+
+	if (!policy)
+		goto bad;
+
+#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE) || defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE) \
+	|| defined(CONFIG_CPU_FREQ_GOV_IRONACTIVE) || defined(CONFIG_CPU_FREQ_GOV_IMPULSE)
+	if (strcmp(policy->governor->name, "interactive") == 1) {
+		threshold_freq = cpufreq_interactive_get_hispeed_freq(0);
+	} else if (strcmp(policy->governor->name, "cafactive") == 1) {
+		threshold_freq = cpufreq_cafactive_get_hispeed_freq(0);
+	} else if (strcmp(policy->governor->name, "ironactive") == 1) {
+		threshold_freq = cpufreq_ironactive_get_hispeed_freq(0);
+	}
 	if (!threshold_freq)
 		threshold_freq = 1000000;	/* 1.0GHz */
 #else
@@ -1933,11 +1941,6 @@ static int exynos_kfc_min_qos_handler(struct notifier_block *b, unsigned long va
 	freq = exynos_getspeed(cpu);
 	if (freq >= val)
 		goto good;
-
-	policy = cpufreq_cpu_get(cpu);
-
-	if (!policy)
-		goto bad;
 
 	if (!policy->user_policy.governor) {
 		cpufreq_cpu_put(policy);
