@@ -336,6 +336,7 @@ static int gpu_context_init(struct kbase_device *kbdev)
 	mutex_init(&platform->gpu_process_job_lock);
 #endif
 	spin_lock_init(&platform->gpu_dvfs_spinlock);
+	spin_lock_init(&platform->power_status_spinlock);
 
 	gpu_validate_attrib_data(platform);
 

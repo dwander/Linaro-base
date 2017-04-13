@@ -55,7 +55,7 @@ static gpu_dvfs_info gpu_dvfs_table_default[] = {
 	{420, 1025000, 0,  80,  99, 1, 0, 543000, 267000,   900000, 1800000},
 	{350, 1025000, 0,  80,  90, 1, 0, 413000, 200000,   500000, CPU_MAX},
 	{266, 1000000, 0,  80,  90, 1, 0, 211000, 160000,   500000, CPU_MAX},
-	{160, 1000000, 0,  0,   90, 1, 0, 136000, 133000,   500000, CPU_MAX},
+	{160, 1000000, 0,   0,  90, 1, 0, 136000, 133000,   500000, CPU_MAX},
 #elif defined(CONFIG_EXYNOS5430_FHD)    /* EXYNOS5430 Resolution : FHD */
 	{600, 1150000, 0,  98, 100, 1, 0, 825000, 400000,  1300000, 1300000},
 #ifdef CONFIG_MALI_HWCNT_UTIL
@@ -67,7 +67,7 @@ static gpu_dvfs_info gpu_dvfs_table_default[] = {
 	{420, 1025000, 0,  80,  99, 1, 0, 543000, 200000,   900000, 1800000},
 	{350, 1025000, 0,  80,  90, 1, 0, 413000, 133000,   500000, CPU_MAX},
 	{266, 1000000, 0,  80,  90, 1, 0, 272000, 133000,   500000, CPU_MAX},
-	{160, 1000000, 0,  0,   90, 1, 0, 211000, 100000,   500000, CPU_MAX},
+	{160, 1000000, 0,   0,  90, 1, 0, 211000, 100000,   500000, CPU_MAX},
 #elif defined(CONFIG_EXYNOS5430_HD)     /* EXYNOS5430 Resolution : HD */
 	{600, 1150000, 0,  98, 100, 1, 0, 825000, 400000,  1300000, 1300000},
 #ifdef CONFIG_MALI_HWCNT_UTIL
@@ -79,7 +79,7 @@ static gpu_dvfs_info gpu_dvfs_table_default[] = {
 	{420, 1025000, 0,  80,  99, 1, 0, 413000, 200000,   900000, 1800000},
 	{350, 1025000, 0,  80,  90, 1, 0, 413000, 133000,   500000, CPU_MAX},
 	{266, 1000000, 0,  80,  90, 1, 0, 413000, 100000,   500000, CPU_MAX},
-	{160, 1000000, 0,  0,   90, 1, 0, 413000, 100000,   500000, CPU_MAX},
+	{160, 1000000, 0,   0,  90, 1, 0, 413000, 100000,   500000, CPU_MAX},
 #endif
 };
 
@@ -149,7 +149,7 @@ static gpu_attribute gpu_config_attributes[] = {
 #endif
 	{GPU_RUNTIME_PM_DELAY_TIME, 50},
 	{GPU_DVFS_POLLING_TIME, 30},
-	{GPU_PMQOS_INT_DISABLE, 1},
+	{GPU_PMQOS_INT_DISABLE, 0},
 	{GPU_PMQOS_MIF_MAX_CLOCK, 825000},
 	{GPU_PMQOS_MIF_MAX_CLOCK_BASE, 420},
 	{GPU_CL_DVFS_START_BASE, 600},
@@ -684,7 +684,6 @@ int gpu_regulator_disable(struct exynos_context *platform) {
 }
 
 int gpu_regulator_init(struct exynos_context *platform) {
-	int gpu_voltage = 0;
 
 	g3d_regulator = regulator_get(NULL, "vdd_g3d");
 	if (IS_ERR(g3d_regulator) || (g3d_regulator == NULL)) {
@@ -699,19 +698,6 @@ int gpu_regulator_init(struct exynos_context *platform) {
 		GPU_LOG(DVFS_ERROR, DUMMY, 0u, 0u,
 			"%s failed to enable regulator\n", __func__);
 		g3d_regulator = NULL;
-		return -1;
-	}
-
-	gpu_voltage = get_match_volt(ID_G3D,
-			platform->gpu_dvfs_config_clock*1000);
-
-	if (gpu_voltage == 0)
-		gpu_voltage = platform->gpu_default_vol;
-
-	if (gpu_set_voltage(platform, gpu_voltage) != 0) {
-		GPU_LOG(DVFS_ERROR, DUMMY,
-			0u, 0u, "%s: failed to set voltage [%d]\n", __func__,
-			gpu_voltage);
 		return -1;
 	}
 

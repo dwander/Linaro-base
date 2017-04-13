@@ -540,6 +540,34 @@ int gpu_dvfs_get_level_clock(int clock)
 	return -1;
 }
 
+int gpu_dvfs_get_max_freq(void)
+{
+#if defined(CONFIG_MALI_DVFS)
+	struct kbase_device *kbdev = pkbdev;
+	struct exynos_context *platform = (struct exynos_context *) kbdev->platform_context;
+
+	DVFS_ASSERT(platform);
+
+	return platform->gpu_max_clock;
+#else
+	return -1;
+#endif
+}
+
+int gpu_dvfs_get_min_freq(void)
+{
+#if defined(CONFIG_MALI_DVFS)
+	struct kbase_device *kbdev = pkbdev;
+	struct exynos_context *platform = (struct exynos_context *) kbdev->platform_context;
+
+	DVFS_ASSERT(platform);
+
+	return platform->gpu_min_clock;
+#else
+	return -1;
+#endif
+}
+
 int gpu_dvfs_get_voltage(int clock)
 {
 	struct kbase_device *kbdev = pkbdev;
@@ -1063,10 +1091,12 @@ bool gpu_dvfs_process_job(void *pkatom)
 				gpu_dvfs_notify_info(BASE_JD_EVENT_DVFS_INFO_PROFILE_MODE_OFF);
 
 			mutex_lock(&kbdev->pm.lock);
+#ifdef MALI_SEC_HWCNT
 			platform->hwcnt_choose_jm = kbdev->hwcnt.suspended_state.jm_bm = hwc_setup.jm_bm;
 			platform->hwcnt_choose_tiler = kbdev->hwcnt.suspended_state.tiler_bm = hwc_setup.tiler_bm;
 			platform->hwcnt_choose_shader = kbdev->hwcnt.suspended_state.shader_bm = hwc_setup.sc_bm;
 			platform->hwcnt_choose_mmu_l2 = kbdev->hwcnt.suspended_state.mmu_l2_bm = hwc_setup.memory_bm;
+#endif
 
 #ifdef TEMP_BLOCK
 			if (kbdev->pm.active_count > 0) {

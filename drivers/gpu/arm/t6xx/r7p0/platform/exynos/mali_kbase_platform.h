@@ -353,6 +353,7 @@ struct exynos_context {
 	bool dvs_is_enabled;
 
 	bool power_status;
+	spinlock_t power_status_spinlock;
 
 	bool perf_gathering_status;
 #ifdef MALI_SEC_HWCNT

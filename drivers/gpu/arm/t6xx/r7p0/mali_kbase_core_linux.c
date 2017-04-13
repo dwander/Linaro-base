@@ -1367,6 +1367,8 @@ static int kbase_release(struct inode *inode, struct file *filp)
 			list_del(&element->link);
 			kfree(element);
 			found_element = true;
+			/* MALI_SEC_INTEGRATION */
+			kctx->destroying_context = true;
 		}
 	}
 	mutex_unlock(&kbdev->kctx_list_lock);

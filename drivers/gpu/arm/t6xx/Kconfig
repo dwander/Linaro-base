@@ -15,7 +15,7 @@
 
 menuconfig MALI_T6XX_R7P0
 	tristate "Mali-T6XX R7P0 support"
-	default n
+	default y
 	help
 	  Enable this option to build support for the ARM Mali-T7xx GPU.
 

@@ -1115,7 +1115,8 @@ static void ion_unmap_dma_buf(struct dma_buf_attachment *attachment,
 	struct dma_buf *dmabuf = attachment->dmabuf;
 	struct ion_buffer *buffer = dmabuf->priv;
 	ion_buffer_task_remove_lock(attachment->dmabuf->priv, attachment->dev);
-	if (ion_buffer_sync_force(buffer) && (buffer->size == 2080768))
+	// P160321-02542 - Fix for A800I with dimension 576 * 576, buffer size is 1335296
+	if (ion_buffer_sync_force(buffer) && (buffer->size == 2080768 || buffer->size == 1335296))
 		exynos_ion_sync_sg_for_cpu(attachment->dev, buffer->size,
 					   buffer->sg_table, DMA_FROM_DEVICE);
 }
@@ -1245,6 +1246,12 @@ static int ion_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 		pr_err("%s: mmap non-zeroed buffer to user is prohibited!\n",
 			__func__);
 		return -EINVAL;
+	}
+
+	if (buffer->flags & ION_FLAG_PROTECTED) {
+		pr_err("%s: mmap protected buffer to user is prohibited!\n",
+			__func__);
+		return -EPERM;
 	}
 
 	if ((((vma->vm_pgoff << PAGE_SHIFT) >= buffer->size)) ||
@@ -2045,6 +2052,8 @@ static void ion_buffer_dump_flags(struct seq_file *s, unsigned long flags)
 		seq_printf(s, "|migrated");
 	if (flags & ION_FLAG_READY_TO_USE)
 		seq_printf(s, "|ready");
+	if (flags & ION_FLAG_PROTECTED)
+		seq_printf(s, "|protect");
 }
 
 static struct ion_handle *ion_handle_lookup(struct ion_client *client,
