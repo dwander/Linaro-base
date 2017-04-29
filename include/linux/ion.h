@@ -68,6 +68,8 @@ enum ion_heap_type {
 					   with zero value and userspace is not
 					   able to access the buffer
 					 */
+#define ION_FLAG_PROTECTED 16	/* this buffer would be used in secure world.
+				if this is et, all cpu accesss are prohibited */
 #define ION_FLAG_SYNC_FORCE 32		/* cache sync forcely at allocation */
 
 #ifdef __KERNEL__

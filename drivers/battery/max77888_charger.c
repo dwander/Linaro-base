@@ -817,6 +817,40 @@ void max77888_powered_otg_control(struct max77888_charger_data *charger, int ena
 	}
 }
 
+static u8 max77888_get_float_voltage_data(int float_voltage)
+{
+	u8 data = 0x16;
+
+	if (float_voltage >= 4500)
+		data = 0x1f;
+	else
+		data = (float_voltage - 3725) / 25;
+	return data;
+}
+
+static int max77888_get_float_voltage(struct max77888_charger_data *charger)
+{
+	u8 reg_data = 0;
+
+	max77888_read_reg(charger->max77888->i2c, MAX77888_CHG_REG_CHG_CNFG_04, &reg_data);
+	reg_data &= 0x1F;
+
+	return reg_data;
+}
+
+static void max77888_set_float_voltage(struct max77888_charger_data *charger, int float_voltage)
+{
+	u8 reg_data = 0x0;
+
+	reg_data = max77888_get_float_voltage_data(float_voltage);
+	max77888_update_reg(charger->max77888->i2c, MAX77888_CHG_REG_CHG_CNFG_04,
+		(reg_data << CHG_CNFG_04_CHG_CV_PRM_SHIFT),
+		CHG_CNFG_04_CHG_CV_PRM_MASK);
+
+	max77888_read_reg(charger->max77888->i2c, MAX77888_CHG_REG_CHG_CNFG_04, &reg_data);
+	pr_info("%s: float_voltage(%d - 0x%x)\n", __func__, float_voltage, (reg_data & 0x1F));
+}
+
 static int max77888_chg_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -863,6 +897,9 @@ static int max77888_chg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = max77888_get_battery_present(charger);
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = max77888_get_float_voltage(charger);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		break;
@@ -1010,6 +1047,32 @@ static int max77888_chg_set_property(struct power_supply *psy,
 			}
 
 		}
+
+		if (charger->pdata->full_check_type_2nd == SEC_BATTERY_FULLCHARGED_CHGPSY) {
+			union power_supply_propval chg_mode;
+			psy_do_property("battery", get,	POWER_SUPPLY_PROP_CHARGE_NOW, chg_mode);
+
+			if (chg_mode.intval == SEC_BATTERY_CHARGING_2ND) {
+				max77888_set_charger_state(charger, 0);
+				max77888_set_topoff_current(charger,
+								charger->pdata->charging_current[
+									charger->cable_type].full_check_current_2nd,
+								(70 * 60));
+			} else {
+				max77888_set_topoff_current(charger,
+								charger->pdata->charging_current[
+									charger->cable_type].full_check_current_1st,
+								(70 * 60));
+			}
+		} else {
+			int to_time = (charger->pdata->full_check_type_2nd == SEC_BATTERY_FULLCHARGED_NONE) ?
+				(70 * 60) : charger->pdata->charging_current[charger->cable_type].full_check_current_2nd;
+
+			max77888_set_topoff_current(charger,
+							charger->pdata->charging_current[
+								charger->cable_type].full_check_current_1st, to_time);
+		}
+
 		max77888_set_charger_state(charger, charger->is_charging);
 		/* if battery full, only disable charging  */
 		if ((charger->status == POWER_SUPPLY_STATUS_CHARGING) ||
@@ -1027,11 +1090,6 @@ static int max77888_chg_set_property(struct power_supply *psy,
 			else
 				max77888_set_input_current(charger,
 					set_charging_current_max);
-			max77888_set_topoff_current(charger,
-				charger->pdata->charging_current[
-				val->intval].full_check_current_1st,
-				charger->pdata->charging_current[
-				val->intval].full_check_current_2nd);
 		}
 		prev_cable_type = charger->cable_type;
 		mutex_unlock(&charger->chg_lock);
@@ -1049,6 +1107,14 @@ static int max77888_chg_set_property(struct power_supply *psy,
 				val->intval);
 		max77888_set_input_current(charger,
 				val->intval);
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_FULL:
+		max77888_set_charger_state(charger, 0);
+		max77888_set_topoff_current(charger, val->intval, (70 * 60));
+		max77888_set_charger_state(charger, charger->is_charging);
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		max77888_set_float_voltage(charger, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		charger->siop_level = val->intval;
@@ -1106,18 +1172,6 @@ static int max77888_chg_set_property(struct power_supply *psy,
 	}
 
 	return 0;
-}
-
-static u8 max77888_get_float_voltage_data(
-					int float_voltage)
-{
-	u8 data = 0x16;
-
-	if (float_voltage >= 4500)
-		data = 0x1f;
-	else
-		data = (float_voltage - 3725) / 25;
-	return data;
 }
 
 static void max77888_charger_initialize(struct max77888_charger_data *charger)
@@ -1490,6 +1544,13 @@ static int max77888_charger_parse_dt(struct max77888_charger_data *charger)
 	if (!np) {
 		pr_err("%s np NULL\n", __func__);
 	} else {
+		ret = of_property_read_u32(np, "battery,full_check_type_2nd",
+					&pdata->full_check_type_2nd);
+		if (ret) {
+			pr_info("%s : Full check type 2nd is Empty\n", __func__);
+			pdata->full_check_type_2nd = SEC_BATTERY_FULLCHARGED_NONE;
+		}
+
 		p = of_get_property(np, "battery,input_current_limit", &len);
 
 		len = len / sizeof(u32);
