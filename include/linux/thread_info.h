@@ -93,7 +93,8 @@ static inline int test_and_clear_ti_thread_flag(struct thread_info *ti, int flag
 
 static inline int test_ti_thread_flag_relaxed(struct thread_info *ti, int flag)
 {
-	ti->flags = cpu_relaxed_read_long(&ti->flags);
+	if (enable_cpu_relaxed)
+		ti->flags = cpu_relaxed_read_long(&ti->flags);
 	return test_bit(flag, (unsigned long *)&ti->flags);
 }
 

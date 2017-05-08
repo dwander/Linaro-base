@@ -27,4 +27,6 @@
 #define cpu_relaxed_read_long(p)	(*(p))
 #endif
 
+extern bool enable_cpu_relaxed;
+
 #endif /*_ASM_GENERIC_RELAXED_H_*/
