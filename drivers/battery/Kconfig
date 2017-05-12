@@ -25,12 +25,6 @@ config BATTERY_SWELLING_SELF_DISCHARGING
 	help
 	  Say Y to include support for prevent battery swelling with self discharging
 
-config BATTERY_ADC_CHANNEL_SEPERATION
-	bool "enable BATTERY_ADC_CHANNEL_SEPERATION for duplicate adc channel in sec_adc"
-	default n
-	help
-	  Say Y to enable BATTERY_ADC_CHANNEL_SEPERATION  
-
 config INBATTERY
 	bool "is inbattery or not"
 	help

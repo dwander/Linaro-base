@@ -13,7 +13,6 @@
 
 #include <linux/battery/sec_battery.h>
 
-bool slate_mode_state;
 static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(batt_reset_soc),
 	SEC_BATTERY_ATTR(batt_read_raw_soc),
@@ -42,7 +41,6 @@ static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(fg_reg_dump),
 	SEC_BATTERY_ATTR(fg_reset_cap),
 	SEC_BATTERY_ATTR(fg_capacity),
-	SEC_BATTERY_ATTR(fg_asoc),
 	SEC_BATTERY_ATTR(auth),
 	SEC_BATTERY_ATTR(chg_current_adc),
 	SEC_BATTERY_ATTR(wc_adc),
@@ -2118,14 +2116,10 @@ static void sec_bat_get_battery_info(
 			pr_info("%s : forced full-charged sequence for the capacity(%d)\n",
 				__func__, battery->capacity);
 		}
-
-		if (value.intval >= battery->pdata->full_condition_soc &&
-			battery->voltage_now >= (battery->pdata->recharge_condition_vcell - 50)) {
-			/* update capacity max */
-			value.intval = battery->capacity;
-			psy_do_property(battery->pdata->fuelgauge_name, set,
-				POWER_SUPPLY_PROP_CHARGE_FULL, value);
-		}
+		/* update capacity max */
+		value.intval = battery->capacity;
+		psy_do_property(battery->pdata->fuelgauge_name, set,
+			POWER_SUPPLY_PROP_CHARGE_FULL, value);
 		old_ts = c_ts;
 	}
 #else
@@ -2561,7 +2555,7 @@ static void sec_bat_cable_work(struct work_struct *work)
 	else
 		current_cable_type = battery->wire_status;
 
-	if (current_cable_type == battery->cable_type && !battery->slate_mode) {
+	if (current_cable_type == battery->cable_type) {
 		dev_info(battery->dev,
 				"%s: Cable is NOT Changed(%d)\n",
 				__func__, battery->cable_type);
@@ -2618,18 +2612,6 @@ static void sec_bat_cable_work(struct work_struct *work)
 
 		if (sec_bat_set_charge(battery, false))
 			goto end_of_cable_work;
-	} else if (battery->slate_mode == true) {
-		sec_bat_set_charging_status(battery,
-				POWER_SUPPLY_STATUS_DISCHARGING);
-		battery->cable_type = POWER_SUPPLY_TYPE_BATTERY;
-
-		sec_bat_set_charge(battery, false);
-		val.intval = 0;
-		psy_do_property(battery->pdata->charger_name, set,
-			POWER_SUPPLY_PROP_CURRENT_NOW, val);
-
-		dev_info(battery->dev,
-			"%s:slate mode on\n",__func__);
 	} else {
 #if defined(CONFIG_EN_OOPS)
 		val.intval = battery->cable_type;
@@ -2879,12 +2861,6 @@ ssize_t sec_bat_show_attrs(struct device *dev,
 			value.intval);
 	}
 		break;
-	case FG_ASOC:
-		psy_do_property(battery->pdata->fuelgauge_name, get,
-			POWER_SUPPLY_PROP_ENERGY_FULL, value);
-		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
-			value.intval);
-		break;
 	case AUTH:
 		break;
 	case CHG_CURRENT_ADC:
@@ -3086,11 +3062,6 @@ void update_external_temp_table(struct sec_battery_info *battery, int temp[])
 		battery->pdata->event_check = 1;
 }
 
-bool sec_bat_get_slate_mode(void)
-{
-	return slate_mode_state;
-}
-
 ssize_t sec_bat_store_attrs(
 					struct device *dev,
 					struct device_attribute *attr,
@@ -3159,9 +3130,12 @@ ssize_t sec_bat_store_attrs(
 		break;
 	case BATT_SLATE_MODE:
 		if (sscanf(buf, "%d\n", &x) == 1) {
+			union power_supply_propval value;
 			if (x == 1) {
+				value.intval = POWER_SUPPLY_TYPE_BATTERY;
 				battery->slate_mode = true;
 			} else if (x == 0) {
+				value.intval = POWER_SUPPLY_TYPE_USB;
 				battery->slate_mode = false;
 			} else {
 				dev_info(battery->dev,
@@ -3169,10 +3143,18 @@ ssize_t sec_bat_store_attrs(
 					__func__);
 				return -EINVAL;
 			}
-			slate_mode_state = battery->slate_mode;
-			wake_lock(&battery->cable_wake_lock);
-			queue_work(battery->monitor_wqueue,
-				&battery->cable_work);
+			psy_do_property("battery", set,
+					POWER_SUPPLY_PROP_ONLINE, value);
+			if (battery->slate_mode) {
+				value.intval = 0;
+				psy_do_property(battery->pdata->charger_name, set,
+					POWER_SUPPLY_PROP_CURRENT_NOW,
+					value);
+				if (battery->pdata->always_enable)
+					psy_do_property(battery->pdata->charger_name, set,
+						POWER_SUPPLY_PROP_CHARGING_ENABLED,
+						value);
+			}
 			ret = count;
 		}
 		break;
@@ -3835,8 +3817,6 @@ static int sec_usb_get_property(struct power_supply *psy,
 		break;
 	}
 
-	if(battery->slate_mode)
-		val->intval = 0;
 	return 0;
 }
 
@@ -4100,7 +4080,6 @@ static int sec_bat_cable_check(struct sec_battery_info *battery,
 	case ATTACHED_DEV_CARDOCK_MUIC:
 	case ATTACHED_DEV_DESKDOCK_VB_MUIC:
 	case ATTACHED_DEV_SMARTDOCK_TA_MUIC:
-	case ATTACHED_DEV_UNIVERSAL_MMDOCK_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_5V_MUIC:
 	case ATTACHED_DEV_UNOFFICIAL_TA_MUIC:
 	case ATTACHED_DEV_UNOFFICIAL_ID_TA_MUIC:
@@ -4181,7 +4160,6 @@ static int batt_handle_notification(struct notifier_block *nb,
 	case MUIC_NOTIFY_CMD_DETACH:
 	case MUIC_NOTIFY_CMD_LOGICALLY_DETACH:
 		cmd = "DETACH";
-		battery->is_jig_on = false;
 		cable_type = POWER_SUPPLY_TYPE_BATTERY;
 		break;
 	case MUIC_NOTIFY_CMD_ATTACH:
@@ -4878,7 +4856,7 @@ static int sec_bat_parse_dt(struct device *dev,
 	ret = of_property_read_u32(np, "battery,swelling_chg_current",
 				   (unsigned int *)&pdata->swelling_chg_current);
 	if (ret) {
-		pdata->swelling_chg_current = BATT_SWELLING_CHG_CURRENT;
+		pdata->swelling_chg_current = 0;
 		pr_info("%s: swelling low temp chg current is Empty\n", __func__);
 	}
 
@@ -4899,14 +4877,14 @@ static int sec_bat_parse_dt(struct device *dev,
 	ret = of_property_read_u32(np, "battery,swelling_high_rechg_voltage",
 		(unsigned int *)&pdata->swelling_high_rechg_voltage);
 	if (ret) {
-		pdata->swelling_high_rechg_voltage = BATT_SWELLING_HIGH_RECHG_VOLTAGE;
+		pdata->swelling_high_rechg_voltage = BATT_SWELLING_RECHG_VOLTAGE;
 		pr_info("%s: swelling_high_rechg_voltage is Empty\n", __func__);
 	}
 
 	ret = of_property_read_u32(np, "battery,swelling_low_rechg_voltage",
 		(unsigned int *)&pdata->swelling_low_rechg_voltage);
 	if (ret) {
-		pdata->swelling_low_rechg_voltage = BATT_SWELLING_LOW_RECHG_VOLTAGE;
+		pdata->swelling_low_rechg_voltage = BATT_SWELLING_RECHG_VOLTAGE;
 		pr_info("%s: swelling_low_rechg_voltage is Empty\n", __func__);
 	}
 
@@ -5107,7 +5085,6 @@ static int __devinit sec_battery_probe(struct platform_device *pdev)
 	battery->store_mode = false;
 	battery->ignore_store_mode = false;
 	battery->slate_mode = false;
-	slate_mode_state = battery->slate_mode;
 
 #if defined(CONFIG_BATTERY_SWELLING_SELF_DISCHARGING)
 	battery->self_discharging = false;

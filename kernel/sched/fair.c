@@ -9195,10 +9195,6 @@ static int hmp_active_task_migration_cpu_stop(void *data)
 	struct sched_domain *sd;
 
 	raw_spin_lock_irq(&busiest_rq->lock);
-
-	if (p->exit_state)
-		goto out_unlock;
-
 	/* make sure the requested cpu hasn't gone down in the meantime */
 	if (unlikely(busiest_cpu != smp_processor_id() ||
 		!busiest_rq->active_balance)) {
@@ -9276,9 +9272,6 @@ static int hmp_idle_pull_cpu_stop(void *data)
 	struct sched_domain *sd;
 
 	raw_spin_lock_irq(&busiest_rq->lock);
-
-	if (p->exit_state)
-		goto out_unlock;
 
 	/* make sure the requested cpu hasn't gone down in the meantime */
 	if (unlikely(busiest_cpu != smp_processor_id() ||
@@ -9482,12 +9475,9 @@ static unsigned int hmp_idle_pull(int this_cpu)
 
 		if (hmp_boost() || curr->avg.load_avg_ratio > up_threshold)
 			if (curr->avg.load_avg_ratio > ratio) {
-				if (p)
-					put_task_struct(p);
 				p = task_of(curr);
 				target = rq;
 				ratio = curr->avg.load_avg_ratio;
-				get_task_struct(p);
 			}
 		raw_spin_unlock_irqrestore(&rq->lock, flags);
 	}
@@ -9498,6 +9488,7 @@ static unsigned int hmp_idle_pull(int this_cpu)
 	/* now we have a candidate */
 	raw_spin_lock_irqsave(&target->lock, flags);
 	if (!target->active_balance && task_rq(p) == target) {
+		get_task_struct(p);
 		target->active_balance = 1;
 		target->push_cpu = this_cpu;
 		target->migrate_task = p;
@@ -9505,8 +9496,6 @@ static unsigned int hmp_idle_pull(int this_cpu)
 		trace_sched_hmp_migrate(p, target->push_cpu,
 			HMP_MIGRATE_IDLE_PULL);
 		hmp_next_up_delay(&p->se, target->push_cpu);
-	} else {
-		put_task_struct(p);
 	}
 	raw_spin_unlock_irqrestore(&target->lock, flags);
 	if (force) {

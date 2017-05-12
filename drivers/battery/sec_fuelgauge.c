@@ -153,65 +153,6 @@ static int sec_fg_get_property(struct power_supply *psy,
 	return 0;
 }
 
-#if defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_PREVENT_SOC_JUMP)
-static int sec_fg_calculate_dynamic_scale(
-	struct sec_fuelgauge_info *fuelgauge, int capacity)
-{
-	union power_supply_propval raw_soc_val;
-
-	raw_soc_val.intval = SEC_FUELGAUGE_CAPACITY_TYPE_RAW;
-	if (!sec_hal_fg_get_property(fuelgauge->client,
-		POWER_SUPPLY_PROP_CAPACITY,
-		&raw_soc_val))
-		return -EINVAL;
-	raw_soc_val.intval /= 10;
-
-	if (raw_soc_val.intval <
-		fuelgauge->pdata->capacity_max -
-		fuelgauge->pdata->capacity_max_margin) {
-		fuelgauge->capacity_max =
-			fuelgauge->pdata->capacity_max -
-			fuelgauge->pdata->capacity_max_margin;
-		dev_dbg(&fuelgauge->client->dev, "%s: capacity_max (%d)", __func__,
-			 fuelgauge->capacity_max);
-	} else {
-		fuelgauge->capacity_max =
-			(raw_soc_val.intval >
-			fuelgauge->pdata->capacity_max +
-			fuelgauge->pdata->capacity_max_margin) ?
-			(fuelgauge->pdata->capacity_max +
-			fuelgauge->pdata->capacity_max_margin) :
-			raw_soc_val.intval;
-		dev_dbg(&fuelgauge->client->dev, "%s: raw soc (%d)", __func__,
-			 fuelgauge->capacity_max);
-	}
-
-	if (capacity != 100) {
-		fuelgauge->capacity_max =
-			(fuelgauge->capacity_max * 100 / capacity);
-		fuelgauge->capacity_old = capacity;
-	} else {
-		fuelgauge->capacity_max =
-			(fuelgauge->capacity_max * 99 / 100);
-		fuelgauge->capacity_old = 100;
-	}
-
-	if (fuelgauge->capacity_max <
-		fuelgauge->pdata->capacity_max -
-		fuelgauge->pdata->capacity_max_margin) {
-		fuelgauge->capacity_max =
-			fuelgauge->pdata->capacity_max -
-			fuelgauge->pdata->capacity_max_margin;
-		pr_debug("%s: capacity_max (%d)", __func__,
-			 fuelgauge->capacity_max);
-	}
-
-	dev_info(&fuelgauge->client->dev, "%s: %d is used for capacity_max, capacity(%d)\n",
-		__func__, fuelgauge->capacity_max, capacity);
-
-	return fuelgauge->capacity_max;
-}
-#else
 static int sec_fg_calculate_dynamic_scale(
 				struct sec_fuelgauge_info *fuelgauge)
 {
@@ -255,7 +196,6 @@ static int sec_fg_calculate_dynamic_scale(
 
 	return fuelgauge->capacity_max;
 }
-#endif
 
 static int sec_fg_set_property(struct power_supply *psy,
 			    enum power_supply_property psp,
@@ -270,17 +210,11 @@ static int sec_fg_set_property(struct power_supply *psy,
 			sec_hal_fg_full_charged(fuelgauge->client);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-#if defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_PREVENT_SOC_JUMP)
-		if (fuelgauge->pdata->capacity_calculation_type &
-			SEC_FUELGAUGE_CAPACITY_TYPE_DYNAMIC_SCALE)
-			sec_fg_calculate_dynamic_scale(fuelgauge, val->intval);
-#else
 		if (val->intval == POWER_SUPPLY_TYPE_BATTERY) {
 			if (fuelgauge->pdata->capacity_calculation_type &
 				SEC_FUELGAUGE_CAPACITY_TYPE_DYNAMIC_SCALE)
 				sec_fg_calculate_dynamic_scale(fuelgauge);
 		}
-#endif
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		fuelgauge->cable_type = val->intval;
@@ -554,11 +488,7 @@ static int __devinit sec_fuelgauge_probe(struct i2c_client *client,
 			POWER_SUPPLY_PROP_CAPACITY, &raw_soc_val);
 	raw_soc_val.intval /= 10;
 	if(raw_soc_val.intval > fuelgauge->pdata->capacity_max)
-#if defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_PREVENT_SOC_JUMP)
-		sec_fg_calculate_dynamic_scale(fuelgauge, 100);
-#else
 		sec_fg_calculate_dynamic_scale(fuelgauge);
-#endif
 /*
 	if (!fuelgauge->pdata->fg_gpio_init()) {
 		dev_err(&client->dev,

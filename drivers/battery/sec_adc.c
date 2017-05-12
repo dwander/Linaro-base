@@ -19,8 +19,6 @@ static void sec_bat_adc_ap_init(struct platform_device *pdev)
 	temp_adc = iio_channel_get_all(&pdev->dev);
 }
 
-
-#ifndef CONFIG_BATTERY_ADC_CHANNEL_SEPERATION
 static int sec_bat_adc_ap_read(int channel)
 {
 	int data = -1;
@@ -68,63 +66,6 @@ static int sec_bat_adc_ap_read(int channel)
 	}
 	return data;
 }
-
-#else
-
-static int sec_bat_adc_ap_read(int channel)
-{
-	int data = -1;
-	int ret = 0;
-
-	switch (channel)
-	{
-	case SEC_BAT_ADC_CHANNEL_CABLE_CHECK:
-	case SEC_BAT_ADC_CHANNEL_BAT_CHECK:
-		break;
-	case SEC_BAT_ADC_CHANNEL_TEMP:
-	case SEC_BAT_ADC_CHANNEL_TEMP_AMBIENT:
-		ret = iio_read_channel_raw(&temp_adc[0], &data);
-		if (ret < 0)
-			pr_info("read channel error[%d]\n", ret);
-		else
-			pr_debug("TEMP ADC(%d)\n", data);
-		break;
-	case SEC_BAT_ADC_CHANNEL_FULL_CHECK:
-	case SEC_BAT_ADC_CHANNEL_VOLTAGE_NOW:
-	case SEC_BAT_ADC_CHANNEL_NUM:
-		break;
-	case SEC_BAT_ADC_CHANNEL_INBAT_VOLTAGE:
-		ret = iio_read_channel_raw(&temp_adc[1], &data);
-		if (ret < 0)
-			pr_info("read channel error[%d]\n", ret);
-		else
-			pr_info("INBAT ADC(%d)\n", data);
-		break;
-#ifdef CONFIG_BATTERY_SWELLING_SELF_DISCHARGING
-	case SEC_BAT_ADC_CHANNEL_DISCHARGING_CHECK:
-		ret = iio_read_channel_raw(&temp_adc[2], &data);
-		if (ret < 0)
-			pr_info("read channel error[%d]\n", ret);
-		else
-			pr_info("DISCHARGING CHECK(%d)\n", data);
-		break;
-#endif
-	case SEC_BAT_ADC_CHANNEL_CHG_TEMP:
-		ret = iio_read_channel_raw(&temp_adc[3], &data);
-		if (ret < 0)
-			pr_info("read channel error[%d]\n", ret);
-		else
-			pr_info("CHG TEMP ADC(%d)\n", data);
-		break;		
-		
-	default:
-		break;
-	}
-	return data;
-}
-
-#endif
-
 
 static void sec_bat_adc_ap_exit(void)
 {

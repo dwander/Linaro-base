@@ -47,12 +47,8 @@ struct sec_jack_platform_data {
 	int	det_gpio;
 	int	send_end_gpio;
 	int	ear_micbias_gpio;
-#ifdef CONFIG_RF_EAR_DET
-	int rf_ear_det_gpio;
-#endif
 	bool	det_active_high;
 	bool	send_end_active_high;
-	bool	use_codec_micbias;
 	struct qpnp_vadc_chip		*vadc_dev;
 	struct sec_jack_zone jack_zones[4];
 	struct sec_jack_buttons_zone jack_buttons_zones[4];

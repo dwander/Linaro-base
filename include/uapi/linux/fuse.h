@@ -237,9 +237,6 @@ struct fuse_file_lock {
 #define FUSE_READDIRPLUS_AUTO	(1 << 14)
 #define FUSE_ASYNC_DIO		(1 << 15)
 
-#define FUSE_RESERVE_SPACE	(1 << 30)
-#define FUSE_SHORTCIRCUIT	(1 << 31)
-
 /**
  * CUSE INIT request/reply flags
  *
@@ -465,7 +462,7 @@ struct fuse_create_in {
 struct fuse_open_out {
 	uint64_t	fh;
 	uint32_t	open_flags;
-	int32_t         lower_fd;/* lower layer file descriptor */
+	int32_t         lower_fd;
 };
 
 struct fuse_release_in {
@@ -568,8 +565,6 @@ struct fuse_init_out {
 	uint16_t	max_background;
 	uint16_t	congestion_threshold;
 	uint32_t	max_write;
-	uint32_t	reserved_space_mb;
-	uint32_t	padding;
 };
 
 #define CUSE_INIT_INFO_MAX 4096

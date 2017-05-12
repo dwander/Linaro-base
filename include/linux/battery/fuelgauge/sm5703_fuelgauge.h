@@ -121,7 +121,6 @@ struct sm5703_platform_data {
 	int fuel_alert_soc;
 	int fullsocthr;
 	int fg_irq;
-	bool low_temp_compensate_a8ve;
 	unsigned long fg_irq_attr;
 
 	char *fuelgauge_name;
