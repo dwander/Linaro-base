@@ -634,6 +634,8 @@ extern struct class *fb_class;
 
 extern int lock_fb_info(struct fb_info *info);
 
+extern bool state_lcd_is_on;
+
 static inline void unlock_fb_info(struct fb_info *info)
 {
 	mutex_unlock(&info->lock);
