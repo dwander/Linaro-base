@@ -1151,9 +1151,8 @@ static int f2fs_remount(struct super_block *sb, int *flags, char *data)
 	 * or if flush_merge is not passed in mount option.
 	 */
 	if ((*flags & MS_RDONLY) || !test_opt(sbi, FLUSH_MERGE)) {
-		clear_opt(sbi, FLUSH_MERGE);
-		destroy_flush_cmd_control(sbi, false);
-	} else {
+		destroy_flush_cmd_control(sbi);
+	} else if (!SM_I(sbi)->fcc_info) {
 		err = create_flush_cmd_control(sbi);
 		if (err)
 			goto restore_gc;
