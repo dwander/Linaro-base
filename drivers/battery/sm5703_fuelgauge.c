@@ -234,10 +234,18 @@ static u32 sm5703_get_soc(struct sm5703_fuelgauge_data *fuelgauge)
 	temp_cal_fact = temp_cal_fact * fuelgauge->info.temp_offset_cal;
 	curr_cal = curr_cal + (temp_cal_fact << 8);
 
-	// low temp env battery V-drop defence
-	psy_do_property("battery", get,	POWER_SUPPLY_PROP_TEMP, value);
-	if ((value.intval / 10) < 25) {
-		curr_cal = curr_cal - ((((25 - (value.intval / 10)) / 7) * 2) << 8);
+	psy_do_property("battery", get, POWER_SUPPLY_PROP_TEMP, value);
+	if(fuelgauge->pdata->low_temp_compensate_a8ve){
+		/* compensate soc in case of low bat_temp */
+		if ((value.intval / 10) < 25) {
+			curr_cal = curr_cal + ((((25 - (value.intval / 10)) / 7) * 2) << 8);
+		}
+	}
+	else{
+		// low temp env battery V-drop defence
+		if ((value.intval / 10) < 25) {
+			curr_cal = curr_cal - ((((25 - (value.intval / 10)) / 7) * 2) << 8);
+		}
 	}
 
 	dev_info(&fuelgauge->i2c->dev, "%s: fg_get_soc : temp_std = %d, temperature = %d, temp_offset = %d, temp_offset_cal = 0x%x, curr_cal = 0x%x\n",
@@ -1283,6 +1291,8 @@ static int sm5703_fg_parse_dt(struct sm5703_fuelgauge_data *fuelgauge)
 		if (ret < 0)
 			pr_err("%s error reading pdata->fuel_alert_soc %d\n",
 					__func__, ret);
+
+		fuelgauge->pdata->low_temp_compensate_a8ve = of_property_read_bool(np,"fuelgauge,low_temp_compensate_a8ve");
 	}
 
 	pr_info("%s: fg_irq : %d, capacity_max : %d, capacity_max_margin : %d, capacity_min : %d\n",

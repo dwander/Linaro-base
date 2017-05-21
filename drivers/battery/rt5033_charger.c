@@ -506,6 +506,7 @@ static void rt5033_configure_charger(struct rt5033_charger_data *charger)
 	int eoc;
 	int input_current_limit;
 	union power_supply_propval val;
+	union power_supply_propval chg_mode,swelling_state;
 
 	pr_info("%s : Set config charging\n", __func__);
 	if (charger->charging_current < 0) {
@@ -541,8 +542,32 @@ static void rt5033_configure_charger(struct rt5033_charger_data *charger)
 
 	charger->charging_current = charger->pdata->charging_current_table
 				    [charger->cable_type].fast_charging_current;
-	eoc = charger->pdata->charging_current_table
-	      [charger->cable_type].full_check_current_1st;
+
+	if (charger->pdata->full_check_type_2nd == SEC_BATTERY_FULLCHARGED_CHGPSY)
+	{
+#if defined(CONFIG_BATTERY_SWELLING)
+		psy_do_property("battery", get,
+				POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, swelling_state);
+#else
+		swelling_state.intval = 0;
+#endif
+		psy_do_property("battery", get, POWER_SUPPLY_PROP_CHARGE_NOW, chg_mode);
+
+		if (chg_mode.intval == SEC_BATTERY_CHARGING_2ND || swelling_state.intval) {
+			eoc = charger->pdata->charging_current_table
+					[charger->cable_type].full_check_current_2nd;
+
+			/* change full_charged status */
+			charger->full_charged = false;
+		} else {
+			eoc = charger->pdata->charging_current_table
+					[charger->cable_type].full_check_current_1st;
+		}
+	}
+	else {
+		eoc = charger->pdata->charging_current_table
+				[charger->cable_type].full_check_current_1st;
+	}
 	/* Fast charge and Termination current */
 	pr_info("%s : fast charging current (%dmA)\n",
 		__func__, charger->charging_current);
@@ -614,8 +639,13 @@ static bool rt5033_chg_init(struct rt5033_charger_data *charger)
     /* Disable Timer function (Charging timeout fault) */
     rt5033_clr_bits(charger->rt5033->i2c_client,
                     RT5033_CHG_CTRL3, RT5033_TIMEREN_MASK);
-    /* Disable TE */
-    rt5033_enable_charging_termination(charger->rt5033->i2c_client, 0);
+    if (charger->pdata->full_check_type_2nd == SEC_BATTERY_FULLCHARGED_CHGPSY) {
+		/* Background charging change to current method, so enable TE */
+		rt5033_enable_charging_termination(charger->rt5033->i2c_client, 1);
+	} else {
+		/* Disable TE */
+		rt5033_enable_charging_termination(charger->rt5033->i2c_client, 0);
+	}
 
 	/* Enable High-GM */
 	rt5033_set_bits(charger->rt5033->i2c_client,
@@ -881,6 +911,10 @@ static int sec_chg_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		pr_info("%s: float voltage(%d)\n", __func__, val->intval);
 		rt5033_set_regulation_voltage(charger, val->intval);
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_AVG:
+		charger->charging_current = val->intval;
+		__rt5033_set_fast_charging_current(charger, val->intval);
 		break;
 #endif
 	case POWER_SUPPLY_PROP_CHARGE_OTG_CONTROL:
@@ -1301,6 +1335,18 @@ static int rt5033_charger_parse_dt(struct device *dev,
 		pdata->is_750kHz_switching);
 	pr_info("%s : is_fixed_switching = %d\n", __func__,
 		pdata->is_fixed_switching);
+
+	np = of_find_node_by_name(NULL, "battery");
+	if (!np) {
+		pr_info("%s : np NULL\n", __func__);
+		return -ENODATA;
+	}
+
+	ret = of_property_read_u32(np, "battery,full_check_type_2nd",
+			&pdata->full_check_type_2nd);
+	if (ret)
+		pr_info("%s: full_check_type_2nd is Empty\n", __func__);
+
 	np = of_find_node_by_name(NULL, "charger");
 	if (!np) {
 		pr_info("%s : np NULL\n", __func__);

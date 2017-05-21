@@ -67,9 +67,11 @@
 
 #include "audit.h"
 
+// [ SEC_SELINUX_PORTING_EXYNOS
 #ifdef CONFIG_SEC_AVC_LOG
 #include <linux/sec_debug.h>
 #endif
+// ] SEC_SELINUX_PORTING_EXYNOS
 
 /* No auditing will take place until audit_initialized == AUDIT_INITIALIZED.
  * (Initialization happens after skb_init is called.) */
@@ -370,14 +372,22 @@ static void audit_hold_skb(struct sk_buff *skb)
  */
 static void audit_printk_skb(struct sk_buff *skb)
 {
-#ifdef CONFIG_SEC_AVC_LOG
 	struct nlmsghdr *nlh = nlmsg_hdr(skb);
 	char *data = nlmsg_data(nlh);
 
 	if (nlh->nlmsg_type != AUDIT_EOE && nlh->nlmsg_type != AUDIT_NETFILTER_CFG) {
+// [ SEC_SELINUX_PORTING_EXYNOS
+#ifdef CONFIG_SEC_AVC_LOG
 		sec_debug_avc_log("type=%d %s\n", nlh->nlmsg_type, data);
-	}
+#else
+		if (printk_ratelimit())
+			pr_notice("type=%d %s\n", nlh->nlmsg_type, data);
+		else
+			audit_log_lost("printk limit exceeded\n");
 #endif
+// ] SEC_SELINUX_PORTING_EXYNOS
+	}
+
 	audit_hold_skb(skb);
 }
 
@@ -395,6 +405,7 @@ static void kauditd_send_skb(struct sk_buff *skb)
 		/* we might get lucky and get this in the next auditd */
 		audit_hold_skb(skb);
 	} else {
+// [ SEC_SELINUX_PORTING_EXYNOS
 #ifdef CONFIG_SEC_AVC_LOG
 		struct nlmsghdr *nlh = nlmsg_hdr(skb);
 		char *data = NLMSG_DATA(nlh);
@@ -403,6 +414,7 @@ static void kauditd_send_skb(struct sk_buff *skb)
 			sec_debug_avc_log("%s\n", data);
 		}
 #endif
+// ] SEC_SELINUX_PORTING_EXYNOS
 		/* drop the extra reference if sent ok */
 		consume_skb(skb);
 	}
@@ -581,10 +593,9 @@ out:
 static int audit_netlink_ok(struct sk_buff *skb, u16 msg_type)
 {
 	int err = 0;
-	struct user_namespace *user_ns = current_user_ns();
 
 	/* Only support the initial namespaces for now. */
-	if ((user_ns != &init_user_ns) ||
+	if ((current_user_ns() != &init_user_ns) ||
 	    (task_active_pid_ns(current) != &init_pid_ns))
 		return -EPERM;
 

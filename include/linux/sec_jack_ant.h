@@ -27,7 +27,8 @@ enum {
 	SEC_TVOUT_DEVICE		= 0x01 << 5,
 	SEC_EXTRA_DOCK_SPEAKER		= 0x01 << 6,
 	SEC_EXTRA_CAR_DOCK_SPEAKER	= 0x01 << 7,
-	SEC_UNKNOWN_DEVICE		= 0x01 << 8,
+	SEC_EXTRA_ANT_DEVICE		= 0x01 << 8,	
+	SEC_UNKNOWN_DEVICE		= 0x01 << 9,
 };
 
 struct sec_jack_zone {
@@ -50,11 +51,12 @@ struct sec_jack_platform_data {
 #ifdef CONFIG_RF_EAR_DET
 	int rf_ear_det_gpio;
 #endif
+	int ant_det_gpio;
 	bool	det_active_high;
 	bool	send_end_active_high;
 	bool	use_codec_micbias;
 	struct qpnp_vadc_chip		*vadc_dev;
-	struct sec_jack_zone jack_zones[4];
+	struct sec_jack_zone jack_zones[6];
 	struct sec_jack_buttons_zone jack_buttons_zones[4];
 	struct pinctrl *jack_pinctrl;
 };
