@@ -19,16 +19,24 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/clk.h>
 #include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_i2c.h>
+#include <linux/of_gpio.h>
+#include "../../pinctrl/core.h"
+#include <linux/smc.h>
 
 #include <mach/exynos-pm.h>
+#ifdef CONFIG_EXYNOS_APM
+#include <mach/apm-exynos.h>
+#endif
 
-#ifdef CONFIG_EXYNOS_HSI2C_RESET_DURING_DSTOP
+#if defined(CONFIG_EXYNOS_HSI2C_RESET_DURING_DSTOP) || \
+	defined(CONFIG_EXYNOS_APM)
 static LIST_HEAD(drvdata_list);
 #endif
 
@@ -70,21 +78,37 @@ static LIST_HEAD(drvdata_list);
 #define HSI2C_TIMING_SLA	0x6C
 #define HSI2C_ADDR		0x70
 
+#define HSI2C_SMRelease		0x200
+
+/* HSI2C Batcher Register Map */
+#define HSI2C_BATCHER_CON		0x500
+#define HSI2C_BATCHER_STATE		0x504
+#define HSI2C_BATCHER_INT_EN		0x508
+#define HSI2C_BATCHER_FIFO_STATUS	0x50C
+#define HSI2C_BATCHER_INT_STATUS	0x510
+#define HSI2C_BATCHER_OPCODE		0x600
+
+#define HSI2C_START_PAYLOAD		0x1000
+#define HSI2C_END_PAYLOAD		0x1060
+
 /* I2C_CTL Register bits */
 #define HSI2C_FUNC_MODE_I2C			(1u << 0)
 #define HSI2C_MASTER				(1u << 3)
 #define HSI2C_RXCHON				(1u << 6)
 #define HSI2C_TXCHON				(1u << 7)
+#define HSI2C_EXT_MSB				(1u << 29)
+#define HSI2C_EXT_ADDR				(1u << 30)
 #define HSI2C_SW_RST				(1u << 31)
 
 /* I2C_FIFO_CTL Register bits */
 #define HSI2C_RXFIFO_EN				(1u << 0)
 #define HSI2C_TXFIFO_EN				(1u << 1)
 #define HSI2C_FIFO_MAX				(0x40)
-#define HSI2C_RXFIFO_TRIGGER_LEVEL		(0x20 << 4)
-#define HSI2C_TXFIFO_TRIGGER_LEVEL		(0x20 << 16)
+#define HSI2C_RXFIFO_TRIGGER_LEVEL		(0x8 << 4)
+#define HSI2C_TXFIFO_TRIGGER_LEVEL		(0x8 << 16)
 /* I2C_TRAILING_CTL Register bits */
 #define HSI2C_TRAILING_COUNT			(0xf)
+#define BATCHER_TRAILING_COUNT			(0x0ffff)
 
 /* I2C_INT_EN Register bits */
 #define HSI2C_INT_TX_ALMOSTEMPTY_EN		(1u << 0)
@@ -124,6 +148,8 @@ static LIST_HEAD(drvdata_list);
 #define HSI2C_AUTO_MODE				(1u << 31)
 #define HSI2C_10BIT_ADDR_MODE			(1u << 30)
 #define HSI2C_HS_MODE				(1u << 29)
+#define HSI2C_FILTER_EN_SCL			(1u << 28)
+#define HSI2C_FILTER_EN_SDA			(1u << 27)
 #define HSI2C_FTL_CYCLE_SCL_MASK		(0x7 << 16)
 #define HSI2C_FTL_CYCLE_SDA_MASK		(0x7 << 13)
 
@@ -151,6 +177,16 @@ static LIST_HEAD(drvdata_list);
 #define HSI2C_MASTER_ID(x)			((x & 0xff) << 24)
 #define MASTER_ID(x)				((x & 0x7) + 0x08)
 
+/* HSI2CBatcer.CON register bits */
+#define HSI2C_BATCHER_RESET			(1u << 31)
+#define HSI2C_BATCHER_HSI2C_RST			(1u << 6)
+#define HSI2C_BATCHER_APB_RSP			(1u << 5)
+#define HSI2C_BATCHER_START			(1u << 4)
+#define HSI2C_BATCHER_DISABLE_SEMA_REL		(1u << 2)
+#define HSI2C_BATCHER_DEDICATE			(1u << 1)
+#define HSI2C_BATCHER_ENABLE			(1u << 0)
+#define HSI2C_BATCHER_INT_ENABLE		(1u << 0)
+
 /*
  * Controller operating frequency, timing values for operation
  * are calculated against this frequency
@@ -167,6 +203,10 @@ static LIST_HEAD(drvdata_list);
 
 #define EXYNOS5_FIFO_SIZE		16
 
+#define EXYNOS5_HSI2C_RUNTIME_PM_DELAY	(100)
+
+#define HSI2C_BATCHER_INIT_CMD	0xFFFFFFFF
+
 struct exynos5_i2c {
 	struct list_head	node;
 	struct i2c_adapter	adap;
@@ -181,6 +221,7 @@ struct exynos5_i2c {
 	unsigned int		irq;
 
 	void __iomem		*regs;
+	void __iomem		*regs_mailbox;
 	struct clk		*clk;
 	struct clk		*rate_clk;
 	struct device		*dev;
@@ -209,6 +250,19 @@ struct exynos5_i2c {
 	int			scl_clk_stretch;
 	int			stop_after_trans;
 	unsigned int		transfer_delay;
+#ifdef CONFIG_EXYNOS_APM
+	int			use_apm_mode;
+#endif
+	/* HSI2C Batcher can automatically handle HSI2C operation */
+	int			support_hsi2c_batcher;
+
+	unsigned int		cmd_buffer;
+	unsigned int		cmd_index;
+	unsigned int		cmd_pointer;
+	unsigned int		desc_pointer;
+	unsigned int		batcher_read_addr;
+	unsigned int		secure_mode;
+	unsigned int		t_data_su_timing;
 };
 
 static const struct of_device_id exynos5_i2c_match[] = {
@@ -218,73 +272,242 @@ static const struct of_device_id exynos5_i2c_match[] = {
 MODULE_DEVICE_TABLE(of, exynos5_i2c_match);
 
 
-void dump_i2c_register(struct exynos5_i2c *i2c)
+#ifdef CONFIG_EXYNOS_APM
+static struct pinctrl *apm_i2c_pinctrl;
+static struct pinctrl_state *default_i2c_gpio, *apm_i2c_gpio;
+
+static int exynos_regulator_apm_notifier(struct notifier_block *notifier,
+						unsigned long pm_event, void *v)
 {
-	unsigned char i;
+	int status;
+	struct exynos5_i2c *i2c;
 
-	dev_err(i2c->dev, "Register dump(suspended : %d)\n"
-		": CTL          0x%08x\n"
-		": FIFO_CTL     0x%08x\n"
-		": TRAILING_CTL 0x%08x\n"
-		": CLK_CTL      0x%08x\n"
-		": CLK_SLOT     0x%08x\n"
-		": INT_EN       0x%08x\n"
-		": INT_STAT     0x%08x\n"
-		": ERR_STAT     0x%08x\n"
-		": FIFO_STAT    0x%08x\n"
-		": TXDATA       0x%08x\n"
-		": RXDATA       0x%08x\n"
-		": CONF         0x%08x\n"
-		, i2c->suspended
-		, readl(i2c->regs + HSI2C_CTL)
-		, readl(i2c->regs + HSI2C_FIFO_CTL)
-		, readl(i2c->regs + HSI2C_TRAILIG_CTL)
-		, readl(i2c->regs + HSI2C_CLK_CTL)
-		, readl(i2c->regs + HSI2C_CLK_SLOT)
-		, readl(i2c->regs + HSI2C_INT_ENABLE)
-		, readl(i2c->regs + HSI2C_INT_STATUS)
-		, readl(i2c->regs + HSI2C_ERR_STATUS)
-		, readl(i2c->regs + HSI2C_FIFO_STATUS)
-		, readl(i2c->regs + HSI2C_TX_DATA)
-		, readl(i2c->regs + HSI2C_RX_DATA)
-		, readl(i2c->regs + HSI2C_CONF));
+	list_for_each_entry(i2c, &drvdata_list, node)
+		if (i2c->use_apm_mode == 1)
+			break;
+	if (i2c->use_apm_mode == 0)
+		printk(KERN_ERR "[APM I2C] No APM device\n");
 
-	dev_err(i2c->dev,
-		": AUTO_CONF    0x%08x\n"
-		": TIMEOUT      0x%08x\n"
-		": MANUAL_CMD   0x%08x\n"
-		": TRANS_STAT   0x%08x\n"
-		": TIMING_HS1   0x%08x\n"
-		": TIMING_HS2   0x%08x\n"
-		": TIMING_HS3   0x%08x\n"
-		": TIMING_FS1   0x%08x\n"
-		": TIMING_FS2   0x%08x\n"
-		": TIMING_FS3   0x%08x\n"
-		": TIMING_SLA   0x%08x\n"
-		": ADDR         0x%08x\n"
-		, readl(i2c->regs + HSI2C_AUTO_CONF)
-		, readl(i2c->regs + HSI2C_TIMEOUT)
-		, readl(i2c->regs + HSI2C_MANUAL_CMD)
-		, readl(i2c->regs + HSI2C_TRANS_STATUS)
-		, readl(i2c->regs + HSI2C_TIMING_HS1)
-		, readl(i2c->regs + HSI2C_TIMING_HS2)
-		, readl(i2c->regs + HSI2C_TIMING_HS3)
-		, readl(i2c->regs + HSI2C_TIMING_FS1)
-		, readl(i2c->regs + HSI2C_TIMING_FS2)
-		, readl(i2c->regs + HSI2C_TIMING_FS3)
-		, readl(i2c->regs + HSI2C_TIMING_SLA)
-		, readl(i2c->regs + HSI2C_ADDR));
-
-	dev_err(i2c->dev,"I2C Message Dump, msg_ptr = %d, msg_len = %d\n",
-			i2c->msg_ptr, i2c->msg->len);
-
-	printk(KERN_ERR "dump buf =");
-	for (i =0; i < i2c->msg->len; i++) {
-		printk(KERN_ERR " %02X", i2c->msg->buf[i]);
-
+	if (IS_ERR(default_i2c_gpio)) {
+		printk(KERN_ERR "[APM I2C] Err pinctrl_state!\n");
+		return NOTIFY_BAD;
 	}
-	printk(KERN_ERR "\n");
 
+	switch (pm_event) {
+		case APM_READY:
+			status = pinctrl_select_state(apm_i2c_pinctrl, apm_i2c_gpio);
+			if (status) {
+				printk(KERN_ERR "[APM I2C] Can't set APM I2C gpio(output).\n");
+				return NOTIFY_BAD;
+			}
+			break;
+		case APM_SLEEP:
+		case APM_TIMEOUT:
+			status = pinctrl_select_state(apm_i2c_pinctrl, default_i2c_gpio);
+			if (status) {
+				printk(KERN_ERR "[APM I2C] Can't set default I2C gpio.\n");
+				return NOTIFY_BAD;
+			}
+
+			i2c->need_hw_init = 1;
+			break;
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block exynos_apm_notifier = {
+	.notifier_call = exynos_regulator_apm_notifier,
+};
+#endif
+
+static void change_i2c_gpio(struct exynos5_i2c *i2c)
+{
+	struct pinctrl_state *default_i2c_pins;
+	struct pinctrl *default_i2c_pinctrl;
+	int status = 0;
+
+	default_i2c_pinctrl = devm_pinctrl_get(i2c->dev);
+	if (IS_ERR(default_i2c_pinctrl)) {
+		dev_err(i2c->dev, "Can't get i2c pinctrl!!!\n");
+		return ;
+	}
+
+	default_i2c_pins = pinctrl_lookup_state(default_i2c_pinctrl,
+				"default");
+	if (!IS_ERR(default_i2c_pins)) {
+		default_i2c_pinctrl->state = NULL;
+		status = pinctrl_select_state(default_i2c_pinctrl, default_i2c_pins);
+		if (status)
+			dev_err(i2c->dev, "Can't set default i2c pins!!!\n");
+	} else {
+		dev_err(i2c->dev, "Can't get default pinstate!!!\n");
+	}
+}
+
+static void recover_gpio_pins_secure(struct exynos5_i2c *i2c)
+{
+	dev_err(i2c->dev, "Recover GPIO pins in secure\n");
+
+	if(i2c->bus_id == exynos_smc((0x83000012), i2c->bus_id, 0, 0)){
+		dev_err(i2c->dev, "SDA line(%d) is recovered in secure!!!\n", i2c->bus_id);
+	}else{
+		dev_err(i2c->dev, "SDA line(%d) is not recovered in secure!!!\n", i2c->bus_id);
+	}
+}
+
+static void recover_gpio_pins(struct exynos5_i2c *i2c)
+{
+	int gpio_sda, gpio_scl;
+	int sda_val, scl_val, clk_cnt;
+	unsigned long timeout;
+	struct device_node *np = i2c->adap.dev.of_node;
+
+	dev_err(i2c->dev, "Recover GPIO pins\n");
+
+	gpio_sda = of_get_named_gpio(np, "gpio_sda", 0);
+	if (!gpio_is_valid(gpio_sda)) {
+		dev_err(i2c->dev, "Can't get gpio_sda!!!\n");
+		return ;
+	}
+	gpio_scl = of_get_named_gpio(np, "gpio_scl", 0);
+	if (!gpio_is_valid(gpio_scl)) {
+		dev_err(i2c->dev, "Can't get gpio_scl!!!\n");
+		return ;
+	}
+
+	sda_val = gpio_get_value(gpio_sda);
+	scl_val = gpio_get_value(gpio_scl);
+
+	dev_err(i2c->dev, "SDA line : %s, SCL line : %s\n",
+			sda_val ? "HIGH" : "LOW", scl_val ? "HIGH" : "LOW");
+
+	if (sda_val == 1)
+		return ;
+
+	/* Wait for SCL as high for 500msec */
+	if (scl_val == 0) {
+		timeout = jiffies + msecs_to_jiffies(500);
+		while (time_before(jiffies, timeout)) {
+			if (gpio_get_value(gpio_scl) != 0) {
+				timeout = 0;
+				break;
+			}
+			msleep(10);
+		}
+		if (timeout)
+			dev_err(i2c->dev, "SCL line is still LOW!!!\n");
+	}
+
+	sda_val = gpio_get_value(gpio_sda);
+
+	if (sda_val == 0) {
+		gpio_direction_output(gpio_scl, 1);
+
+		for (clk_cnt = 0; clk_cnt < 100; clk_cnt++) {
+			/* Make clock for slave */
+			gpio_set_value(gpio_scl, 0);
+			udelay(5);
+			gpio_set_value(gpio_scl, 1);
+			udelay(5);
+			if (gpio_get_value(gpio_sda) == 1) {
+				dev_err(i2c->dev, "SDA line is recovered.\n");
+				break;
+			}
+		}
+		if (clk_cnt == 100)
+			dev_err(i2c->dev, "SDA line is not recovered!!!\n");
+	}
+
+	/* Change I2C GPIO as default function */
+	change_i2c_gpio(i2c);
+}
+
+static inline void dump_i2c_register(struct exynos5_i2c *i2c)
+{
+#ifdef CONFIG_EXYNOS_APM
+	int buf_index;
+#endif
+
+	dev_err(i2c->dev, "Register dump(suspended : %d)\n", i2c->suspended);
+	dev_err(i2c->dev, ": CTL	0x%08x\n"
+			, readl(i2c->regs + HSI2C_CTL));
+	dev_err(i2c->dev, ": FIFO_CTL	0x%08x\n"
+			, readl(i2c->regs + HSI2C_FIFO_CTL));
+	dev_err(i2c->dev, ": INT_EN	0x%08x\n"
+			, readl(i2c->regs + HSI2C_INT_ENABLE));
+	dev_err(i2c->dev, ": INT_STAT	0x%08x\n"
+			, readl(i2c->regs + HSI2C_INT_STATUS));
+	dev_err(i2c->dev, ": FIFO_STAT	0x%08x\n"
+			, readl(i2c->regs + HSI2C_FIFO_STATUS));
+	dev_err(i2c->dev, ": CONF	0x%08x\n"
+			, readl(i2c->regs + HSI2C_CONF));
+	dev_err(i2c->dev, ": AUTO_CONF	0x%08x\n"
+			, readl(i2c->regs + HSI2C_AUTO_CONF));
+	dev_err(i2c->dev, ": TRANS_STAT	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TRANS_STATUS));
+	dev_err(i2c->dev, ": TIMING_HS1	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_HS1));
+	dev_err(i2c->dev, ": TIMING_HS2	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_HS2));
+	dev_err(i2c->dev, ": TIMING_HS3	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_HS3));
+	dev_err(i2c->dev, ": TIMING_FS1	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_FS1));
+	dev_err(i2c->dev, ": TIMING_FS2	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_FS2));
+	dev_err(i2c->dev, ": TIMING_FS3	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_FS3));
+	dev_err(i2c->dev, ": TIMING_SLA	0x%08x\n"
+			, readl(i2c->regs + HSI2C_TIMING_SLA));
+	dev_err(i2c->dev, ": ADDR	0x%08x\n"
+			, readl(i2c->regs + HSI2C_ADDR));
+
+#ifdef CONFIG_EXYNOS_APM
+	if (i2c->use_apm_mode && i2c->msg != NULL) {
+		dev_err(i2c->dev, "Print PMIC CMD\n");
+		for (buf_index = 0; buf_index < i2c->msg->len; buf_index++) {
+			pr_err("[%d] 0x%x\n", buf_index, i2c->msg->buf[buf_index]);
+		}
+	}
+#endif
+
+	if(i2c->secure_mode) /* this is for secure gpio port recovery (zero model only) */
+		recover_gpio_pins_secure(i2c);
+	else
+		recover_gpio_pins(i2c);
+
+}
+
+static void write_batcher(struct exynos5_i2c *i2c, unsigned int description,
+			unsigned int opcode)
+{
+
+	if ((HSI2C_START_PAYLOAD + (i2c->desc_pointer * 4)) <
+		HSI2C_END_PAYLOAD) {
+
+		/* clear cmd_buffer */
+		i2c->cmd_buffer &= ~(0xff << (8 * i2c->cmd_index));
+
+		/* write opcode to cmd_buffer */
+		i2c->cmd_buffer |= opcode << (8 * i2c->cmd_index);
+
+		writel(i2c->cmd_buffer, i2c->regs + HSI2C_BATCHER_OPCODE +
+			(i2c->cmd_pointer * 4));
+
+		writel(description, i2c->regs + HSI2C_START_PAYLOAD +
+			(i2c->desc_pointer++ * 4));
+	} else {
+		/* Error Handling Routine */
+		dev_warn(i2c->dev, "fail to write hsi2c batcher\n");
+	}
+
+	/* Update cmd_index */
+	if (++i2c->cmd_index == 4) {
+		i2c->cmd_index = 0;
+		i2c->cmd_pointer++;
+		i2c->cmd_buffer = HSI2C_BATCHER_INIT_CMD;
+	}
 }
 
 static void exynos5_i2c_clr_pend_irq(struct exynos5_i2c *i2c)
@@ -352,7 +575,12 @@ static int exynos5_i2c_set_timing(struct exynos5_i2c *i2c, int mode)
 	t_start_su = t_scl_l;
 	t_start_hd = t_scl_l;
 	t_stop_su = t_scl_l;
-	t_data_su = t_scl_l / 2;
+
+	if (i2c->t_data_su_timing)
+		t_data_su = (t_scl_l / 2) * i2c->t_data_su_timing;
+	else
+		t_data_su = t_scl_l / 2;
+
 	t_data_hd = t_scl_l / 2;
 	t_sr_release = clk_cycle;
 
@@ -385,6 +613,8 @@ static int exynos5_i2c_set_timing(struct exynos5_i2c *i2c, int mode)
 
 static int exynos5_hsi2c_clock_setup(struct exynos5_i2c *i2c)
 {
+	if (i2c->support_hsi2c_batcher)
+		return 0;
 	/*
 	 * Configure the Fast speed timing values
 	 * Even the High Speed mode initially starts with Fast mode
@@ -413,8 +643,7 @@ static void exynos5_i2c_init(struct exynos5_i2c *i2c)
 {
 	u32 i2c_conf = readl(i2c->regs + HSI2C_CONF);
 
-	writel((HSI2C_FUNC_MODE_I2C | HSI2C_MASTER),
-					i2c->regs + HSI2C_CTL);
+	writel(HSI2C_MASTER, i2c->regs + HSI2C_CTL);
 	writel(HSI2C_TRAILING_COUNT, i2c->regs + HSI2C_TRAILIG_CTL);
 
 	if (i2c->speed_mode == HSI2C_HIGH_SPD) {
@@ -431,8 +660,6 @@ static void exynos5_i2c_init(struct exynos5_i2c *i2c)
 static void exynos5_i2c_reset(struct exynos5_i2c *i2c)
 {
 	u32 i2c_ctl;
-
-	dev_dbg(i2c->dev, "exynos5_i2c_reset\n");
 
 	/* Set and clear the bit for reset */
 	i2c_ctl = readl(i2c->regs + HSI2C_CTL);
@@ -454,6 +681,99 @@ static inline void exynos5_i2c_stop(struct exynos5_i2c *i2c)
 	writel(0, i2c->regs + HSI2C_INT_ENABLE);
 
 	complete(&i2c->msg_complete);
+}
+
+static void set_batcher_enable(struct exynos5_i2c *i2c)
+{
+	u32 i2c_batcher_con;
+
+	i2c_batcher_con = readl(i2c->regs + HSI2C_BATCHER_CON);
+
+	i2c_batcher_con |= HSI2C_BATCHER_ENABLE;
+	i2c_batcher_con |= HSI2C_BATCHER_DEDICATE;
+
+	writel(i2c_batcher_con, i2c->regs + HSI2C_BATCHER_CON);
+}
+
+static void start_batcher(struct exynos5_i2c *i2c)
+{
+	u32 i2c_batcher_con = 0x00;
+	u32 i2c_batcher_int = 0x00;
+
+	i2c_batcher_int |= HSI2C_BATCHER_INT_ENABLE;
+	writel(i2c_batcher_int, i2c->regs + HSI2C_BATCHER_INT_EN);
+
+
+	i2c_batcher_con = readl(i2c->regs + HSI2C_BATCHER_CON);
+	i2c_batcher_con |= HSI2C_BATCHER_START;
+	writel(i2c_batcher_con, i2c->regs + HSI2C_BATCHER_CON);
+}
+
+static void set_batcher_idle(struct exynos5_i2c *i2c)
+{
+	u32 i2c_batcher_con = 0x00;
+	writel(i2c_batcher_con, i2c->regs + HSI2C_BATCHER_CON);
+}
+
+static void reset_batcher(struct exynos5_i2c *i2c)
+{
+	u32 i2c_batcher_con = 0x00;
+	i2c_batcher_con |= HSI2C_BATCHER_RESET;
+	writel(i2c_batcher_con, i2c->regs + HSI2C_BATCHER_CON);
+	set_batcher_idle(i2c);
+	writel(0x01, i2c->regs + HSI2C_SMRelease);
+}
+
+static void finalize_batcher(struct exynos5_i2c *i2c)
+{
+	write_batcher(i2c, 0x00, 0xff);
+
+	/* Initialize batcher related variables */
+	i2c->desc_pointer = 0;
+	i2c->cmd_index = 0;
+	i2c->cmd_pointer = 0;
+	i2c->cmd_buffer = HSI2C_BATCHER_INIT_CMD;
+}
+
+/*
+ * exynos5_i2c_irq_batcher: Batcher IRQ servicing routine
+ *
+ * INT_STATUS registers gives the interrupt details. Further,
+ * HSI2C_BATCHER_STATE or FIFO_STATUS registers are to be check for detailed
+ * state of the bus.
+ */
+
+static irqreturn_t exynos5_i2c_irq_batcher(int irqno, void *dev_id)
+{
+	struct exynos5_i2c *i2c = dev_id;
+	unsigned char byte;
+	unsigned char i = 0;
+	unsigned int i2c_batcher_state;
+	unsigned int i2c_int_state;
+
+	i2c_batcher_state = readl(i2c->regs + HSI2C_BATCHER_STATE);
+	i2c_int_state = readl(i2c->regs + HSI2C_BATCHER_INT_STATUS);
+
+	if (i2c_batcher_state & 0x2)
+		dev_warn(i2c->dev, "Unexpected Batcher Interrupt\n");
+
+	if (i2c->msg->flags & I2C_M_RD) {
+		do {
+			byte = (unsigned char)readl(i2c->regs +
+				i2c->batcher_read_addr + (i++ * 4));
+			i2c->msg->buf[i2c->msg_ptr++] = byte;
+		} while (i2c->msg_ptr < i2c->msg->len);
+	}
+
+	complete(&i2c->msg_complete);
+
+	writel(i2c_batcher_state, i2c->regs + HSI2C_BATCHER_STATE);
+	writel(i2c_int_state, i2c->regs + HSI2C_BATCHER_INT_STATUS);
+
+	/* Initialize Batcher */
+	set_batcher_idle(i2c);
+
+	return IRQ_HANDLED;
 }
 
 /*
@@ -498,7 +818,7 @@ static irqreturn_t exynos5_i2c_irq(int irqno, void *dev_id)
 static irqreturn_t exynos5_i2c_irq_chkdone(int irqno, void *dev_id)
 {
 	struct exynos5_i2c *i2c = dev_id;
-	unsigned long reg_val;
+	unsigned long reg_val, trans_status;
 	unsigned char byte;
 
 	if (i2c->msg->flags & I2C_M_RD) {
@@ -532,16 +852,17 @@ static irqreturn_t exynos5_i2c_irq_chkdone(int irqno, void *dev_id)
 
 	/*
 	 * Checking Error State in INT_STATUS register
-	 * If error state is occured, TX timeout will be occured
 	 */
 	if (reg_val & HSI2C_INT_CHK_TRANS_STATE) {
-		dev_err(i2c->dev, "HSI2C Error status is occured!(0x%x)\n",
-			(unsigned int)reg_val);
+		trans_status = readl(i2c->regs + HSI2C_TRANS_STATUS);
+		dev_err(i2c->dev, "HSI2C Error Interrupt "
+				"occurred(IS:0x%08x, TR:0x%08x)\n",
+				(unsigned int)reg_val, (unsigned int)trans_status);
 		i2c->trans_done = -ENXIO;
 		exynos5_i2c_stop(i2c);
 		goto out;
 	}
-	/* Checking INT_TRANSFER_DONE - to avoid lost trans_done */
+	/* Checking INT_TRANSFER_DONE */
 	if ((reg_val & HSI2C_INT_TRANSFER_DONE) &&
 		(i2c->msg_ptr >= i2c->msg->len) &&
 		!(i2c->msg->flags & I2C_M_RD))
@@ -613,7 +934,6 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 	else
 		i2c_auto_conf &= ~HSI2C_STOP_AFTER_TRANS;
 
-
 	i2c_addr = readl(i2c->regs + HSI2C_ADDR);
 	i2c_addr &= ~(0x3ff << 10);
 	i2c_addr &= ~(0x3ff << 0);
@@ -663,7 +983,7 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 			if (ret == -EAGAIN) {
 				dump_i2c_register(i2c);
 				exynos5_i2c_reset(i2c);
-				dev_err(i2c->dev, "rx timeout\n");
+				dev_warn(i2c->dev, "rx timeout\n");
 				return ret;
 			}
 		} else {
@@ -699,7 +1019,7 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 			if (timeout == 0) {
 				dump_i2c_register(i2c);
 				exynos5_i2c_reset(i2c);
-				dev_err(i2c->dev, "rx timeout\n");
+				dev_warn(i2c->dev, "rx timeout\n");
 				ret = -EAGAIN;
 				return ret;
 			}
@@ -727,7 +1047,7 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 			if (timeout == 0) {
 				dump_i2c_register(i2c);
 				exynos5_i2c_reset(i2c);
-				dev_err(i2c->dev, "tx timeout\n");
+				dev_warn(i2c->dev, "tx timeout\n");
 				return ret;
 			}
 
@@ -748,7 +1068,7 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 				if (ret == -EAGAIN) {
 					dump_i2c_register(i2c);
 					exynos5_i2c_reset(i2c);
-					dev_err(i2c->dev, "tx timeout\n");
+					dev_warn(i2c->dev, "tx timeout\n");
 					return ret;
 				}
 			} else {
@@ -794,11 +1114,212 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c, struct i2c_msg *msgs, i
 		if (ret == -EAGAIN) {
 			dump_i2c_register(i2c);
 			exynos5_i2c_reset(i2c);
-			dev_err(i2c->dev, "tx timeout\n");
+			dev_warn(i2c->dev, "tx timeout\n");
 			return ret;
 		}
 	}
 
+	return ret;
+}
+
+static int exynos5_i2c_xfer_batcher(struct exynos5_i2c *i2c,
+					struct i2c_msg *msgs, int stop)
+{
+	unsigned long timeout;
+	unsigned long i2c_ctl = 0;
+	unsigned long i2c_auto_conf = 0;
+	unsigned long i2c_timeout = 0x80ff;
+	unsigned long i2c_addr = 0;
+	unsigned long i2c_int_en = 0;
+	unsigned long i2c_fifo_ctl;
+	unsigned char byte;
+
+	int ret = 0;
+
+	unsigned int i2c_conf = 0x00;
+	unsigned int i2c_read_length;
+
+	i2c->msg = msgs;
+	i2c->msg_ptr = 0;
+	i2c->trans_done = 0;
+	i2c->desc_pointer = 0;
+
+	INIT_COMPLETION(i2c->msg_complete);
+
+	/*****************************/
+	/* Set Batcher IDLE Status   */
+	/*****************************/
+	set_batcher_idle(i2c);
+
+	/********************************************/
+	/* initialization batcher -> enable batcher */
+	/********************************************/
+	set_batcher_enable(i2c);
+
+	/* Set HSI2C Timing Parameters */
+	write_batcher(i2c, 0x0F0F0F00, HSI2C_TIMING_HS1);
+	write_batcher(i2c, 0x080F0F04, HSI2C_TIMING_HS2);
+	write_batcher(i2c, 0x00000013, HSI2C_TIMING_HS3);
+	write_batcher(i2c, 0x78787800, HSI2C_TIMING_FS1);
+	write_batcher(i2c, 0x3C0F7878, HSI2C_TIMING_FS2);
+	write_batcher(i2c, 0x000000F0, HSI2C_TIMING_FS3);
+	write_batcher(i2c, 0x00000007, HSI2C_TIMING_SLA);
+
+	/* Set HSI2C Trailing Register */
+	write_batcher(i2c, BATCHER_TRAILING_COUNT, HSI2C_TRAILIG_CTL);
+
+	/* Set HSI2C Configuration Register */
+	if (msgs->flags & I2C_M_RD)
+		i2c_conf |= HSI2C_10BIT_ADDR_MODE;
+	else
+		i2c_conf &= ~HSI2C_10BIT_ADDR_MODE;
+
+	i2c_conf |= HSI2C_HS_MODE | HSI2C_AUTO_MODE;
+
+	i2c_conf &= ~HSI2C_FTL_CYCLE_SCL_MASK;
+	i2c_conf |= 3 << 16;
+
+	i2c_conf &= ~HSI2C_FTL_CYCLE_SDA_MASK;
+	i2c_conf |= 3 << 13;
+
+	i2c_conf |= HSI2C_FILTER_EN_SCL | HSI2C_FILTER_EN_SDA;
+
+	i2c_conf |= 0xff;
+
+	write_batcher(i2c, i2c_conf, HSI2C_CONF);
+
+	/* Set HSI2C Timeout Register */
+	i2c_timeout &= ~HSI2C_TIMEOUT_EN;
+	i2c_timeout = 0x00;
+	write_batcher(i2c, i2c_timeout, HSI2C_TIMEOUT);
+
+	/* Set HSI2C FIFO Control Register */
+	i2c_fifo_ctl = HSI2C_RXFIFO_EN | HSI2C_TXFIFO_EN |
+		HSI2C_TXFIFO_TRIGGER_LEVEL | HSI2C_RXFIFO_TRIGGER_LEVEL;
+	write_batcher(i2c, i2c_fifo_ctl, HSI2C_FIFO_CTL);
+
+	/* Set HSI2C Control Register */
+	i2c_ctl |= HSI2C_MASTER;
+
+	if (msgs->flags & I2C_M_RD) {
+		i2c_ctl &= ~HSI2C_TXCHON;
+		i2c_ctl |= HSI2C_RXCHON;
+
+		i2c_ctl &= ~HSI2C_EXT_ADDR;
+		i2c_ctl |= HSI2C_EXT_ADDR;
+
+		if (msgs->addr & 0x4000) {
+			i2c_ctl &= ~HSI2C_EXT_MSB;
+			i2c_ctl |= HSI2C_EXT_MSB;
+		} else {
+			i2c_ctl &= ~HSI2C_EXT_MSB;
+		}
+	} else {
+		i2c_ctl &= ~HSI2C_RXCHON;
+		i2c_ctl |= HSI2C_TXCHON;
+
+		i2c_ctl &= ~HSI2C_EXT_ADDR;
+		i2c_ctl &= ~HSI2C_EXT_MSB;
+	}
+	write_batcher(i2c, i2c_ctl, HSI2C_CTL);
+
+	if (msgs->flags & I2C_M_RD)
+		i2c_addr |= ((msgs->addr & 0x3fff) << 10);
+	else
+		i2c_addr |= ((msgs->addr & 0x7f) << 10);
+
+	write_batcher(i2c, i2c_addr, HSI2C_ADDR);
+
+	/* Set HSI2C Auto Configuration Register */
+	if (msgs->flags & I2C_M_RD)
+		i2c_auto_conf |= HSI2C_READ_WRITE;
+	else
+		i2c_auto_conf &= ~HSI2C_READ_WRITE;
+
+	if (stop == 1)
+		i2c_auto_conf |= HSI2C_STOP_AFTER_TRANS;
+	else
+		i2c_auto_conf &= ~HSI2C_STOP_AFTER_TRANS;
+
+	i2c_auto_conf |= i2c->msg->len;
+	i2c_auto_conf |= HSI2C_MASTER_RUN;
+	write_batcher(i2c, i2c_auto_conf, HSI2C_AUTO_CONF);
+
+	/* Enable HSI2C Interrupt */
+	if (msgs->flags & I2C_M_RD) {
+
+		i2c_int_en |= (HSI2C_INT_RX_ALMOSTFULL_EN |
+			HSI2C_INT_TRAILING_EN);
+	} else {
+
+		i2c_int_en |= HSI2C_INT_TX_ALMOSTEMPTY_EN;
+	}
+
+	i2c_int_en |= HSI2C_INT_CHK_TRANS_STATE |
+			HSI2C_INT_TRANSFER_DONE;
+	writel(readl(i2c->regs + HSI2C_BATCHER_INT_STATUS),
+		i2c->regs + HSI2C_BATCHER_INT_STATUS);
+
+	write_batcher(i2c, i2c_int_en, HSI2C_INT_ENABLE);
+	enable_irq(i2c->irq);
+
+	/* Fill the Batcher with Read and Write Data*/
+	if (msgs->flags & I2C_M_RD) {
+		i2c->batcher_read_addr = HSI2C_START_PAYLOAD +
+					((i2c->desc_pointer) * 4);
+		i2c_read_length = i2c->msg->len;
+
+		do {
+			write_batcher(i2c, 0x77, HSI2C_RX_DATA);
+		} while (--i2c_read_length != 0);
+	} else {
+		i2c_read_length = i2c->msg->len;
+		do {
+			byte = i2c->msg->buf[i2c->msg_ptr++];
+			write_batcher(i2c, byte, HSI2C_TX_DATA);
+		} while (--i2c_read_length != 0);
+	}
+
+	/* Finalize Batcher */
+	finalize_batcher(i2c);
+
+	/* Batcher enable Interrupt and start to work for execution opcode */
+	start_batcher(i2c);
+
+	ret = -EAGAIN;
+	if (msgs->flags & I2C_M_RD) {
+
+		timeout = wait_for_completion_timeout
+			(&i2c->msg_complete, EXYNOS5_I2C_TIMEOUT);
+
+		disable_irq(i2c->irq);
+
+		if (timeout == 0) {
+			/* Read Error handlilng for HSI2C_Batcher */
+			dev_warn(i2c->dev, "rx timeout Batcher status= %x\n",
+			readl(i2c->regs + HSI2C_BATCHER_STATE));
+			reset_batcher(i2c);
+			exynos5_i2c_reset(i2c);
+			return 0;
+		}
+		ret = 0;
+	} else {
+		timeout = wait_for_completion_timeout
+			(&i2c->msg_complete, EXYNOS5_I2C_TIMEOUT);
+
+		disable_irq(i2c->irq);
+
+		if (timeout == 0) {
+			/* Write Error handlilng for HSI2C_Batcher */
+			dev_warn(i2c->dev, "tx timeout Batcher status= %x\n",
+			readl(i2c->regs + HSI2C_BATCHER_STATE));
+			ret = i2c->trans_done;
+			reset_batcher(i2c);
+			exynos5_i2c_reset(i2c);
+			return ret;
+		}
+		ret = 0;
+	}
 	return ret;
 }
 
@@ -811,16 +1332,31 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	int ret = 0;
 	int stop = 0;
 
+#ifdef CONFIG_PM_RUNTIME
+	int clk_ret = 0;
+#endif
+
 	if (i2c->suspended) {
 		dev_err(i2c->dev, "HS-I2C is not initialzed.\n");
 		return -EIO;
 	}
 
+#ifdef CONFIG_PM_RUNTIME
+	clk_ret = pm_runtime_get_sync(i2c->dev);
+	if (clk_ret < 0)
+		clk_prepare_enable(i2c->clk);
+#else
 	clk_prepare_enable(i2c->clk);
-	if (i2c->need_hw_init){
-		dev_dbg(i2c->dev, "exynos5_i2c_xfer call exynos5_i2c_reset\n");
+#endif
+	if (i2c->need_hw_init)
 		exynos5_i2c_reset(i2c);
+
+	if (unlikely(!(readl(i2c->regs + HSI2C_AUTO_CONF)
+			& HSI2C_AUTO_MODE))) {
+		exynos5_hsi2c_clock_setup(i2c);
+		exynos5_i2c_init(i2c);
 	}
+
 	for (retry = 0; retry < adap->retries; retry++) {
 		for (i = 0; i < num; i++) {
 			stop = (i == num - 1);
@@ -828,7 +1364,11 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 			if (i2c->transfer_delay)
 				udelay(i2c->transfer_delay);
 
-			ret = exynos5_i2c_xfer_msg(i2c, msgs_ptr, stop);
+			if (i2c->support_hsi2c_batcher)
+				ret = exynos5_i2c_xfer_batcher(i2c, msgs_ptr, stop);
+			else
+				ret = exynos5_i2c_xfer_msg(i2c, msgs_ptr, stop);
+
 			msgs_ptr++;
 
 			if (ret == -EAGAIN) {
@@ -855,7 +1395,17 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	}
 
  out:
+#ifdef CONFIG_PM_RUNTIME
+	if (clk_ret < 0) {
+		clk_disable_unprepare(i2c->clk);
+	} else {
+		pm_runtime_mark_last_busy(i2c->dev);
+		pm_runtime_put_autosuspend(i2c->dev);
+	}
+#else
 	clk_disable_unprepare(i2c->clk);
+#endif
+
 	return ret;
 }
 
@@ -946,6 +1496,21 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 	else
 		i2c->stop_after_trans = 0;
 
+	if (of_get_property(np, "samsung,hsi2c-batcher", NULL)) {
+		i2c->support_hsi2c_batcher = 1;
+		i2c->cmd_buffer = HSI2C_BATCHER_INIT_CMD;
+	} else
+		i2c->support_hsi2c_batcher = 0;
+
+	/* TDATA_SU_FS/HS setting if needed */
+	if (of_property_read_u32(np, "t-data-su", &i2c->t_data_su_timing))
+		i2c->t_data_su_timing = 0;
+
+	if (of_get_property(np, "secure-mode", NULL)) {
+		i2c->secure_mode = 1;
+	} else
+		i2c->secure_mode = 0;
+
 	strlcpy(i2c->adap.name, "exynos5-i2c", sizeof(i2c->adap.name));
 	i2c->adap.owner   = THIS_MODULE;
 	i2c->adap.algo    = &exynos5_i2c_algorithm;
@@ -964,7 +1529,13 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "cannot get rate clock\n");
 		return -ENOENT;
 	}
-	clk_prepare_enable(i2c->clk);
+
+#ifdef CONFIG_PM_RUNTIME
+	pm_runtime_use_autosuspend(&pdev->dev);
+	pm_runtime_set_autosuspend_delay(&pdev->dev,
+					EXYNOS5_HSI2C_RUNTIME_PM_DELAY);
+	pm_runtime_enable(&pdev->dev);
+#endif
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	i2c->regs = devm_request_and_ioremap(&pdev->dev, mem);
@@ -974,12 +1545,18 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 		goto err_clk;
 	}
 
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	i2c->regs_mailbox = devm_request_and_ioremap(&pdev->dev, mem);
+
+	if (IS_ERR(i2c->regs_mailbox)) {
+		dev_err(&pdev->dev, "cannot map MAILBOX IO\n");
+		ret = PTR_ERR(i2c->regs_mailbox);
+		goto err_clk;
+	}
+
 	i2c->adap.dev.of_node = np;
 	i2c->adap.algo_data = i2c;
 	i2c->adap.dev.parent = &pdev->dev;
-
-	/* Clear pending interrupts from u-boot or misc causes */
-	exynos5_i2c_clr_pend_irq(i2c);
 
 	init_completion(&i2c->msg_complete);
 
@@ -991,15 +1568,29 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 			goto err_clk;
 		}
 
-		if (i2c->check_transdone_int == 1) {
+		if (i2c->support_hsi2c_batcher) {
+			i2c->irq = ret = irq_of_parse_and_map(np, 1);
+			if (ret <= 0) {
+				dev_err(&pdev->dev, "cannot find BATCHER IRQ\n");
+				ret = -EINVAL;
+				goto err_clk;
+			}
+
 			ret = devm_request_irq(&pdev->dev, i2c->irq,
-					exynos5_i2c_irq_chkdone,
-					0, dev_name(&pdev->dev), i2c);
+				exynos5_i2c_irq_batcher, 0, dev_name(&pdev->dev)
+				, i2c);
 			disable_irq(i2c->irq);
-		} else
-			ret = devm_request_irq(&pdev->dev, i2c->irq,
-					exynos5_i2c_irq,
-					0, dev_name(&pdev->dev), i2c);
+		} else {
+			if (i2c->check_transdone_int == 1) {
+				ret = devm_request_irq(&pdev->dev, i2c->irq,
+						exynos5_i2c_irq_chkdone,
+						0, dev_name(&pdev->dev), i2c);
+				disable_irq(i2c->irq);
+			} else
+				ret = devm_request_irq(&pdev->dev, i2c->irq,
+						exynos5_i2c_irq,
+						0, dev_name(&pdev->dev), i2c);
+		}
 
 		if (ret != 0) {
 			dev_err(&pdev->dev, "cannot request HS-I2C IRQ %d\n",
@@ -1007,9 +1598,21 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 			goto err_clk;
 		}
 	}
-	ret = exynos5_hsi2c_clock_setup(i2c);
-	if (ret)
-		goto err_clk;
+	platform_set_drvdata(pdev, i2c);
+#ifdef CONFIG_PM_RUNTIME
+	pm_runtime_get_sync(&pdev->dev);
+#else
+	clk_prepare_enable(i2c->clk);
+#endif
+
+	/* Clear pending interrupts from u-boot or misc causes */
+	exynos5_i2c_clr_pend_irq(i2c);
+
+	if (!(i2c->support_hsi2c_batcher)) {
+		ret = exynos5_hsi2c_clock_setup(i2c);
+		if (ret)
+			goto err_clk;
+	}
 
 	i2c->bus_id = of_alias_get_id(i2c->adap.dev.of_node, "hsi2c");
 
@@ -1023,14 +1626,33 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 	}
 
 	of_i2c_register_devices(&i2c->adap);
-	platform_set_drvdata(pdev, i2c);
-
+#ifdef CONFIG_PM_RUNTIME
+	pm_runtime_mark_last_busy(&pdev->dev);
+	pm_runtime_put_autosuspend(&pdev->dev);
+#else
 	clk_disable_unprepare(i2c->clk);
+#endif
 
-#ifdef CONFIG_EXYNOS_HSI2C_RESET_DURING_DSTOP
+#if defined(CONFIG_EXYNOS_HSI2C_RESET_DURING_DSTOP) || \
+	defined(CONFIG_EXYNOS_APM)
 	list_add_tail(&i2c->node, &drvdata_list);
 #endif
 
+#ifdef CONFIG_EXYNOS_APM
+	if (of_get_property(np, "samsung,use-apm", NULL)) {
+		i2c->use_apm_mode = 1;
+		apm_i2c_pinctrl = devm_pinctrl_get(&pdev->dev);
+		if (IS_ERR(apm_i2c_pinctrl)) {
+			dev_err(&pdev->dev, "Can't get apm i2c pinctrl.\n");
+		} else {
+			default_i2c_gpio = pinctrl_lookup_state(apm_i2c_pinctrl, "default");
+			apm_i2c_gpio = pinctrl_lookup_state(apm_i2c_pinctrl, "apm");
+		}
+	} else {
+		i2c->use_apm_mode = 0;
+	}
+
+#endif
 	return 0;
 
  err_clk:
@@ -1075,15 +1697,46 @@ static int exynos5_i2c_resume_noirq(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops exynos5_i2c_dev_pm_ops = {
-	.suspend_noirq = exynos5_i2c_suspend_noirq,
-	.resume_noirq	= exynos5_i2c_resume_noirq,
-};
-
-#define EXYNOS5_DEV_PM_OPS (&exynos5_i2c_dev_pm_ops)
 #else
-#define EXYNOS5_DEV_PM_OPS NULL
+static int exynos5_i2c_suspend_noirq(struct device *dev)
+{
+	return 0;
+}
+
+static int exynos5_i2c_resume_noirq(struct device *dev)
+{
+	return 0;
+}
 #endif
+
+#ifdef CONFIG_PM_RUNTIME
+static int exynos5_i2c_runtime_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct exynos5_i2c *i2c = platform_get_drvdata(pdev);
+
+	clk_disable_unprepare(i2c->clk);
+
+	return 0;
+}
+
+static int exynos5_i2c_runtime_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct exynos5_i2c *i2c = platform_get_drvdata(pdev);
+
+	clk_prepare_enable(i2c->clk);
+
+	return 0;
+}
+#endif /* CONFIG_PM_RUNTIME */
+
+static const struct dev_pm_ops exynos5_i2c_pm = {
+	.suspend_noirq = exynos5_i2c_suspend_noirq,
+	.resume_noirq = exynos5_i2c_resume_noirq,
+	SET_RUNTIME_PM_OPS(exynos5_i2c_runtime_suspend,
+			   exynos5_i2c_runtime_resume, NULL)
+};
 
 static struct platform_driver exynos5_i2c_driver = {
 	.probe		= exynos5_i2c_probe,
@@ -1091,7 +1744,7 @@ static struct platform_driver exynos5_i2c_driver = {
 	.driver		= {
 		.owner	= THIS_MODULE,
 		.name	= "exynos5-hsi2c",
-		.pm	= EXYNOS5_DEV_PM_OPS,
+		.pm	= &exynos5_i2c_pm,
 		.of_match_table = exynos5_i2c_match,
 	},
 };
@@ -1100,6 +1753,9 @@ static int __init i2c_adap_exynos5_init(void)
 {
 #ifdef CONFIG_EXYNOS_HSI2C_RESET_DURING_DSTOP
 	exynos_pm_register_notifier(&exynos5_i2c_notifier_block);
+#endif
+#ifdef CONFIG_EXYNOS_APM
+	register_apm_notifier(&exynos_apm_notifier);
 #endif
 	return platform_driver_register(&exynos5_i2c_driver);
 }
