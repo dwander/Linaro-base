@@ -1357,34 +1357,25 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 		exynos5_i2c_init(i2c);
 	}
 
-	for (retry = 0; retry < adap->retries; retry++) {
-		for (i = 0; i < num; i++) {
-			stop = (i == num - 1);
+	for (i = 0; i < num; i++) {
+		stop = (i == num - 1);
 
-			if (i2c->transfer_delay)
-				udelay(i2c->transfer_delay);
+		if (i2c->transfer_delay)
+			udelay(i2c->transfer_delay);
 
-			if (i2c->support_hsi2c_batcher)
-				ret = exynos5_i2c_xfer_batcher(i2c, msgs_ptr, stop);
-			else
-				ret = exynos5_i2c_xfer_msg(i2c, msgs_ptr, stop);
+		if (i2c->support_hsi2c_batcher)
+			ret = exynos5_i2c_xfer_batcher(i2c, msgs_ptr, stop);
+		else
+			ret = exynos5_i2c_xfer_msg(i2c, msgs_ptr, stop);
 
-			msgs_ptr++;
+		msgs_ptr++;
 
-			if (ret == -EAGAIN) {
-				msgs_ptr = msgs;
-				break;
-			} else if (ret < 0) {
-				goto out;
-			}
-		}
-
-		if ((i == num) && (ret != -EAGAIN))
+		if (ret == -EAGAIN) {
+			msgs_ptr = msgs;
 			break;
-
-		dev_dbg(i2c->dev, "retrying transfer (%d)\n", retry);
-
-		udelay(100);
+		} else if (ret < 0) {
+			goto out;
+		}
 	}
 
 	if (i == num) {
