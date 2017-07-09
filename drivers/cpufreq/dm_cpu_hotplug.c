@@ -413,6 +413,28 @@ static ssize_t store_cpucore_max_num_limit(struct kobject *kobj,
 	return count;
 }
 
+static ssize_t show_enable_forced_hotplug(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", forced_hotplug ? 1 : 0);
+}
+
+static ssize_t store_enable_forced_hotplug(struct kobject *kobj, struct attribute *attr,
+					const char *buf, size_t count)
+{
+	if (forced_hotplug)
+		nr_running_threshold = 5;
+	else
+		nr_running_threshold = 200;
+
+	forced_hotplug = forced_hotplug ? false : true;
+	return count;
+}
+
+static struct global_attr enable_forced_hotplug =
+		__ATTR(enable_forced_hotplug, S_IRUGO | S_IWUSR,
+			show_enable_forced_hotplug, store_enable_forced_hotplug);
+
 static struct global_attr enable_dm_hotplug =
 		__ATTR(enable_dm_hotplug, S_IRUGO | S_IWUSR,
 			show_enable_dm_hotplug, store_enable_dm_hotplug);
@@ -1211,6 +1233,13 @@ static int __init dm_cpu_hotplug_init(void)
 
 	fb_register_client(&fb_block);
 
+	ret = sysfs_create_file(power_kobj, &enable_forced_hotplug.attr);
+	if (ret) {
+		pr_err("%s: failed to create enable_forced_hotplug sysfs interface\n",
+			__func__);
+		goto err_enable_forced_hotplug;
+	}
+
 #ifdef CONFIG_PM
 	ret = sysfs_create_file(power_kobj, &enable_dm_hotplug.attr);
 	if (ret) {
@@ -1322,6 +1351,8 @@ err_little_core_hotplug_in:
 #endif
 	sysfs_remove_file(power_kobj, &enable_dm_hotplug.attr);
 err_enable_dm_hotplug:
+	sysfs_remove_file(power_kobj, &enable_forced_hotplug.attr);
+err_enable_forced_hotplug:
 #endif
 err:
 	pr_err("%s: failed to create sysfs interface\n", __func__);
