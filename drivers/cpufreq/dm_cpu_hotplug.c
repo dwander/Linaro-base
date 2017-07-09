@@ -55,11 +55,13 @@ static DEFINE_MUTEX(thread_lock);
 static DEFINE_MUTEX(big_hotplug_lock);
 static DEFINE_MUTEX(little_hotplug_in_lock);
 
+static bool enable_hotplug_hack = false;
 static struct task_struct *dm_hotplug_task;
 static unsigned int low_stay_threshold = DEFAULT_LOW_STAY_THRSHD;
 static int cpu_util[NR_CPUS];
 static unsigned int cur_load_freq = 0;
 static bool lcd_is_on = true;
+static bool lcd_is_on_real = true;
 static bool forced_hotplug = false;
 static bool in_low_power_mode = false;
 static bool in_suspend_prepared = false;
@@ -435,6 +437,23 @@ static struct global_attr enable_forced_hotplug =
 		__ATTR(enable_forced_hotplug, S_IRUGO | S_IWUSR,
 			show_enable_forced_hotplug, store_enable_forced_hotplug);
 
+static ssize_t show_hotplug_hack(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", enable_hotplug_hack ? 1 : 0);
+}
+
+static ssize_t store_hotplug_hack(struct kobject *kobj, struct attribute *attr,
+					const char *buf, size_t count)
+{
+	enable_hotplug_hack = enable_hotplug_hack ? false : true;
+	return count;
+}
+
+static struct global_attr hotplug_hack =
+		__ATTR(hotplug_hack, S_IRUGO | S_IWUSR,
+			show_hotplug_hack, store_hotplug_hack);
+
 static struct global_attr enable_dm_hotplug =
 		__ATTR(enable_dm_hotplug, S_IRUGO | S_IWUSR,
 			show_enable_dm_hotplug, store_enable_dm_hotplug);
@@ -539,6 +558,7 @@ static int fb_state_change(struct notifier_block *nb,
 	switch (blank) {
 	case FB_BLANK_POWERDOWN:
 		lcd_is_on = false;
+		lcd_is_on_real = false;
 		pr_info("LCD is off\n");
 		break;
 	case FB_BLANK_UNBLANK:
@@ -547,7 +567,11 @@ static int fb_state_change(struct notifier_block *nb,
 		 * This line of code release max limit when LCD is
 		 * turned on.
 		 */
-		lcd_is_on = true;
+		lcd_is_on_real = true;
+		if (enable_hotplug_hack)
+			lcd_is_on = false;
+		else
+			lcd_is_on = true;
 		pr_info("LCD is on\n");
 		break;
 	default:
@@ -657,6 +681,10 @@ static int __ref __cpu_hotplug(bool out_flag, enum hotplug_cmd cmd)
 					}
 				}
 			} else {
+				if (enable_hotplug_hack)
+					lcd_is_on = false;
+				else
+					lcd_is_on = lcd_is_on_real;
 				if (lcd_is_on) {
 					for (i = NR_CA7; i < max_num_cpu; i++) {
 						if (do_hotplug_out)
@@ -1238,6 +1266,12 @@ static int __init dm_cpu_hotplug_init(void)
 		pr_err("%s: failed to create enable_forced_hotplug sysfs interface\n",
 			__func__);
 		goto err_enable_forced_hotplug;
+	}
+
+	ret = sysfs_create_file(power_kobj, &hotplug_hack.attr);
+	if (ret) {
+		pr_err("%s: failed to create hotplug_hack sysfs interface\n",
+			__func__);
 	}
 
 #ifdef CONFIG_PM
