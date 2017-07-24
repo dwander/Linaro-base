@@ -137,13 +137,8 @@ void mspin_lock(struct mspin_node **lock, struct mspin_node *node)
 	ACCESS_ONCE(prev->next) = node;
 	smp_wmb();
 	/* Wait until the lock holder passes the lock down */
-	if (enable_cpu_relaxed) {
-		while (!cpu_relaxed_read(&(node->locked)))
-			cpu_read_relax();
-	} else {
-		while (!ACCESS_ONCE(node->locked))
-			arch_mutex_cpu_relax();
-	}
+	while (!cpu_relaxed_read(&(node->locked)))
+		cpu_read_relax();
 }
 
 static void mspin_unlock(struct mspin_node **lock, struct mspin_node *node)
@@ -157,13 +152,8 @@ static void mspin_unlock(struct mspin_node **lock, struct mspin_node *node)
 		if (cmpxchg(lock, node, NULL) == node)
 			return;
 		/* Wait until the next pointer is set */
-		if (enable_cpu_relaxed) {
-			while (!(next = (struct mspin_node*)(cpu_relaxed_read_long(&(node->next)))))
-				cpu_read_relax();
-		} else {
-			while (!(next = ACCESS_ONCE(node->next)))
-				arch_mutex_cpu_relax();
-		}
+		while (!(next = (struct mspin_node*)(cpu_relaxed_read_long(&(node->next)))))
+			cpu_read_relax();
 	}
 	ACCESS_ONCE(next->locked) = 1;
 	smp_wmb();

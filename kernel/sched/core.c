@@ -94,11 +94,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
-#include <linux/moduleparam.h>
-
-bool enable_cpu_relaxed = false;
-module_param(enable_cpu_relaxed, bool, 0644);
-
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
 	unsigned long delta;
@@ -1126,14 +1121,9 @@ unsigned long wait_task_inactive(struct task_struct *p, long match_state)
 		 * is actually now running somewhere else!
 		 */
 		while (task_running(rq, p)) {
-			if (enable_cpu_relaxed) {
-				if (match_state && unlikely(cpu_relaxed_read_long
-					(&(p->state)) != match_state))
-					return 0;
-			} else {
-				if (match_state && unlikely(p->state != match_state))
-					return 0;
-			}
+			if (match_state && unlikely(cpu_relaxed_read_long
+				(&(p->state)) != match_state))
+				return 0;
 			cpu_read_relax();
 		}
 
@@ -1624,13 +1614,8 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 * If the owning (remote) cpu is still in the middle of schedule() with
 	 * this task as prev, wait until its done referencing the task.
 	 */
-	if (enable_cpu_relaxed) {
-		while (cpu_relaxed_read(&(p->on_cpu)))
-			cpu_read_relax();
-	} else {
-		while (p->on_cpu)
-			cpu_relax();
-	}
+	while (cpu_relaxed_read(&(p->on_cpu)))
+		cpu_read_relax();
 	/*
 	 * Pairs with the smp_wmb() in finish_lock_switch().
 	 */

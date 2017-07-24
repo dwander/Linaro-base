@@ -62,10 +62,7 @@ static inline unsigned __read_seqcount_begin(const seqcount_t *s)
 	unsigned ret;
 
 repeat:
-	if (enable_cpu_relaxed)
-		ret = ACCESS_ONCE(s->sequence);
-	else
-		ret = cpu_relaxed_read((volatile u32 *)&s->sequence);
+	ret = cpu_relaxed_read((volatile u32 *)&s->sequence);
 	if (unlikely(ret & 1)) {
 		cpu_read_relax();
 		goto repeat;

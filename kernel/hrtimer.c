@@ -232,13 +232,8 @@ again:
 		 * completed. There is no conflict as we hold the lock until
 		 * the timer is enqueued.
 		 */
-		if (enable_cpu_relaxed) {
-			if (unlikely(hrtimer_callback_running_relaxed(timer)))
-				return base;
-		} else {
-			if (unlikely(hrtimer_callback_running(timer)))
-				return base;
-		}
+		if (unlikely(hrtimer_callback_running_relaxed(timer)))
+			return base;
 
 		/* See the comment in lock_timer_base() */
 		timer->base = NULL;
@@ -639,13 +634,8 @@ static int hrtimer_reprogram(struct hrtimer *timer,
 	 * reprogramming is handled either by the softirq, which called the
 	 * callback or at the end of the hrtimer_interrupt.
 	 */
-	if (enable_cpu_relaxed) {
-		if (hrtimer_callback_running_relaxed(timer))
-			return 0;
-	} else {
-		if (hrtimer_callback_running(timer))
-			return 0;
-	}
+	if (hrtimer_callback_running_relaxed(timer))
+		return 0;
 
 	/*
 	 * CLOCK_REALTIME timer might be requested with an absolute
@@ -1118,13 +1108,8 @@ int hrtimer_try_to_cancel(struct hrtimer *timer)
 
 	base = lock_hrtimer_base(timer, &flags);
 
-	if (enable_cpu_relaxed) {
-		if (!hrtimer_callback_running_relaxed(timer))
-			ret = remove_hrtimer(timer, base);
-	} else {
-		if (!hrtimer_callback_running(timer))
-			ret = remove_hrtimer(timer, base);
-	}
+	if (!hrtimer_callback_running_relaxed(timer))
+		ret = remove_hrtimer(timer, base);
 
 	unlock_hrtimer_base(timer, &flags);
 
@@ -1723,10 +1708,7 @@ static void migrate_hrtimer_list(struct hrtimer_clock_base *old_base,
 
 	while ((node = timerqueue_getnext(&old_base->active))) {
 		timer = container_of(node, struct hrtimer, node);
-		if (enable_cpu_relaxed)
-			BUG_ON(hrtimer_callback_running_relaxed(timer));
-		else
-			BUG_ON(hrtimer_callback_running(timer));
+		BUG_ON(hrtimer_callback_running_relaxed(timer));
 		debug_deactivate(timer);
 
 		/*
