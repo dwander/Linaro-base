@@ -180,6 +180,20 @@ static inline unsigned int cpufreq_quick_get_max(unsigned int cpu)
 static inline void disable_cpufreq(void) { }
 #endif
 
+/* Govinfo Notifiers */
+#define CPUFREQ_LOAD_CHANGE		(0)
+
+/*
+ * Governor specific info that can be passed to modules that subscribe
+ * to CPUFREQ_GOVINFO_NOTIFIER
+ */
+struct cpufreq_govinfo {
+	unsigned int cpu;
+	unsigned int load;
+	unsigned int sampling_rate_us;
+};
+extern struct atomic_notifier_head cpufreq_govinfo_notifier_list;
+
 /*********************************************************************
  *                      CPUFREQ DRIVER INTERFACE                     *
  *********************************************************************/
@@ -372,6 +386,7 @@ static inline void cpufreq_resume(void) {}
 
 #define CPUFREQ_TRANSITION_NOTIFIER	(0)
 #define CPUFREQ_POLICY_NOTIFIER		(1)
+#define CPUFREQ_GOVINFO_NOTIFIER	(2)
 
 /* Transition notifiers */
 #define CPUFREQ_PRECHANGE		(0)
