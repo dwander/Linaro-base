@@ -372,13 +372,13 @@ static u64 update_load(int cpu)
 		pcpu->policy->governor_data;
 	u64 now;
 	u64 now_idle;
-	unsigned int delta_idle;
-	unsigned int delta_time;
+	u64 delta_idle;
+	u64 delta_time;
 	u64 active_time;
 
 	now_idle = get_cpu_idle_time(cpu, &now, tunables->io_is_busy);
-	delta_idle = (unsigned int)(now_idle - pcpu->time_in_idle);
-	delta_time = (unsigned int)(now - pcpu->time_in_idle_timestamp);
+	delta_idle = (now_idle - pcpu->time_in_idle);
+	delta_time = (now - pcpu->time_in_idle_timestamp);
 
 	if (delta_time <= delta_idle)
 		active_time = 0;
@@ -393,7 +393,7 @@ static u64 update_load(int cpu)
 }
 
 #define MAX_LOCAL_LOAD 100
-static void __cpufreq_cafactive_timer(unsigned long data, bool is_notif)
+static void cpufreq_cafactive_timer(unsigned long data)
 {
 	u64 now;
 	unsigned int delta_time;
@@ -471,6 +471,9 @@ static void __cpufreq_cafactive_timer(unsigned long data, bool is_notif)
 		}
 	} else {
 		new_freq = choose_freq(pcpu, loadadjfreq);
+		if (new_freq > tunables->hispeed_freq &&
+				pcpu->target_freq < tunables->hispeed_freq)
+			new_freq = tunables->hispeed_freq;
 	}
 
 	if (cpu_load <= MAX_LOCAL_LOAD &&
@@ -496,7 +499,7 @@ static void __cpufreq_cafactive_timer(unsigned long data, bool is_notif)
 
 	new_freq = pcpu->freq_table[index].frequency;
 
-	if (!is_notif && new_freq < pcpu->target_freq &&
+	if (new_freq < pcpu->target_freq &&
 	    now - pcpu->max_freq_hyst_start_time <
 	    tunables->max_freq_hysteresis) {
 		trace_cpufreq_cafactive_notyet(data, cpu_load,
@@ -510,7 +513,7 @@ static void __cpufreq_cafactive_timer(unsigned long data, bool is_notif)
 	 * floor frequency for the minimum sample time since last validated.
 	 */
 	max_fvtime = max(pcpu->floor_validate_time, pcpu->local_fvtime);
-	if (!is_notif && new_freq < pcpu->floor_freq &&
+	if (new_freq < pcpu->floor_freq &&
 	    pcpu->target_freq >= pcpu->policy->cur) {
 		if (now - max_fvtime < tunables->min_sample_time) {
 			trace_cpufreq_cafactive_notyet(
@@ -566,10 +569,6 @@ exit:
 	return;
 }
 
-static void cpufreq_cafactive_timer(unsigned long data)
-{
-	__cpufreq_cafactive_timer(data, false);
-}
 
 static void cpufreq_cafactive_idle_end(void)
 {
@@ -741,7 +740,7 @@ static int load_change_callback(struct notifier_block *nb, unsigned long val,
 	trace_cpufreq_cafactive_load_change(cpu);
 	del_timer(&pcpu->cpu_timer);
 	del_timer(&pcpu->cpu_slack_timer);
-	__cpufreq_cafactive_timer(cpu, true);
+	cpufreq_cafactive_timer(cpu);
 
 	up_read(&pcpu->enable_sem);
 	return 0;
@@ -1704,7 +1703,7 @@ static int cpufreq_governor_cafactive(struct cpufreq_policy *policy,
 	return 0;
 }
 
-#ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_CAFACTIVE
+#ifdef CONFIG_CPU_FREQ_GOV_CAFACTIVE_MODULE
 static
 #endif
 struct cpufreq_governor cpufreq_gov_cafactive = {
