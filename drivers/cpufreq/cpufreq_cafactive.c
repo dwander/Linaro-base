@@ -72,10 +72,6 @@ static cpumask_t speedchange_cpumask;
 static spinlock_t speedchange_cpumask_lock;
 static struct mutex gov_lock;
 
-static int set_window_count;
-static int migration_register_count;
-static struct mutex sched_lock;
-
 /* Target load.  Lower values result in higher CPU speeds. */
 #define DEFAULT_TARGET_LOAD 90
 static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
@@ -151,6 +147,29 @@ static struct cpufreq_cafactive_tunables *common_tunables;
 
 static struct attribute_group *get_sysfs_attr(void);
 
+static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
+						  cputime64_t *wall)
+{
+	u64 idle_time;
+	u64 cur_wall_time;
+	u64 busy_time;
+
+	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
+
+	busy_time  = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
+
+	idle_time = cur_wall_time - busy_time;
+	if (wall)
+		*wall = jiffies_to_usecs(cur_wall_time);
+
+	return jiffies_to_usecs(idle_time);
+}
+
 /* Round to starting jiffy of next evaluation window */
 static u64 round_to_nw_start(u64 jif,
 			     struct cpufreq_cafactive_tunables *tunables)
@@ -166,13 +185,6 @@ static u64 round_to_nw_start(u64 jif,
 	}
 
 	return ret;
-}
-
-static inline int set_window_helper(
-			struct cpufreq_cafactive_tunables *tunables)
-{
-	return sched_set_window(round_to_nw_start(get_jiffies_64(), tunables),
-			 usecs_to_jiffies(tunables->timer_rate));
 }
 
 static void cpufreq_cafactive_timer_resched(unsigned long cpu,
@@ -1315,20 +1327,16 @@ static int cpufreq_governor_cafactive(struct cpufreq_policy *policy,
 
 		tunables->usage_count = 1;
 		policy->governor_data = tunables;
-		if (!have_governor_per_policy()) {
-			WARN_ON(cpufreq_get_global_kobject());
+		if (!have_governor_per_policy())
 			common_tunables = tunables;
-		}
 
 		rc = sysfs_create_group(get_governor_parent_kobj(policy),
 				get_sysfs_attr());
 		if (rc) {
 			kfree(tunables);
 			policy->governor_data = NULL;
-			if (!have_governor_per_policy()) {
+			if (!have_governor_per_policy())
 				common_tunables = NULL;
-				cpufreq_put_global_kobject();
-			}
 			return rc;
 		}
 
@@ -1350,8 +1358,6 @@ static int cpufreq_governor_cafactive(struct cpufreq_policy *policy,
 
 			sysfs_remove_group(get_governor_parent_kobj(policy),
 					get_sysfs_attr());
-			if (!have_governor_per_policy())
-				cpufreq_put_global_kobject();
 			common_tunables = NULL;
 		}
 
@@ -1472,6 +1478,23 @@ struct cpufreq_governor cpufreq_gov_cafactive = {
 
 static void cpufreq_cafactive_nop_timer(unsigned long data)
 {
+}
+
+unsigned int cpufreq_cafactive_get_hispeed_freq(int cpu)
+{
+	struct cpufreq_cafactive_cpuinfo *pcpu =
+			&per_cpu(cpuinfo, cpu);
+	struct cpufreq_cafactive_tunables *tunables;
+
+	if (pcpu && pcpu->policy)
+		tunables = pcpu->policy->governor_data;
+	else
+		return 0;
+
+	if (!tunables)
+		return 0;
+
+	return tunables->hispeed_freq;
 }
 
 static int __init cpufreq_cafactive_init(void)
