@@ -442,7 +442,7 @@ static ssize_t __ref thunderplug_hp_enabled_store(struct kobject *kobj,
 
 static struct kobj_attribute thunderplug_hp_enabled_attribute =
 	__ATTR(hotplug_enabled,
-		0666, thunderplug_hp_enabled_show,
+		0644, thunderplug_hp_enabled_show,
 		thunderplug_hp_enabled_store);
 
 static ssize_t thunderplug_ver_show(struct kobject *kobj,
@@ -458,32 +458,32 @@ static struct kobj_attribute thunderplug_ver_attribute =
 
 static struct kobj_attribute thunderplug_hotplug_suspend_attribute =
 	__ATTR(hotplug_suspend,
-		0666, thunderplug_hotplug_suspend_show,
+		0644, thunderplug_hotplug_suspend_show,
 		thunderplug_hotplug_suspend_store);
 
 static struct kobj_attribute thunderplug_suspend_cpus_attribute =
 	__ATTR(suspend_cpus,
-		0666, thunderplug_suspend_cpus_show,
+		0644, thunderplug_suspend_cpus_show,
 		thunderplug_suspend_cpus_store);
 
 static struct kobj_attribute thunderplug_max_core_online_attribute =
 	__ATTR(max_core_online,
-		0666, thunderplug_max_core_online_show,
+		0644, thunderplug_max_core_online_show,
 		thunderplug_max_core_online_store);
 
 static struct kobj_attribute thunderplug_min_core_online_attribute =
 	__ATTR(min_core_online,
-		0666, thunderplug_min_core_online_show,
+		0644, thunderplug_min_core_online_show,
 		thunderplug_min_core_online_store);
 
 static struct kobj_attribute thunderplug_sampling_attribute =
 	__ATTR(sampling_rate,
-		0666, thunderplug_sampling_show,
+		0644, thunderplug_sampling_show,
 		thunderplug_sampling_store);
 
 static struct kobj_attribute thunderplug_load_attribute =
 	__ATTR(load_threshold,
-		0666, thunderplug_load_show,
+		0644, thunderplug_load_show,
 		thunderplug_load_store);
 
 static struct attribute *thunderplug_attrs[] = {
