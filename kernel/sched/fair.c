@@ -2444,6 +2444,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	u64 delta, periods;
 	u32 runnable_contrib;
 	int delta_w, decayed = 0;
+	unsigned long scale_cpu = arch_scale_cpu_capacity(NULL, cpu);
 #ifdef CONFIG_HMP_FREQUENCY_INVARIANT_SCALE
 	u64 scaled_delta;
 	u32 scaled_runnable_contrib;
@@ -2500,6 +2501,10 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 				>> SCHED_FREQSCALE_SHIFT;
 		if (runnable)
 			sa->runnable_avg_sum += scaled_delta_w;
+
+		scaled_delta_w *= scale_cpu;
+		scaled_delta_w >>= SCHED_CAPACITY_SHIFT;
+
 		if (running)
 			sa->usage_avg_sum += scaled_delta_w;
 #else
@@ -2533,6 +2538,10 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 				>> SCHED_FREQSCALE_SHIFT;
 		if (runnable)
 			sa->runnable_avg_sum += scaled_runnable_contrib;
+
+		scaled_runnable_contrib *= scale_cpu;
+		scaled_runnable_contrib >>= SCHED_CAPACITY_SHIFT;
+
 		if (running)
 			sa->usage_avg_sum += scaled_runnable_contrib;
 #else
@@ -2554,6 +2563,10 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	scaled_delta = ((delta * curr_scale) >> SCHED_FREQSCALE_SHIFT);
 	if (runnable)
 		sa->runnable_avg_sum += scaled_delta;
+
+	scaled_delta *= scale_cpu;
+	scaled_delta >>= SCHED_CAPACITY_SHIFT;
+
 	if (running)
 		sa->usage_avg_sum += scaled_delta;
 #else
