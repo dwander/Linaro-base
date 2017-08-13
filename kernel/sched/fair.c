@@ -682,6 +682,7 @@ static int select_idle_sibling(struct task_struct *p, int cpu);
 static unsigned long task_h_load(struct task_struct *p);
 
 static inline void __update_task_entity_contrib(struct sched_entity *se);
+static inline void __update_task_entity_utilization(struct sched_entity *se);
 
 /* Give new task start runnable values to heavy its load in infant time */
 void init_task_runnable_average(struct task_struct *p)
@@ -690,10 +691,11 @@ void init_task_runnable_average(struct task_struct *p)
 
 	p->se.avg.decay_count = 0;
 	slice = sched_slice(task_cfs_rq(p), &p->se) >> 10;
-	p->se.avg.runnable_avg_sum = slice;
-	p->se.avg.runnable_avg_period = slice;
+	p->se.avg.runnable_avg_sum = p->se.avg.running_avg_sum = slice;
+	p->se.avg.avg_period = slice;
 	__update_task_entity_contrib(&p->se);
 	p->se.avg.task = p;
+	__update_task_entity_utilization(&p->se);
 }
 #else
 void init_task_runnable_average(struct task_struct *p)
@@ -1584,7 +1586,7 @@ static u64 numa_get_avg_runtime(struct task_struct *p, u64 *period)
 		*period = now - p->last_task_numa_placement;
 	} else {
 		delta = p->se.avg.runnable_avg_sum;
-		*period = p->se.avg.runnable_avg_period;
+		*period = p->se.avg.avg_period;
 	}
 
 	p->last_sum_exec_runtime = runtime;
@@ -2507,7 +2509,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 		if (running)
 			sa->usage_avg_sum += delta_w;
 #endif /* #ifdef CONFIG_HMP_FREQUENCY_INVARIANT_SCALE */
-		sa->runnable_avg_period += delta_w;
+		sa->avg_period += delta_w;
 
 		delta -= delta_w;
 
@@ -2517,7 +2519,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 		/* decay the load we have accumulated so far */
 		sa->runnable_avg_sum = decay_load(sa->runnable_avg_sum,
 						  periods + 1);
-		sa->runnable_avg_period = decay_load(sa->runnable_avg_period,
+		sa->avg_period = decay_load(sa->avg_period,
 						     periods + 1);
 		sa->usage_avg_sum = decay_load(sa->usage_avg_sum, periods + 1);
 		/* add the contribution from this period */
@@ -2540,7 +2542,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 		if (running)
 			sa->usage_avg_sum += runnable_contrib;
 #endif /* CONFIG_HMP_FREQUENCY_INVARIANT_SCALE */
-		sa->runnable_avg_period += runnable_contrib;
+		sa->avg_period += runnable_contrib;
 
 		sa->remainder = delta;
 	} else {
@@ -2561,7 +2563,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	if (running)
 		sa->usage_avg_sum += delta;
 #endif /* CONFIG_HMP_FREQUENCY_INVARIANT_SCALE */
-	sa->runnable_avg_period += delta;
+	sa->avg_period += delta;
 
 	return decayed;
 }
@@ -2610,11 +2612,11 @@ static inline void __update_tg_runnable_avg(struct sched_avg *sa,
 
 	/* The fraction of a cpu used by this cfs_rq */
 	contrib = div_u64((u64)sa->runnable_avg_sum << NICE_0_SHIFT,
-			  sa->runnable_avg_period + 1);
+			  sa->avg_period + 1);
 	contrib -= cfs_rq->tg_runnable_contrib;
 
 	usage_contrib = div_u64(sa->usage_avg_sum << NICE_0_SHIFT,
-			        sa->runnable_avg_period + 1);
+			        sa->avg_period + 1);
 	usage_contrib -= cfs_rq->tg_usage_contrib;
 
 	/*
@@ -2757,11 +2759,11 @@ static inline void __update_task_entity_contrib(struct sched_entity *se)
 
 	/* avoid overflowing a 32-bit type w/ SCHED_LOAD_SCALE */
 	contrib = se->avg.runnable_avg_sum * scale_load_down(se->load.weight);
-	contrib /= (se->avg.runnable_avg_period + 1);
+	contrib /= (se->avg.avg_period + 1);
 	se->avg.load_avg_contrib = scale_load(contrib);
 	trace_sched_task_load_contrib(task_of(se), se->avg.load_avg_contrib);
 	contrib = se->avg.runnable_avg_sum * scale_load_down(NICE_0_LOAD);
-	contrib /= (se->avg.runnable_avg_period + 1);
+	contrib /= (se->avg.avg_period + 1);
 	se->avg.load_avg_ratio = scale_load(contrib);
 #ifdef CONFIG_SCHED_HMP
 	if (!hmp_cpu_is_fastest(cpu_of(se->cfs_rq->rq)) &&
@@ -2787,6 +2789,17 @@ static long __update_entity_load_avg_contrib(struct sched_entity *se, long *rati
 	if (ratio)
 		*ratio = se->avg.load_avg_ratio - old_ratio;
 	return se->avg.load_avg_contrib - old_contrib;
+}
+
+
+static inline void __update_task_entity_utilization(struct sched_entity *se)
+{
+	u32 contrib;
+
+	/* avoid overflowing a 32-bit type w/ SCHED_LOAD_SCALE */
+	contrib = se->avg.running_avg_sum * scale_load_down(SCHED_LOAD_SCALE);
+	contrib /= (se->avg.avg_period + 1);
+	se->avg.utilization_avg_contrib = scale_load(contrib);
 }
 
 static inline void subtract_blocked_load_contrib(struct cfs_rq *cfs_rq,
@@ -10701,7 +10714,7 @@ static void update_sysload_info(int cpu)
 		return;
 
 	contrib = rq->avg.runnable_avg_sum * scale_load_down(NICE_0_LOAD);
-	contrib /= (rq->avg.runnable_avg_period + 1);
+	contrib /= (rq->avg.avg_period + 1);
 	rq->sysload_avg_ratio = scale_load(contrib);
 
 	trace_sched_rq_sysload_ratio(cpu, rq->sysload_avg_ratio);

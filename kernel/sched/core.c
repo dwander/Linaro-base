@@ -1891,7 +1891,7 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
  * load-balance).
  */
 #if defined(CONFIG_SMP) && defined(CONFIG_FAIR_GROUP_SCHED)
-	p->se.avg.runnable_avg_period = 0;
+	p->se.avg.avg_period = 0;
 	p->se.avg.runnable_avg_sum = 0;
 	p->se.avg.usage_avg_sum = 0;
 	p->se.avg.remainder = 0;
