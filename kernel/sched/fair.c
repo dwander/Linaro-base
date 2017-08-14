@@ -2445,6 +2445,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	u64 delta, periods;
 	u32 runnable_contrib;
 	int delta_w, decayed = 0;
+	unsigned long scale_freq = arch_scale_freq_capacity(NULL, cpu);
 	unsigned long scale_cpu = arch_scale_cpu_capacity(NULL, cpu);
 #ifdef CONFIG_HMP_FREQUENCY_INVARIANT_SCALE
 	u64 scaled_delta;
@@ -2452,6 +2453,9 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	int scaled_delta_w;
 	u32 curr_scale = 1024;
 #endif /* CONFIG_HMP_FREQUENCY_INVARIANT_SCALE */
+
+	trace_sched_contrib_scale_f(cpu, scale_freq, scale_cpu);
+
 
 	delta = now - sa->last_runnable_update;
 #ifdef CONFIG_HMP_VARIABLE_SCALE
@@ -2864,6 +2868,9 @@ static inline void update_entity_load_avg(struct sched_entity *se,
 
 	hp_event_update_entity_load(se);
 
+	if (entity_is_task(se))
+		trace_sched_load_avg_task(task_of(se), &se->avg);
+
 	if (!update_cfs_rq)
 		return;
 
@@ -2873,6 +2880,8 @@ static inline void update_entity_load_avg(struct sched_entity *se,
 	} else {
 		subtract_blocked_load_contrib(cfs_rq, -contrib_delta);
 	}
+
+	trace_sched_load_avg_cpu(cpu, cfs_rq);
 }
 
 /* Update a throttled sched_entity's runnable average */
