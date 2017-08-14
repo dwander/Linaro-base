@@ -1191,6 +1191,39 @@ extern void trigger_load_balance(struct rq *rq, int cpu);
 extern void idle_enter_fair(struct rq *this_rq);
 extern void idle_exit_fair(struct rq *this_rq);
 
+/*
+ * Check that the per-cpu provided sd energy data is consistent for all cpus
+ * within the mask.
+ */
+static inline void check_sched_energy_data(int cpu, sched_domain_energy_f fn,
+					   const struct cpumask *cpumask)
+{
+	struct cpumask mask;
+	int i;
+
+	cpumask_xor(&mask, cpumask, get_cpu_mask(cpu));
+
+	for_each_cpu(i, &mask) {
+		int y;
+
+		BUG_ON(fn(i)->nr_idle_states != fn(cpu)->nr_idle_states);
+
+		for (y = 0; y < (fn(i)->nr_idle_states); y++) {
+			BUG_ON(fn(i)->idle_states[y].power !=
+					fn(cpu)->idle_states[y].power);
+		}
+
+		BUG_ON(fn(i)->nr_cap_states != fn(cpu)->nr_cap_states);
+
+		for (y = 0; y < (fn(i)->nr_cap_states); y++) {
+			BUG_ON(fn(i)->cap_states[y].cap !=
+					fn(cpu)->cap_states[y].cap);
+			BUG_ON(fn(i)->cap_states[y].power !=
+					fn(cpu)->cap_states[y].power);
+		}
+	}
+}
+
 #else
 
 static inline void idle_enter_fair(struct rq *rq) { }
