@@ -948,6 +948,7 @@ struct sched_group_energy {
 	atomic_t ref;
 	unsigned int nr_idle_states;	/* number of idle states */
 	struct idle_state_sg *idle_states;	/* ptr to idle state array */
+	unsigned int nr_idle_states_below; /* number idle states in lower groups */
 	unsigned int nr_cap_states;	/* number of capacity states */
 	struct capacity_state *cap_states; /* ptr to capacity state array */
 };
