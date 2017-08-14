@@ -902,6 +902,7 @@ enum cpu_idle_type {
 #define SD_OVERLAP		0x2000	/* sched_domains of this level overlap */
 #define SD_NUMA			0x4000	/* cross-node balancing */
 #define SD_NO_LOAD_BALANCE	0x8000	/* flag for hmp scheduler */
+#define SD_SHARE_CAP_STATES	0x16000  /* Domain members share capacity state */
 
 #ifdef CONFIG_SCHED_SMT
 static inline int cpu_smt_flags(void)
