@@ -352,6 +352,7 @@ static void update_cpu_power(unsigned int cpu)
 		cpu, arch_scale_freq_power(NULL, cpu));
 }
 
+#ifdef CONFIG_CPU_FREQ
 /*
  * Scheduler load-tracking scale-invariance
  *
@@ -368,6 +369,12 @@ unsigned long arm_arch_scale_freq_capacity(int cpu)
 
 	return curr;
 }
+#else /* CONFIG_CPU_FREQ */
+unsigned long arm_arch_scale_freq_capacity(int cpu)
+{
+	return SCHED_CAPACITY_SCALE;
+}
+#endif /* CONFIG_CPU_FREQ */
 
 /*
  * cpu topology table
