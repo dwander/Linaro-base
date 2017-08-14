@@ -4719,7 +4719,7 @@ static unsigned long get_cpu_usage(int cpu)
 static unsigned long capacity_curr_of(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity_orig *
-	       arch_scale_cpu_capacity(NULL, cpu)
+	       arch_scale_freq_capacity(NULL, cpu)
 	       >> SCHED_CAPACITY_SHIFT;
 }
 
