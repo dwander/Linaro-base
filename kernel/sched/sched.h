@@ -1403,6 +1403,12 @@ unsigned long arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
 #endif
 
 #ifdef CONFIG_SMP
+extern struct static_key __sched_energy_freq;
+static inline bool sched_energy_freq(void)
+{
+	return static_key_false(&__sched_energy_freq);
+}
+
 #ifdef CONFIG_CPU_FREQ_GOV_SCHED
 void cpufreq_sched_set_cap(int cpu, unsigned long util);
 #else
