@@ -832,6 +832,7 @@ TRACE_EVENT(sched_wake_idle_without_ipi,
 );
 
 
+#ifdef CONFIG_SMP
 TRACE_EVENT(sched_contrib_scale_f,
 
 	TP_PROTO(int cpu, unsigned long freq_scale_factor,
@@ -920,6 +921,7 @@ TRACE_EVENT(sched_load_avg_cpu,
 	TP_printk("cpu=%d load=%lu utilization=%lu",
 		  __entry->cpu, __entry->load, __entry->utilization)
 );
+#endif /* CONFIG_SMP */
 
 TRACE_EVENT(sched_hp_event_thread_group,
 
