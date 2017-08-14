@@ -2444,7 +2444,7 @@ static __always_inline int __update_entity_runnable_avg(u64 now,
 	u64 delta, periods;
 	u32 runnable_contrib;
 	int delta_w, decayed = 0;
-	unsigned long scale_freq = arch_scale_freq_capacity(NULL, cpu);
+	unsigned long scale_freq = arch_scale_freq_capacity(cpu);
 	unsigned long scale_cpu = arch_scale_cpu_capacity(NULL, cpu);
 #ifdef CONFIG_HMP_FREQUENCY_INVARIANT_SCALE
 	u64 scaled_delta;
@@ -4745,7 +4745,7 @@ static unsigned long get_cpu_usage(int cpu)
 unsigned long capacity_curr_of(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity_orig *
-	       arch_scale_freq_capacity(NULL, cpu)
+	       arch_scale_freq_capacity(cpu)
 	       >> SCHED_CAPACITY_SHIFT;
 }
 
@@ -7979,16 +7979,6 @@ static inline int get_sd_load_idx(struct sched_domain *sd,
 	}
 
 	return load_idx;
-}
-
-static unsigned long default_scale_capacity(struct sched_domain *sd, int cpu)
-{
-	return SCHED_CAPACITY_SCALE;
-}
-
-unsigned long __weak arch_scale_freq_capacity(struct sched_domain *sd, int cpu)
-{
-	return default_scale_capacity(sd, cpu);
 }
 
 static unsigned long scale_rt_capacity(int cpu)
