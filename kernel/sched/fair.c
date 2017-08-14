@@ -6054,13 +6054,17 @@ static int hmp_is_family_in_fastest_domain(struct task_struct *p)
 
 static int get_cpu_usage(int cpu)
 {
+	int sum;
 	unsigned long usage = cpu_rq(cpu)->cfs.utilization_load_avg;
+	unsigned long blocked = cpu_rq(cpu)->cfs.utilization_blocked_avg;
 	unsigned long capacity_orig = capacity_orig_of(cpu);
 
-	if (usage >= capacity_orig)
+	sum = usage + blocked;
+
+	if (sum >= capacity_orig)
 		return capacity_orig;
 
-	return usage;
+	return sum;
 }
 
 /*
