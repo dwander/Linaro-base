@@ -4669,6 +4669,17 @@ static unsigned long get_cpu_usage(int cpu)
 	return __get_cpu_usage(cpu, 0);
 }
 
+/*
+ * Returns the current capacity of cpu after applying both
+ * cpu and freq scaling.
+ */
+static unsigned long capacity_curr_of(int cpu)
+{
+	return cpu_rq(cpu)->cpu_capacity_orig *
+	       arch_scale_cpu_capacity(NULL, cpu)
+	       >> SCHED_CAPACITY_SHIFT;
+}
+
 static inline bool energy_aware(void)
 {
 	return sched_feat(ENERGY_AWARE);
