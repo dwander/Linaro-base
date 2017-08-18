@@ -140,7 +140,8 @@ void acct_update_power(struct task_struct *task, cputime_t cputime) {
 		return;
 
 	curr = powerstats->curr[stats->last_index];
-	task->cpu_power += curr * cputime_to_usecs(cputime);
+	if (task->cpu_power != ULLONG_MAX)
+		task->cpu_power += curr * cputime_to_usecs(cputime);
 }
 EXPORT_SYMBOL_GPL(acct_update_power);
 
@@ -576,7 +577,7 @@ static void cpufreq_stats_create_table(unsigned int cpu)
 
 	table = cpufreq_frequency_get_table(policy->cpu);
 	if (likely(table)) {
-		cpufreq_for_each_valid_entry(pos, table);
+		cpufreq_for_each_valid_entry(pos, table)
 			count++;
 
 		if (!per_cpu(all_cpufreq_stats, cpu))
@@ -607,7 +608,7 @@ static int cpufreq_stat_notifier_policy(struct notifier_block *nb,
 	if (!table)
 		return 0;
 
-	cpufreq_for_each_valid_entry(pos, table);
+	cpufreq_for_each_valid_entry(pos, table)
 		count++;
 
 	if (!per_cpu(all_cpufreq_stats, cpu))

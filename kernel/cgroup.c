@@ -2416,6 +2416,7 @@ retry_find_task:
 			cset = task_css_set(tsk);
 			list_add(&cset->mg_node, &tset.src_csets);
 			ret = cgroup_allow_attach(cgrp, &tset);
+			list_del(&tset.src_csets);
 			if (ret) {
 				rcu_read_unlock();
 				goto out_unlock_cgroup;
@@ -5513,7 +5514,7 @@ static int cgroup_css_links_read(struct seq_file *seq, void *v)
 		struct task_struct *task;
 		int count = 0;
 
-		seq_printf(seq, "css_set %p\n", cset);
+		seq_printf(seq, "css_set %pK\n", cset);
 
 		list_for_each_entry(task, &cset->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS)

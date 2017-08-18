@@ -53,6 +53,7 @@ struct ipv6_devconf {
 	__s32		force_tllao;
 	__s32           ndisc_notify;
 	__s32		suppress_frag_ndisc;
+	__s32		use_oif_addrs_only;
 	void		*sysctl;
 };
 
@@ -255,9 +256,9 @@ struct tcp6_timewait_sock {
 };
 
 #if IS_ENABLED(CONFIG_IPV6)
-static inline struct ipv6_pinfo * inet6_sk(const struct sock *__sk)
+static inline struct ipv6_pinfo *inet6_sk(const struct sock *__sk)
 {
-	return inet_sk(__sk)->pinet6;
+	return sk_fullsock(__sk) ? inet_sk(__sk)->pinet6 : NULL;
 }
 
 static inline struct raw6_sock *raw6_sk(const struct sock *sk)
@@ -303,11 +304,13 @@ static inline struct ipv6_pinfo * inet6_sk(const struct sock *__sk)
 	return NULL;
 }
 
+#ifndef CONFIG_MPTCP
 static inline struct inet6_request_sock *
 			inet6_rsk(const struct request_sock *rsk)
 {
 	return NULL;
 }
+#endif
 
 static inline struct raw6_sock *raw6_sk(const struct sock *sk)
 {
