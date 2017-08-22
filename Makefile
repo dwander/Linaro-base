@@ -416,6 +416,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Werror \
 		   -std=gnu89
 
+# Optimizations
+KBUILD_CFLAGS	+= -pipe -fno-pic -march=armv8-a+crc
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
