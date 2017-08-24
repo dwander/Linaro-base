@@ -32,6 +32,9 @@
 #include <linux/smc.h>
 #include <linux/debugfs.h>
 #include <linux/of_gpio.h>
+#ifdef CONFIG_STATE_NOTIFIER
+#include <linux/state_notifier.h>
+#endif
 
 #include <media/exynos_mc.h>
 #include <video/mipi_display.h>
@@ -1533,6 +1536,9 @@ static int decon_blank(int blank_mode, struct fb_info *info)
 			decon_err("failed to disable decon\n");
 			goto blank_exit;
 		}
+#ifdef CONFIG_STATE_NOTIFIER
+		state_suspend();
+#endif
 		break;
 	case FB_BLANK_UNBLANK:
 		DISP_SS_EVENT_LOG(DISP_EVT_UNBLANK, &decon->sd, ktime_set(0, 0));
@@ -1541,6 +1547,9 @@ static int decon_blank(int blank_mode, struct fb_info *info)
 			decon_err("failed to enable decon\n");
 			goto blank_exit;
 		}
+#ifdef CONFIG_STATE_NOTIFIER
+		state_resume();
+#endif
 		break;
 	case FB_BLANK_VSYNC_SUSPEND:
 	case FB_BLANK_HSYNC_SUSPEND:
@@ -3200,11 +3209,11 @@ static void decon_dsu_handler(struct decon_device *decon)
 	/* 1 frame delay after Display-off : change of PPS is showing at once. therefore, PPS change must be next frame of display-off */
 	v4l2_subdev_call(decon->output_sd, core, ioctl, DSIM_IOC_DISPLAY_ONOFF, (void*) 0);
 	usleep_range(17000, 17000);
-#endif	
+#endif
 #ifdef CONFIG_FB_DSU_REG_LOCK
 	decon->dsu_lock_cnt = 2;
 	v4l2_subdev_call(decon->output_sd, core, ioctl, DSIM_IOC_REG_LOCK, (void*) 1);
-#endif	
+#endif
 #endif
 
 	loop_out = false;
@@ -3412,10 +3421,10 @@ static int decon_set_win_config(struct decon_device *decon,
 	if( decon->dsu_lock_cnt > 0  ) {
 		decon->dsu_lock_cnt--;
 		if( decon->dsu_lock_cnt == 0 ) {
-#ifdef CONFIG_FB_DSU_REG_LOCK			
+#ifdef CONFIG_FB_DSU_REG_LOCK
 			v4l2_subdev_call(decon->output_sd, core, ioctl, DSIM_IOC_REG_LOCK, (void*) 0);
 #endif
-#ifdef CONFIG_FB_DSU_NOT_SEAMLESS			
+#ifdef CONFIG_FB_DSU_NOT_SEAMLESS
 			v4l2_subdev_call(decon->output_sd, core, ioctl, DSIM_IOC_DISPLAY_ONOFF, (void*) 1);
 #endif
 		}
