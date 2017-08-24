@@ -35,6 +35,7 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/apm-exynos.h>
+#include <linux/moduleparam.h>
 #ifdef CONFIG_MUIC_SUPPORT_CCIC
 #include <linux/of_gpio.h>
 #endif
@@ -52,6 +53,7 @@
 #include <soc/samsung/cpufreq.h>
 #include <soc/samsung/exynos-powermode.h>
 #include <soc/samsung/asv-exynos.h>
+#include <soc/samsung/asv-cal.h>
 #include <soc/samsung/tmu.h>
 #include <soc/samsung/ect_parser.h>
 #include <soc/samsung/exynos-pmu.h>
@@ -79,6 +81,14 @@
 #define CLUSTER_ID(cl)		(cl ? ID_CL1 : ID_CL0)
 
 #define LIMIT_FREQ_DIVIDER	4
+
+
+/* 1 = Selected by asv level.
+ * 2 = Max OC freqs enabled
+ * 3 = Stock Freqs
+ */
+static int autoasv = 1;
+module_param(autoasv, int, 0644);
 
 #ifdef CONFIG_SMP
 struct lpj_info {
@@ -2630,6 +2640,8 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 	char *cluster_name;
 	int ret;
 	int not_using_ect = true;
+	unsigned int asv_big = asv_get_information(cal_asv_dvfs_big, dvfs_group, 0);
+	unsigned int asv_little = asv_get_information(cal_asv_dvfs_little, dvfs_group, 0);
 
 	if (!np) {
 		pr_info("%s: cpufreq_dt is not existed. \n", __func__);
@@ -2640,13 +2652,50 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 				&ptr->max_idx_num))
 		return -ENODEV;
 
-	if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "cl0_max_support_idx"),
-				&ptr->max_support_idx))
-		return -ENODEV;
+	if ( (autoasv == 1) ) {
+		/* For Grade E phones, use stock for LITTLE freq_table */
+		if (asv_little < 3) {
+			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "low_cl0_max_support_idx"),
+						&ptr->max_support_idx))
+				return -ENODEV;
+		/* For Grade C and D phones, use mid OC for LITTLE freq_table */
+		} else if (asv_little < 9) {
+				if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "mid_cl0_max_support_idx"),
+						&ptr->max_support_idx))
+				return -ENODEV;
+		/* Grade A and B phones? That's amazing, let's unleash the Exynos */
+		} else {
+			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
+							&ptr->max_support_idx))
+				return -ENODEV;
+		}
+	} else if ( (autoasv == 2) ) {
+			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
+							&ptr->max_support_idx))
+				return -ENODEV;
+	} else if ( (autoasv == 3) ) {
+			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "stock_cl0_max_support_idx"),
+							&ptr->max_support_idx))
+				return -ENODEV;
+	} else {
+			pr_err("%s: autoasv has failed to register little core freqs\n", __func__);
+	}
 
-	if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
-				&ptr->min_support_idx))
-		return -ENODEV;
+	if ( (autoasv == 1) ) {
+		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
+					&ptr->min_support_idx))
+			return -ENODEV;
+	} else if ( (autoasv == 2) ) {
+		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
+					&ptr->min_support_idx))
+			return -ENODEV;
+	} else if ( (autoasv == 3) ) {
+		if (of_property_read_u32(np, (cl ? "stock_cl1_min_support_idx" : "stock_cl0_min_support_idx"),
+					&ptr->min_support_idx))
+			return -ENODEV;
+	} else {
+			pr_err("%s: autoasv has failed to register min freqs\n", __func__);
+	}
 
 	if (of_property_read_u32(np, (cl ? "cl1_boot_max_qos" : "cl0_boot_max_qos"),
 				&ptr->boot_cpu_max_qos))
@@ -2678,8 +2727,31 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 #if defined(CONFIG_EXYNOS_BIG_FREQ_BOOST)
 		ptr->max_support_idx_table = kzalloc(sizeof(unsigned int)
 				* (NR_CLUST1_CPUS + 1), GFP_KERNEL);
-		ret = of_property_read_u32_array(np, "cl1_max_support_idx_table",
-				(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+
+		if ( (autoasv == 1) ) {
+			/* For Grade D and E phones, use stock for BIG freq_table */
+			if (asv_big < 7) {
+			ret = of_property_read_u32_array(np, "low_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			/* For Grade C and B phones, use mid OC for BIG freq_table */
+			} else if (asv_big < 11) {
+			ret = of_property_read_u32_array(np, "mid_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			/* Grade A phones? That's amazing, let's unleash the Exynos */
+			} else {
+			ret = of_property_read_u32_array(np, "high_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			}
+		} else if ( (autoasv == 2) ) {
+			ret = of_property_read_u32_array(np, "high_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+		} else if ( (autoasv == 3) ) {
+			ret = of_property_read_u32_array(np, "stock_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+		} else {
+			pr_err("%s: autoasv has failed to register big core freqs\n", __func__);
+		}
+
 		if (ret < 0)
 			return -ENODEV;
 
