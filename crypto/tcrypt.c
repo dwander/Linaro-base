@@ -272,7 +272,7 @@ static void sg_init_aead(struct scatterlist *sg, char *xbuf[XBUFSIZE],
 			unsigned int buflen)
 {
 	int np = (buflen + PAGE_SIZE - 1)/PAGE_SIZE;
-	int k, rem;
+	int k;
 
 #if 0 // Prevent 60109 : Logically dead code
 	if (np > XBUFSIZE) {
@@ -287,8 +287,6 @@ static void sg_init_aead(struct scatterlist *sg, char *xbuf[XBUFSIZE],
 	np--;
 	for (k = 0; k < np; k++)
 		sg_set_buf(&sg[k], xbuf[k], PAGE_SIZE);
-
-	sg_set_buf(&sg[k], xbuf[k], rem);
 }
 
 static void test_aead_speed(const char *algo, int enc, unsigned int secs,
