@@ -14,6 +14,8 @@
 #ifndef __LINUX_OPP_H__
 #define __LINUX_OPP_H__
 
+#define LSK_OPPV2_BACKPORT
+
 #include <linux/err.h>
 #include <linux/notifier.h>
 
