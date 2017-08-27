@@ -186,6 +186,7 @@ config MALI_PLATFORM_THIRDPARTY
 config MALI_PLATFORM_THIRDPARTY_NAME
 	depends on MALI_T8XX && MALI_PLATFORM_THIRDPARTY && MALI_EXPERT
 	string "Third party platform name"
+	default "exynos"
 	help
 	  Enter the name of a third party platform that is supported. The third part configuration
 	  file must be in midgard/config/tpip/mali_kbase_config_xxx.c where xxx is the name
@@ -241,4 +242,4 @@ config MALI_SEC_HWCNT
 	help
 	  Enable sec hwcnt feature.
 
-source "drivers/gpu/arm/t8xx/r12p0/platform/Kconfig"
+source "drivers/gpu/arm/t8xx/r12p0/platform/exynos/Kconfig"
