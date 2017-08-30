@@ -56,8 +56,8 @@
 #define POWER_COEFF_7P		10 /* percore  param */
 
 #ifdef CONFIG_SOC_EXYNOS8890
-#define CL0_MAX_VOLT		1175000
-#define CL1_MAX_VOLT		1125000
+#define CL0_MAX_VOLT		1200000
+#define CL1_MAX_VOLT		1300000
 #define CL0_MIN_VOLT		500000
 #define CL1_MIN_VOLT		500000
 #define CL_MAX_VOLT(cl)		(cl == CL_ZERO ? CL0_MAX_VOLT : CL1_MAX_VOLT)
