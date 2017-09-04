@@ -215,7 +215,7 @@ static int __cpuinit exynos_boot_secondary(unsigned int cpu, struct task_struct 
 		 * Try to set boot address using firmware first
 		 * and fall back to boot register if it fails.
 		 */
-		if (call_firmware_op(set_cpu_boot_addr, phys_cpu, boot_addr))
+		if (call_firmware_op(set_cpu_boot_addr, phys_cpu, boot_addr) != 0)
 			__raw_writel(boot_addr, cpu_boot_reg(phys_cpu));
 
 		if (soc_is_exynos5433() || soc_is_exynos5430() || soc_is_exynos5422()) {
@@ -292,7 +292,7 @@ static void __init exynos_smp_prepare_cpus(unsigned int max_cpus)
 		phys_cpu = cpu_logical_map(i);
 		boot_addr = virt_to_phys(exynos4_secondary_startup);
 
-		if (call_firmware_op(set_cpu_boot_addr, phys_cpu, boot_addr))
+		if (call_firmware_op(set_cpu_boot_addr, phys_cpu, boot_addr) != 0)
 			__raw_writel(boot_addr, cpu_boot_reg(phys_cpu));
 	}
 

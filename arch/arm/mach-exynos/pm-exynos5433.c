@@ -169,7 +169,7 @@ static int exynos_cpu_suspend(unsigned long arg)
 #endif
 	flush_cache_all();
 
-	if (call_firmware_op(do_idle))
+	if (call_firmware_op(do_idle) != 0)
 		cpu_do_idle();
 	pr_info("sleep resumed to originator?");
 
