@@ -60,6 +60,9 @@ static struct psci_operations psci_ops;
 static int (*invoke_psci_fn)(u64, u64, u64, u64);
 typedef int (*psci_initcall_t)(const struct device_node *);
 
+asmlinkage int __invoke_psci_fn_hvc(u64, u64, u64, u64);
+asmlinkage int __invoke_psci_fn_smc(u64, u64, u64, u64);
+
 enum psci_function {
 	PSCI_FN_CPU_SUSPEND,
 	PSCI_FN_CPU_ON,
@@ -112,6 +115,7 @@ static void psci_power_state_unpack(u32 power_state,
 			PSCI_0_2_POWER_STATE_AFFL_SHIFT;
 }
 
+<<<<<<< HEAD
 /*
  * The following two functions are invoked via the invoke_psci_fn pointer
  * and will not be inlined, allowing us to piggyback on the AAPCS.
@@ -152,6 +156,8 @@ static noinline int __invoke_psci_fn_smc(u64 function_id, u64 arg0, u64 arg1,
 	return function_id;
 }
 
+=======
+>>>>>>> linux-stable/linux-3.18.y
 static int psci_get_version(void)
 {
 	int err;

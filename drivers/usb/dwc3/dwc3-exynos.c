@@ -668,12 +668,9 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, exynos);
 
-	ret = dwc3_exynos_register_phys(exynos);
-	if (ret) {
-		dev_err(dev, "couldn't register PHYs\n");
-		return ret;
-	}
+	exynos->dev	= dev;
 
+<<<<<<< HEAD
 	exynos->dev	= dev;
 #if IS_ENABLED(CONFIG_OF)
 	exynos->drv_data = dwc3_exynos_get_driver_data(pdev);
@@ -707,6 +704,14 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 	pm_runtime_enable(dev);
 
 	dwc3_exynos_rsw_init(exynos);
+=======
+	exynos->clk = devm_clk_get(dev, "usbdrd30");
+	if (IS_ERR(exynos->clk)) {
+		dev_err(dev, "couldn't get clock\n");
+		return -EINVAL;
+	}
+	clk_prepare_enable(exynos->clk);
+>>>>>>> linux-stable/linux-3.18.y
 
 	exynos->vdd33 = devm_regulator_get(dev, "vdd33");
 	if (IS_ERR(exynos->vdd33)) {
@@ -734,20 +739,29 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 		}
 	}
 
+	ret = dwc3_exynos_register_phys(exynos);
+	if (ret) {
+		dev_err(dev, "couldn't register PHYs\n");
+		goto err4;
+	}
+
 	if (node) {
 		ret = of_platform_populate(node, NULL, NULL, dev);
 		if (ret) {
 			dev_err(dev, "failed to add dwc3 core\n");
-			goto err4;
+			goto err5;
 		}
 	} else {
 		dev_err(dev, "no device node, failed to add dwc3 core\n");
 		ret = -ENODEV;
-		goto err4;
+		goto err5;
 	}
 
 	return 0;
 
+err5:
+	platform_device_unregister(exynos->usb2_phy);
+	platform_device_unregister(exynos->usb3_phy);
 err4:
 	if (exynos->vdd10)
 		regulator_disable(exynos->vdd10);
@@ -755,10 +769,14 @@ err3:
 	if (exynos->vdd33)
 		regulator_disable(exynos->vdd33);
 err2:
+<<<<<<< HEAD
 	pm_runtime_disable(&pdev->dev);
 	dwc3_exynos_clk_disable(exynos);
 	dwc3_exynos_clk_unprepare(exynos);
 	pm_runtime_set_suspended(&pdev->dev);
+=======
+	clk_disable_unprepare(exynos->clk);
+>>>>>>> linux-stable/linux-3.18.y
 	return ret;
 }
 

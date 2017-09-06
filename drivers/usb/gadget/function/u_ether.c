@@ -1010,6 +1010,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 #endif
 	req->length = length;
 
+<<<<<<< HEAD
 	/* throttle highspeed IRQ rate back slightly */
 	if (gadget_is_dualspeed(dev->gadget) &&
 			 (dev->gadget->speed == USB_SPEED_HIGH)) {
@@ -1024,6 +1025,8 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 		req->no_interrupt = 0;
 	}
 
+=======
+>>>>>>> linux-stable/linux-3.18.y
 	retval = usb_ep_queue(in, req, GFP_ATOMIC);
 	switch (retval) {
 	default:
