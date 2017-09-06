@@ -1948,11 +1948,7 @@ struct vfsmount *collect_mounts(struct path *path)
 		tree = ERR_PTR(-EINVAL);
 	else
 		tree = copy_tree(real_mount(path->mnt), path->dentry,
-<<<<<<< HEAD
-				CL_COPY_ALL | CL_PRIVATE);
-=======
 				 CL_COPY_ALL | CL_PRIVATE);
->>>>>>> linux-stable/linux-3.18.y
 	namespace_unlock();
 	if (IS_ERR(tree))
 		return ERR_CAST(tree);
@@ -3590,17 +3586,18 @@ static bool fs_fully_visible(struct file_system_type *type, int *new_mnt_flags)
 #else
 		if (mnt->mnt.mnt_sb->s_type != type)
 			continue;
-<<<<<<< HEAD
 #endif
-		/* This mount is not fully visible if there are any child mounts
-		 * that cover anything except for empty directories.
-=======
 
 		/* This mount is not fully visible if it's root directory
 		 * is not the root directory of the filesystem.
 		 */
+#ifdef CONFIG_RKP_NS_PROT
+		if (mnt->mnt->mnt_root != mnt->mnt->mnt_sb->s_root)
+			continue;
+#else
 		if (mnt->mnt.mnt_root != mnt->mnt.mnt_sb->s_root)
 			continue;
+#endif
 
 		/* Verify the mount flags are equal to or more permissive
 		 * than the proposed new mount.
@@ -3618,7 +3615,6 @@ static bool fs_fully_visible(struct file_system_type *type, int *new_mnt_flags)
 		/* This mount is not fully visible if there are any
 		 * locked child mounts that cover anything except for
 		 * empty directories.
->>>>>>> linux-stable/linux-3.18.y
 		 */
 		list_for_each_entry(child, &mnt->mnt_mounts, mnt_child) {
 			struct inode *inode = child->mnt_mountpoint->d_inode;

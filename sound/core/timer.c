@@ -377,12 +377,9 @@ int snd_timer_close(struct snd_timer_instance *timeri)
 		}
 		spin_unlock(&timer->lock);
 		spin_unlock_irq(&slave_active_lock);
-<<<<<<< HEAD
-=======
 		/* release a card refcount for safe disconnection */
 		if (timer->card)
 			put_device(&timer->card->card_dev);
->>>>>>> linux-stable/linux-3.18.y
 		mutex_unlock(&register_mutex);
 	}
  out:
@@ -508,11 +505,8 @@ static int snd_timer_start_slave(struct snd_timer_instance *timeri,
 		spin_lock(&timeri->timer->lock);
 		list_add_tail(&timeri->active_list,
 			      &timeri->master->slave_active_head);
-<<<<<<< HEAD
-=======
 		snd_timer_notify1(timeri, start ? SNDRV_TIMER_EVENT_START :
 				  SNDRV_TIMER_EVENT_CONTINUE);
->>>>>>> linux-stable/linux-3.18.y
 		spin_unlock(&timeri->timer->lock);
 	}
 	spin_unlock_irqrestore(&slave_active_lock, flags);
@@ -526,22 +520,6 @@ static int snd_timer_stop1(struct snd_timer_instance *timeri, bool stop)
 	int result = 0;
 	unsigned long flags;
 
-<<<<<<< HEAD
-	if (snd_BUG_ON(!timeri))
-		return -ENXIO;
-
-	if (timeri->flags & SNDRV_TIMER_IFLG_SLAVE) {
-		if (!keep_flag) {
-			spin_lock_irqsave(&slave_active_lock, flags);
-			timeri->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
-			list_del_init(&timeri->ack_list);
-			list_del_init(&timeri->active_list);
-			spin_unlock_irqrestore(&slave_active_lock, flags);
-		}
-		goto __end;
-	}
-=======
->>>>>>> linux-stable/linux-3.18.y
 	timer = timeri->timer;
 	if (!timer)
 		return -EINVAL;
@@ -778,13 +756,8 @@ void snd_timer_interrupt(struct snd_timer * timer, unsigned long ticks_left)
 			ti->cticks = ti->ticks;
 		} else {
 			ti->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
-<<<<<<< HEAD
-			if (--timer->running)
-				list_del_init(&ti->active_list);
-=======
 			--timer->running;
 			list_del_init(&ti->active_list);
->>>>>>> linux-stable/linux-3.18.y
 		}
 		if ((timer->hw.flags & SNDRV_TIMER_HW_TASKLET) ||
 		    (ti->flags & SNDRV_TIMER_IFLG_FAST))

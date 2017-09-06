@@ -669,9 +669,6 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, exynos);
 
 	exynos->dev	= dev;
-
-<<<<<<< HEAD
-	exynos->dev	= dev;
 #if IS_ENABLED(CONFIG_OF)
 	exynos->drv_data = dwc3_exynos_get_driver_data(pdev);
 #endif
@@ -704,14 +701,6 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 	pm_runtime_enable(dev);
 
 	dwc3_exynos_rsw_init(exynos);
-=======
-	exynos->clk = devm_clk_get(dev, "usbdrd30");
-	if (IS_ERR(exynos->clk)) {
-		dev_err(dev, "couldn't get clock\n");
-		return -EINVAL;
-	}
-	clk_prepare_enable(exynos->clk);
->>>>>>> linux-stable/linux-3.18.y
 
 	exynos->vdd33 = devm_regulator_get(dev, "vdd33");
 	if (IS_ERR(exynos->vdd33)) {
@@ -769,14 +758,10 @@ err3:
 	if (exynos->vdd33)
 		regulator_disable(exynos->vdd33);
 err2:
-<<<<<<< HEAD
 	pm_runtime_disable(&pdev->dev);
 	dwc3_exynos_clk_disable(exynos);
 	dwc3_exynos_clk_unprepare(exynos);
 	pm_runtime_set_suspended(&pdev->dev);
-=======
-	clk_disable_unprepare(exynos->clk);
->>>>>>> linux-stable/linux-3.18.y
 	return ret;
 }
 

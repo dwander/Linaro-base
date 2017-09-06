@@ -393,11 +393,8 @@ static int get_v4l2_buffer32(struct v4l2_buffer *kp, struct v4l2_buffer32 __user
 		get_user(kp->type, &up->type) ||
 		get_user(kp->flags, &up->flags) ||
 		get_user(kp->memory, &up->memory) ||
-<<<<<<< HEAD
-		get_user(kp->reserved, &up->reserved))
-=======
+		get_user(kp->reserved, &up->reserved) ||
 		get_user(kp->length, &up->length))
->>>>>>> linux-stable/linux-3.18.y
 			return -EFAULT;
 
 	if (V4L2_TYPE_IS_OUTPUT(kp->type))

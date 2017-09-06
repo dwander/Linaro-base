@@ -5234,7 +5234,6 @@ static int hmp_semiboost_period_from_sysfs(int value)
 	return 0;
 }
 
-<<<<<<< HEAD
 /* max value for threshold is 1024 */
 static int hmp_up_threshold_from_sysfs(int value)
 {
@@ -5242,29 +5241,6 @@ static int hmp_up_threshold_from_sysfs(int value)
 		return -EINVAL;
 
 	hmp_up_threshold = value;
-=======
-		/*
-		 * Since we got here without doing put_prev_entity() we also
-		 * have to consider cfs_rq->curr. If it is still a runnable
-		 * entity, update_curr() will update its vruntime, otherwise
-		 * forget we've ever seen it.
-		 */
-		if (curr) {
-			if (curr->on_rq)
-				update_curr(cfs_rq);
-			else
-				curr = NULL;
-
-			/*
-			 * This call to check_cfs_rq_runtime() will do the
-			 * throttle and dequeue its entity in the parent(s).
-			 * Therefore the 'simple' nr_running test will indeed
-			 * be correct.
-			 */
-			if (unlikely(check_cfs_rq_runtime(cfs_rq)))
-				goto simple;
-		}
->>>>>>> linux-stable/linux-3.18.y
 
 	return 0;
 }

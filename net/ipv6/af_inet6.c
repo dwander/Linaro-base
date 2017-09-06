@@ -125,15 +125,12 @@ int inet6_create(struct net *net, struct socket *sock, int protocol, int kern)
 	int try_loading_module = 0;
 	int err;
 
-	if (protocol < 0 || protocol >= IPPROTO_MAX)
-		return -EINVAL;
-
-<<<<<<< HEAD
 	if (!current_has_network())
 		return -EACCES;
 
-=======
->>>>>>> linux-stable/linux-3.18.y
+	if (protocol < 0 || protocol >= IPPROTO_MAX)
+		return -EINVAL;
+
 	/* Look for the requested type/protocol pair. */
 lookup_protocol:
 	err = -ESOCKTNOSUPPORT;

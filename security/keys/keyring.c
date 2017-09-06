@@ -1183,13 +1183,8 @@ void __key_link_end(struct key *keyring,
 
 	if (edit) {
 		if (!edit->dead_leaf) {
-<<<<<<< HEAD
-		key_payload_reserve(keyring,
-				    keyring->datalen - KEYQUOTA_LINK_BYTES);
-=======
 			key_payload_reserve(keyring,
 				keyring->datalen - KEYQUOTA_LINK_BYTES);
->>>>>>> linux-stable/linux-3.18.y
 		}
 		assoc_array_cancel_edit(edit);
 	}

@@ -1355,14 +1355,10 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
  * eventually). The difference is that pulled data not copied, but
  * immediately discarded.
  */
-<<<<<<< HEAD
 #ifndef CONFIG_MPTCP
 static 
 #endif
-void __pskb_trim_head(struct sk_buff *skb, int len)
-=======
-static int __pskb_trim_head(struct sk_buff *skb, int len)
->>>>>>> linux-stable/linux-3.18.y
+int __pskb_trim_head(struct sk_buff *skb, int len)
 {
 	struct skb_shared_info *shinfo;
 	int i, k, eat;
@@ -1404,14 +1400,11 @@ static int __pskb_trim_head(struct sk_buff *skb, int len)
 /* Remove acked data from a packet in the transmit queue. */
 int tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
 {
-<<<<<<< HEAD
+	u32 delta_truesize;
 #ifdef CONFIG_MPTCP
 	if (mptcp(tcp_sk(sk)) && !is_meta_sk(sk) && mptcp_is_data_seq(skb))
 		return mptcp_trim_head(sk, skb, len);
 #endif
-=======
-	u32 delta_truesize;
->>>>>>> linux-stable/linux-3.18.y
 
 	if (skb_unclone(skb, GFP_ATOMIC))
 		return -ENOMEM;

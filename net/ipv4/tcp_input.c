@@ -3414,32 +3414,18 @@ static void tcp_send_challenge_ack(struct sock *sk)
 	/* unprotected vars, we dont care of overwrites */
 	static u32 challenge_timestamp;
 	static unsigned int challenge_count;
-<<<<<<< HEAD
-	u32 now = jiffies / HZ;
-	u32 count;
-=======
 	u32 count, now = jiffies / HZ;
->>>>>>> linux-stable/linux-3.18.y
 
 	if (now != challenge_timestamp) {
 		u32 half = (sysctl_tcp_challenge_ack_limit + 1) >> 1;
 
 		challenge_timestamp = now;
-<<<<<<< HEAD
 		challenge_count = half +
 				  prandom_u32_max(sysctl_tcp_challenge_ack_limit);
 	}
 	count = challenge_count;
 	if (count > 0) {
 		challenge_count = count - 1;
-=======
-		WRITE_ONCE(challenge_count, half +
-			   prandom_u32_max(sysctl_tcp_challenge_ack_limit));
-	}
-	count = READ_ONCE(challenge_count);
-	if (count > 0) {
-		WRITE_ONCE(challenge_count, count - 1);
->>>>>>> linux-stable/linux-3.18.y
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPCHALLENGEACK);
 		tcp_send_ack(sk);
 	}

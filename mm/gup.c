@@ -435,11 +435,7 @@ static int faultin_page(struct task_struct *tsk, struct vm_area_struct *vma,
 	 * reCOWed by userspace write).
 	 */
 	if ((ret & VM_FAULT_WRITE) && !(vma->vm_flags & VM_WRITE))
-<<<<<<< HEAD
-		*flags |= FOLL_COW;
-=======
 	        *flags |= FOLL_COW;
->>>>>>> linux-stable/linux-3.18.y
 	return 0;
 }
 

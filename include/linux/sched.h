@@ -1835,11 +1835,6 @@ static inline pid_t task_tgid_nr(struct task_struct *tsk)
 	return tsk->tgid;
 }
 
-<<<<<<< HEAD
-static pid_t task_tgid_nr_ns(struct task_struct *tsk, struct pid_namespace *ns);
-=======
->>>>>>> linux-stable/linux-3.18.y
-
 static inline int pid_alive(const struct task_struct *p);
 
 static inline pid_t task_pgrp_nr_ns(struct task_struct *tsk,
@@ -1875,8 +1870,6 @@ static inline pid_t task_tgid_vnr(struct task_struct *tsk)
 	return __task_pid_nr_ns(tsk, __PIDTYPE_TGID, NULL);
 }
 
-<<<<<<< HEAD
-=======
 static inline pid_t task_ppid_nr_ns(const struct task_struct *tsk, struct pid_namespace *ns)
 {
 	pid_t pid = 0;
@@ -1894,7 +1887,6 @@ static inline pid_t task_ppid_nr(const struct task_struct *tsk)
 	return task_ppid_nr_ns(tsk, &init_pid_ns);
 }
 
->>>>>>> linux-stable/linux-3.18.y
 /* obsolete, do not use */
 static inline pid_t task_pgrp_nr(struct task_struct *tsk)
 {

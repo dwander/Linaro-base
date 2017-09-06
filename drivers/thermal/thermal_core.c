@@ -61,7 +61,6 @@ static LIST_HEAD(thermal_governor_list);
 static DEFINE_MUTEX(thermal_list_lock);
 static DEFINE_MUTEX(thermal_governor_lock);
 
-<<<<<<< HEAD
 #ifdef CONFIG_SCHED_HMP
 #define BOUNDED_CPU		1
 static void start_poll_queue(struct thermal_zone_device *tz, int delay)
@@ -70,9 +69,7 @@ static void start_poll_queue(struct thermal_zone_device *tz, int delay)
 			msecs_to_jiffies(delay));
 }
 #endif
-=======
 static atomic_t in_suspend;
->>>>>>> linux-stable/linux-3.18.y
 
 static struct thermal_governor *def_governor;
 
@@ -522,14 +519,10 @@ void thermal_zone_device_update(struct thermal_zone_device *tz)
 	struct thermal_instance *instance;
 #endif
 
-<<<<<<< HEAD
-	if (!tz->ops->get_mode)
-=======
 	if (atomic_read(&in_suspend))
 		return;
 
-	if (!tz->ops->get_temp)
->>>>>>> linux-stable/linux-3.18.y
+	if (!tz->ops->get_mode)
 		return;
 
 	update_temperature(tz);
@@ -1596,17 +1589,14 @@ struct thermal_zone_device *thermal_zone_device_register(const char *type,
 	tz->trips = trips;
 	tz->passive_delay = passive_delay;
 	tz->polling_delay = polling_delay;
-<<<<<<< HEAD
 #if defined(CONFIG_EXYNOS_BIG_FREQ_BOOST)
 	tz->device_enable = THERMAL_DEVICE_ENABLED;
 #endif
 #ifdef CONFIG_SCHED_HMP
 	tz->poll_queue_cpu = BOUNDED_CPU;
 #endif
-=======
 	/* A new thermal zone needs to be updated anyway. */
 	atomic_set(&tz->need_update, 1);
->>>>>>> linux-stable/linux-3.18.y
 
 	dev_set_name(&tz->device, "thermal_zone%d", tz->id);
 	result = device_register(&tz->device);
@@ -1937,7 +1927,6 @@ static void thermal_unregister_governors(void)
 	thermal_gov_user_space_unregister();
 }
 
-<<<<<<< HEAD
 #ifdef CONFIG_SCHED_HMP
 static int __cpuinit thermal_cpu_callback(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
@@ -2003,36 +1992,6 @@ static int exynos_thermal_pm_notifier(struct notifier_block *notifier,
 static struct notifier_block thermal_pm_notifier = {
 	.notifier_call = exynos_thermal_pm_notifier,
 	.priority = (INT_MIN + 1),
-=======
-static int thermal_pm_notify(struct notifier_block *nb,
-				unsigned long mode, void *_unused)
-{
-	struct thermal_zone_device *tz;
-
-	switch (mode) {
-	case PM_HIBERNATION_PREPARE:
-	case PM_RESTORE_PREPARE:
-	case PM_SUSPEND_PREPARE:
-		atomic_set(&in_suspend, 1);
-		break;
-	case PM_POST_HIBERNATION:
-	case PM_POST_RESTORE:
-	case PM_POST_SUSPEND:
-		atomic_set(&in_suspend, 0);
-		list_for_each_entry(tz, &thermal_tz_list, node) {
-			thermal_zone_device_reset(tz);
-			thermal_zone_device_update(tz);
-		}
-		break;
-	default:
-		break;
-	}
-	return 0;
-}
-
-static struct notifier_block thermal_pm_nb = {
-	.notifier_call = thermal_pm_notify,
->>>>>>> linux-stable/linux-3.18.y
 };
 
 static int __init thermal_init(void)
@@ -2055,17 +2014,10 @@ static int __init thermal_init(void)
 	if (result)
 		goto exit_netlink;
 
-<<<<<<< HEAD
 #ifdef CONFIG_SCHED_HMP
 	register_hotcpu_notifier(&thermal_cpu_notifier);
 #endif
 	register_pm_notifier(&thermal_pm_notifier);
-=======
-	result = register_pm_notifier(&thermal_pm_nb);
-	if (result)
-		pr_warn("Thermal: Can not register suspend notifier, return %d\n",
-			result);
->>>>>>> linux-stable/linux-3.18.y
 
 	return 0;
 
@@ -2086,14 +2038,10 @@ error:
 
 static void __exit thermal_exit(void)
 {
-<<<<<<< HEAD
 	unregister_pm_notifier(&thermal_pm_notifier);
 #ifdef CONFIG_SCHED_HMP
 	unregister_hotcpu_notifier(&thermal_cpu_notifier);
 #endif
-=======
-	unregister_pm_notifier(&thermal_pm_nb);
->>>>>>> linux-stable/linux-3.18.y
 	of_thermal_destroy_zones();
 	genetlink_exit();
 	class_unregister(&thermal_class);

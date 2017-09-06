@@ -3296,10 +3296,6 @@ EXPORT_SYMBOL_GPL(vb2_thread_start);
 int vb2_thread_stop(struct vb2_queue *q)
 {
 	struct vb2_threadio_data *threadio = q->threadio;
-<<<<<<< HEAD
-	struct vb2_fileio_data __attribute__((__unused__)) *fileio = q->fileio;
-=======
->>>>>>> linux-stable/linux-3.18.y
 	int err;
 
 	if (threadio == NULL)

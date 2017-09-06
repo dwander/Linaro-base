@@ -284,15 +284,12 @@ static int inet_create(struct net *net, struct socket *sock, int protocol,
 	int try_loading_module = 0;
 	int err;
 
-	if (protocol < 0 || protocol >= IPPROTO_MAX)
-		return -EINVAL;
-
-<<<<<<< HEAD
 	if (!current_has_network())
 		return -EACCES;
 
-=======
->>>>>>> linux-stable/linux-3.18.y
+	if (protocol < 0 || protocol >= IPPROTO_MAX)
+		return -EINVAL;
+
 	sock->state = SS_UNCONNECTED;
 
 	/* Look for the requested type/protocol pair. */
@@ -1454,8 +1451,6 @@ static struct sk_buff **ipip_gro_receive(struct sk_buff **head,
 	return inet_gro_receive(head, skb);
 }
 
-<<<<<<< HEAD
-=======
 #define SECONDS_PER_DAY	86400
 
 /* inet_current_timestamp - Return IP network timestamp
@@ -1482,7 +1477,6 @@ __be32 inet_current_timestamp(void)
 }
 EXPORT_SYMBOL(inet_current_timestamp);
 
->>>>>>> linux-stable/linux-3.18.y
 int inet_recv_error(struct sock *sk, struct msghdr *msg, int len, int *addr_len)
 {
 	if (sk->sk_family == AF_INET)
@@ -1749,11 +1743,7 @@ static const struct net_offload ipip_offload = {
 	.callbacks = {
 		.gso_segment	= inet_gso_segment,
 		.gro_receive	= ipip_gro_receive,
-<<<<<<< HEAD
-		.gro_complete	= inet_gro_complete,
-=======
 		.gro_complete	= ipip_gro_complete,
->>>>>>> linux-stable/linux-3.18.y
 	},
 };
 

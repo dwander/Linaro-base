@@ -481,8 +481,6 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
 	pr_auto(ASL1, "Bad mode in %s handler detected, code 0x%08x\n",
 		handler[reason], esr);
 
-<<<<<<< HEAD
-=======
 	die("Oops - bad mode", regs, 0);
 	local_irq_disable();
 	panic("bad mode");
@@ -500,7 +498,6 @@ asmlinkage void bad_el0_sync(struct pt_regs *regs, int reason, unsigned int esr)
 
 	pr_crit("Bad EL0 synchronous exception detected on CPU%d, code 0x%08x\n",
 		smp_processor_id(), esr);
->>>>>>> linux-stable/linux-3.18.y
 	__show_regs(regs);
 
 	info.si_signo = SIGILL;

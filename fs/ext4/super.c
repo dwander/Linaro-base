@@ -415,16 +415,11 @@ static void ext4_handle_error(struct super_block *sb, char* buf)
 		sb->s_flags |= MS_RDONLY;
 	}
 	if (test_opt(sb, ERRORS_PANIC)) {
-<<<<<<< HEAD
-		panic("EXT4-fs (device %s): panic! %s\n",
-			sb->s_id, buf?buf:"no message");
-=======
 		if (EXT4_SB(sb)->s_journal &&
 		  !(EXT4_SB(sb)->s_journal->j_flags & JBD2_REC_ERR))
 			return;
 		panic("EXT4-fs (device %s): panic forced after error\n",
 			sb->s_id);
->>>>>>> linux-stable/linux-3.18.y
 	}
 }
 
@@ -651,17 +646,11 @@ void __ext4_abort(struct super_block *sb, const char *function,
 			jbd2_journal_abort(EXT4_SB(sb)->s_journal, -EIO);
 		save_error_info(sb, function, line);
 	}
-<<<<<<< HEAD
-	if (test_opt(sb, ERRORS_PANIC) && !ignore_fs_panic) {
-		printk("EXT4-fs panic from previous error\n");
-		BUG_ON(1);
-=======
 	if (test_opt(sb, ERRORS_PANIC)) {
 		if (EXT4_SB(sb)->s_journal &&
 		  !(EXT4_SB(sb)->s_journal->j_flags & JBD2_REC_ERR))
 			return;
 		panic("EXT4-fs panic from previous error\n");
->>>>>>> linux-stable/linux-3.18.y
 	}
 }
 

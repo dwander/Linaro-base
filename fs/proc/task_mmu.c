@@ -545,26 +545,20 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 	} else if (is_swap_pte(*pte)) {
 		swp_entry_t swpent = pte_to_swp_entry(*pte);
 
-<<<<<<< HEAD
 		if (!non_swap_entry(swpent)) {
 			int mapcount;
 
-			mss->swap += ptent_size;
+			mss->swap += PAGE_SIZE;
 			mapcount = swp_swapcount(swpent);
 			if (mapcount >= 2) {
-				u64 pss_delta = (u64)ptent_size << PSS_SHIFT;
+				u64 pss_delta = (u64)PAGE_SIZE << PSS_SHIFT;
 
 				do_div(pss_delta, mapcount);
 				mss->swap_pss += pss_delta;
 			} else {
-				mss->swap_pss += (u64)ptent_size << PSS_SHIFT;
+				mss->swap_pss += (u64)PAGE_SIZE << PSS_SHIFT;
 			}
 		} else if (is_migration_entry(swpent))
-=======
-		if (!non_swap_entry(swpent))
-			mss->swap += PAGE_SIZE;
-		else if (is_migration_entry(swpent))
->>>>>>> linux-stable/linux-3.18.y
 			page = migration_entry_to_page(swpent);
 	} else if (pte_file(*pte)) {
 		if (pte_to_pgoff(*pte) != pgoff)

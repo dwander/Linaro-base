@@ -6656,13 +6656,9 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 		       unsigned migratetype)
 {
 	unsigned long outer_start, outer_end;
-<<<<<<< HEAD
-	int ret = 0, order;
-	struct zone *zone = page_zone(pfn_to_page(start));
-=======
 	unsigned int order;
 	int ret = 0;
->>>>>>> linux-stable/linux-3.18.y
+	struct zone *zone = page_zone(pfn_to_page(start));
 
 	struct compact_control cc = {
 		.nr_migratepages = 0,
