@@ -853,19 +853,14 @@ translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
 						 repl->hook_entry,
 						 repl->underflow,
 						 repl->valid_hooks);
-<<<<<<< HEAD
 		if (ret != 0) {
 #ifdef CONFIG_ONESHOT_UID
 			write_unlock(&oneshot_uid_ipv4.lock);
 #endif
-			return ret;
-		}
-=======
-		if (ret != 0)
 			goto out_free;
+		}
 		if (i < repl->num_entries)
 			offsets[i] = (void *)iter - entry0;
->>>>>>> linux-stable/linux-3.18.y
 		++i;
 		if (strcmp(ipt_get_target(iter)->u.user.name,
 		    XT_ERROR_TARGET) == 0) {

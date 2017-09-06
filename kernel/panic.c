@@ -23,13 +23,10 @@
 #include <linux/sysrq.h>
 #include <linux/init.h>
 #include <linux/nmi.h>
-<<<<<<< HEAD
 #include <linux/exynos-ss.h>
 #include <asm/core_regs.h>
 #include "sched/sched.h"
-=======
 #include <linux/console.h>
->>>>>>> linux-stable/linux-3.18.y
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18

@@ -72,13 +72,10 @@
 #include <linux/fs_struct.h>
 #include <linux/compat.h>
 #include <linux/ctype.h>
-<<<<<<< HEAD
 #include <linux/uaccess.h>
-=======
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <uapi/linux/limits.h>
->>>>>>> linux-stable/linux-3.18.y
 
 #include "audit.h"
 

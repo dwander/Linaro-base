@@ -3792,19 +3792,11 @@ perf_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 	struct perf_event *event = file->private_data;
 	struct perf_event_context *ctx;
 	int ret;
-<<<<<<< HEAD
 
 	ctx = perf_event_ctx_lock(event);
 	ret = perf_read_hw(event, buf, count);
 	perf_event_ctx_unlock(event, ctx);
 
-=======
-
-	ctx = perf_event_ctx_lock(event);
-	ret = perf_read_hw(event, buf, count);
-	perf_event_ctx_unlock(event, ctx);
-
->>>>>>> linux-stable/linux-3.18.y
 	return ret;
 }
 
@@ -7610,27 +7602,6 @@ SYSCALL_DEFINE5(perf_event_open,
 		 * grouping events for different CPUs is broken; since
 		 * you can never concurrently schedule them anyhow.
 		 */
-<<<<<<< HEAD
-		if (move_group) {
-			/*
-			 * Make sure we're both on the same task, or both
-			 * per-cpu events.
-			 */
-			if (group_leader->ctx->task != ctx->task)
-				goto err_context;
-
-			/*
-			 * Make sure we're both events for the same CPU;
-			 * grouping events for different CPUs is broken; since
-			 * you can never concurrently schedule them anyhow.
-			 */
-			if (group_leader->cpu != event->cpu)
-				goto err_context;
-		} else {
-			if (group_leader->ctx != ctx)
-				goto err_context;
-		}
-=======
 		if (group_leader->cpu != event->cpu)
 			goto err_context;
 
@@ -7648,7 +7619,6 @@ SYSCALL_DEFINE5(perf_event_open,
 		 */
 		if (!move_group && group_leader->ctx != ctx)
 			goto err_context;
->>>>>>> linux-stable/linux-3.18.y
 
 		/*
 		 * Only a group leader can be exclusive or pinned

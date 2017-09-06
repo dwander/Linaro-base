@@ -1139,12 +1139,8 @@ static void tcp_v6_timewait_ack(struct sock *sk, struct sk_buff *skb)
 			tcptw->tw_rcv_wnd >> tw->tw_rcv_wscale,
 			tcp_time_stamp + tcptw->tw_ts_offset,
 			tcptw->tw_ts_recent, tw->tw_bound_dev_if, tcp_twsk_md5_key(tcptw),
-<<<<<<< HEAD
-			tw->tw_tclass, (tw->tw_flowlabel << 12));
-#endif
-=======
 			tw->tw_tclass, cpu_to_be32(tw->tw_flowlabel));
->>>>>>> linux-stable/linux-3.18.y
+#endif
 
 	inet_twsk_put(tw);
 }
@@ -1239,12 +1235,6 @@ drop:
 	return 0; /* don't send reset */
 }
 
-<<<<<<< HEAD
-#ifndef CONFIG_MPTCP
-static 
-#endif
-struct sock *tcp_v6_syn_recv_sock(struct sock *sk, struct sk_buff *skb,
-=======
 static void tcp_v6_restore_cb(struct sk_buff *skb)
 {
 	/* We need to move header back to the beginning if xfrm6_policy_check()
@@ -1255,8 +1245,10 @@ static void tcp_v6_restore_cb(struct sk_buff *skb)
 		sizeof(struct inet6_skb_parm));
 }
 
-static struct sock *tcp_v6_syn_recv_sock(struct sock *sk, struct sk_buff *skb,
->>>>>>> linux-stable/linux-3.18.y
+#ifndef CONFIG_MPTCP
+static 
+#endif
+struct sock *tcp_v6_syn_recv_sock(struct sock *sk, struct sk_buff *skb,
 					 struct request_sock *req,
 					 struct dst_entry *dst)
 {

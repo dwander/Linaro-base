@@ -115,49 +115,6 @@ static void psci_power_state_unpack(u32 power_state,
 			PSCI_0_2_POWER_STATE_AFFL_SHIFT;
 }
 
-<<<<<<< HEAD
-/*
- * The following two functions are invoked via the invoke_psci_fn pointer
- * and will not be inlined, allowing us to piggyback on the AAPCS.
- */
-static noinline int __invoke_psci_fn_hvc(u64 function_id, u64 arg0, u64 arg1,
-					 u64 arg2)
-{
-	asm volatile(
-			__asmeq("%0", "x0")
-			__asmeq("%1", "x1")
-			__asmeq("%2", "x2")
-			__asmeq("%3", "x3")
-			"hvc	#0\n"
-		: "+r" (function_id)
-		: "r" (arg0), "r" (arg1), "r" (arg2));
-
-	return function_id;
-}
-
-static noinline int __invoke_psci_fn_smc(u64 function_id, u64 arg0, u64 arg1,
-					 u64 arg2)
-{
-	asm volatile(
-			__asmeq("%0", "x0")
-			__asmeq("%1", "x1")
-			__asmeq("%2", "x2")
-			__asmeq("%3", "x3")
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			PRE_SMC_INLINE
-#endif
-			"smc	#0\n"
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			POST_SMC_INLINE
-#endif
-		: "+r" (function_id)
-		: "r" (arg0), "r" (arg1), "r" (arg2));
-
-	return function_id;
-}
-
-=======
->>>>>>> linux-stable/linux-3.18.y
 static int psci_get_version(void)
 {
 	int err;

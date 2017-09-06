@@ -195,22 +195,12 @@ int fb_cmap_to_user(const struct fb_cmap *from, struct fb_cmap_user *to)
 		fromoff = to->start - from->start;
 	else
 		tooff = from->start - to->start;
-<<<<<<< HEAD
-	if ((to->len <= tooff) || (from->len <= fromoff))
-		return -EINVAL;
-
-	size = to->len - tooff;
-	if (size > (int) (from->len - fromoff))
-		size = from->len - fromoff;
-
-=======
 	if (fromoff >= from->len || tooff >= to->len)
 		return -EINVAL;
 
 	size = min_t(size_t, to->len - tooff, from->len - fromoff);
 	if (size == 0)
 		return -EINVAL;
->>>>>>> linux-stable/linux-3.18.y
 	size *= sizeof(u16);
 
 	if (copy_to_user(to->red+tooff, from->red+fromoff, size))

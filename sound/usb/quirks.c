@@ -162,16 +162,6 @@ static int create_fixed_stream_quirk(struct snd_usb_audio *chip,
 	    fp->altset_idx >= iface->num_altsetting) {
 		err = -EINVAL;
 		goto error;
-<<<<<<< HEAD
-	}
-	alts = &iface->altsetting[fp->altset_idx];
-	altsd = get_iface_desc(alts);
-	if (altsd->bNumEndpoints < 1) {
-		kfree(fp);
-		kfree(rate_table);
-		return -EINVAL;
-	}
-=======
 	}
 	alts = &iface->altsetting[fp->altset_idx];
 	altsd = get_iface_desc(alts);
@@ -179,7 +169,6 @@ static int create_fixed_stream_quirk(struct snd_usb_audio *chip,
 		err = -EINVAL;
 		goto error;
 	}
->>>>>>> linux-stable/linux-3.18.y
 
 	fp->protocol = altsd->bInterfaceProtocol;
 

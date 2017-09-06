@@ -361,9 +361,7 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci)
 #else
 	temp_64 = xhci_read_64(xhci, &xhci->op_regs->cmd_ring);
 	xhci->cmd_ring_state = CMD_RING_STATE_ABORTED;
-<<<<<<< HEAD
 #endif
-=======
 
 	/*
 	 * Writing the CMD_RING_ABORT bit should cause a cmd completion event,
@@ -372,7 +370,6 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci)
 	 * handle those cases. Use twice the time to cover the bit polling retry
 	 */
 	mod_timer(&xhci->cmd_timer, jiffies + (2 * XHCI_CMD_DEFAULT_TIMEOUT));
->>>>>>> linux-stable/linux-3.18.y
 	xhci_write_64(xhci, temp_64 | CMD_RING_ABORT,
 			&xhci->op_regs->cmd_ring);
 
@@ -954,7 +951,6 @@ void xhci_stop_endpoint_command_watchdog(unsigned long arg)
 	spin_lock_irqsave(&xhci->lock, flags);
 
 	ep->stop_cmds_pending--;
-<<<<<<< HEAD
 #ifndef CONFIG_USB_HOST_SAMSUNG_FEATURE
 	if (xhci->xhc_state & XHCI_STATE_DYING) {
 		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
@@ -964,8 +960,7 @@ void xhci_stop_endpoint_command_watchdog(unsigned long arg)
 		return;
 	}
 #endif
-=======
->>>>>>> linux-stable/linux-3.18.y
+
 	if (!(ep->stop_cmds_pending == 0 && (ep->ep_state & EP_HALT_PENDING))) {
 		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
 				"Stop EP timer ran, but no command pending, "
@@ -1379,14 +1374,10 @@ void xhci_handle_command_timeout(unsigned long data)
 	int ret;
 	unsigned long flags;
 	u64 hw_ring_state;
-<<<<<<< HEAD
-	struct xhci_command *cur_cmd = NULL;
+	bool second_timeout = false;
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	xhci = container_of(to_delayed_work(work), struct xhci_hcd, cmd_timer);
 #else
-=======
-	bool second_timeout = false;
->>>>>>> linux-stable/linux-3.18.y
 	xhci = (struct xhci_hcd *) data;
 #endif
 
@@ -1402,7 +1393,6 @@ void xhci_handle_command_timeout(unsigned long data)
 	hw_ring_state = xhci_read_64(xhci, &xhci->op_regs->cmd_ring);
 	if ((xhci->cmd_ring_state & CMD_RING_STATE_RUNNING) &&
 	    (hw_ring_state & CMD_RING_RUNNING))  {
-<<<<<<< HEAD
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 		/* Prevent new doorbell, and start command abort */
 		xhci->cmd_ring_state = CMD_RING_STATE_ABORTED;
@@ -1431,8 +1421,7 @@ time_out_completed:
 	spin_unlock_irqrestore(&xhci->lock, flags);
 	return;
 #else
-=======
->>>>>>> linux-stable/linux-3.18.y
+
 		spin_unlock_irqrestore(&xhci->lock, flags);
 		xhci_dbg(xhci, "Command timeout\n");
 		ret = xhci_abort_cmd_ring(xhci);
@@ -1489,7 +1478,6 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 
 	cmd = list_entry(xhci->cmd_list.next, struct xhci_command, cmd_list);
 
-<<<<<<< HEAD
 	if (cmd->command_trb != xhci->cmd_ring->dequeue) {
 		xhci_err(xhci,
 			 "Command completion event does not match command\n");
@@ -1499,8 +1487,6 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	cancel_delayed_work(&xhci->cmd_timer);
 #else
-=======
->>>>>>> linux-stable/linux-3.18.y
 	del_timer(&xhci->cmd_timer);
 #endif
 
@@ -4185,11 +4171,7 @@ static int queue_command(struct xhci_hcd *xhci, struct xhci_command *cmd,
 
 	if ((xhci->xhc_state & XHCI_STATE_DYING) ||
 		(xhci->xhc_state & XHCI_STATE_HALTED)) {
-<<<<<<< HEAD
-		xhci_err(xhci, "xHCI dying or halted, can't queue_command\n");
-=======
 		xhci_dbg(xhci, "xHCI dying or halted, can't queue_command\n");
->>>>>>> linux-stable/linux-3.18.y
 		return -ESHUTDOWN;
 	}
 

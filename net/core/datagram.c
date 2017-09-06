@@ -143,11 +143,7 @@ static struct sk_buff *skb_set_peeked(struct sk_buff *skb)
 
 	nskb = skb_clone(skb, GFP_ATOMIC);
 	if (!nskb)
-<<<<<<< HEAD
-		return ERR_PTR(-ENOMEM);;
-=======
 		return ERR_PTR(-ENOMEM);
->>>>>>> linux-stable/linux-3.18.y
 
 	skb->prev->next = nskb;
 	skb->next->prev = nskb;
@@ -231,20 +227,12 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 					_off -= skb->len;
 					continue;
 				}
-<<<<<<< HEAD
-				
-=======
 
->>>>>>> linux-stable/linux-3.18.y
 				skb = skb_set_peeked(skb);
 				error = PTR_ERR(skb);
 				if (IS_ERR(skb))
 					goto unlock_err;
-<<<<<<< HEAD
-				
-=======
 
->>>>>>> linux-stable/linux-3.18.y
 				atomic_inc(&skb->users);
 			} else
 				__skb_unlink(skb, queue);

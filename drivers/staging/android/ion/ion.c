@@ -637,7 +637,6 @@ static void ion_handle_get(struct ion_handle *handle)
 	kref_get(&handle->ref);
 }
 
-<<<<<<< HEAD
 /* Must hold the client lock */
 static struct ion_handle* ion_handle_get_check_overflow(struct ion_handle *handle)
 {
@@ -648,22 +647,9 @@ static struct ion_handle* ion_handle_get_check_overflow(struct ion_handle *handl
 }
 
 static int ion_handle_put_nolock(struct ion_handle *handle)
-=======
-static int ion_handle_put_nolock(struct ion_handle *handle)
 {
 	int ret;
 
-	ret = kref_put(&handle->ref, ion_handle_destroy);
-
-	return ret;
-}
-
-int ion_handle_put(struct ion_handle *handle)
->>>>>>> linux-stable/linux-3.18.y
-{
-	int ret;
-
-<<<<<<< HEAD
 	ret = kref_put(&handle->ref, ion_handle_destroy);
 
 	return ret;
@@ -716,10 +702,6 @@ static struct ion_handle* pass_to_user(struct ion_handle *handle)
 	mutex_lock(&client->lock);
 	ret = user_ion_handle_get_check_overflow(handle);
 	ion_handle_put_nolock(handle);
-=======
-	mutex_lock(&client->lock);
-	ret = ion_handle_put_nolock(handle);
->>>>>>> linux-stable/linux-3.18.y
 	mutex_unlock(&client->lock);
 	return ret;
 }
@@ -761,32 +743,13 @@ static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
 
 	handle = idr_find(&client->idr, id);
 	if (handle)
-<<<<<<< HEAD
 		return ion_handle_get_check_overflow(handle);
-=======
-		ion_handle_get(handle);
->>>>>>> linux-stable/linux-3.18.y
 
 	return ERR_PTR(-EINVAL);
 }
 
 struct ion_handle *ion_handle_get_by_id(struct ion_client *client,
 						int id)
-<<<<<<< HEAD
-=======
-{
-	struct ion_handle *handle;
-
-	mutex_lock(&client->lock);
-	handle = ion_handle_get_by_id_nolock(client, id);
-	mutex_unlock(&client->lock);
-
-	return handle;
-}
-
-static bool ion_handle_validate(struct ion_client *client,
-				struct ion_handle *handle)
->>>>>>> linux-stable/linux-3.18.y
 {
 	struct ion_handle *handle;
 
@@ -946,7 +909,6 @@ static void ion_free_nolock(struct ion_client *client, struct ion_handle *handle
 	ion_handle_put_nolock(handle);
 }
 
-<<<<<<< HEAD
 static void user_ion_free_nolock(struct ion_client *client, struct ion_handle *handle)
 {
 	bool valid_handle;
@@ -965,8 +927,6 @@ static void user_ion_free_nolock(struct ion_client *client, struct ion_handle *h
 	user_ion_handle_put_nolock(handle);
 }
 
-=======
->>>>>>> linux-stable/linux-3.18.y
 void ion_free(struct ion_client *client, struct ion_handle *handle)
 {
 	BUG_ON(client != handle->client);
@@ -1964,11 +1924,7 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			mutex_unlock(&client->lock);
 			return PTR_ERR(handle);
 		}
-<<<<<<< HEAD
 		user_ion_free_nolock(client, handle);
-=======
-		ion_free_nolock(client, handle);
->>>>>>> linux-stable/linux-3.18.y
 		ion_handle_put_nolock(handle);
 		mutex_unlock(&client->lock);
 		break;

@@ -2538,11 +2538,6 @@ static void hcd_release(struct kref *kref)
 	struct usb_hcd *hcd = container_of (kref, struct usb_hcd, kref);
 
 	mutex_lock(&usb_port_peer_mutex);
-<<<<<<< HEAD
-	if (hcd == hcd->primary_hcd)
-		kfree(hcd->bandwidth_mutex);
-=======
->>>>>>> linux-stable/linux-3.18.y
 	if (hcd->shared_hcd) {
 		struct usb_hcd *peer = hcd->shared_hcd;
 
@@ -2586,7 +2581,6 @@ int usb_hcd_find_raw_port_number(struct usb_hcd *hcd, int port1)
 
 	return hcd->driver->find_raw_port_number(hcd, port1);
 }
-
 static int usb_hcd_request_irqs(struct usb_hcd *hcd,
 		unsigned int irqnum, unsigned long irqflags)
 {

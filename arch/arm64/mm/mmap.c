@@ -51,7 +51,6 @@ static unsigned long mmap_rnd(void)
 {
 	unsigned long rnd = 0;
 
-<<<<<<< HEAD
 	if (current->flags & PF_RANDOMIZE) {
 #ifdef CONFIG_COMPAT
 		if (test_thread_flag(TIF_32BIT))
@@ -60,11 +59,6 @@ static unsigned long mmap_rnd(void)
 #endif
 			rnd = get_random_long() & ((1UL << mmap_rnd_bits) - 1);
 	}
-=======
-	if (current->flags & PF_RANDOMIZE)
-		rnd = (long)get_random_int() & STACK_RND_MASK;
-
->>>>>>> linux-stable/linux-3.18.y
 	return rnd << PAGE_SHIFT;
 }
 

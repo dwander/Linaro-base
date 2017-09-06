@@ -1894,12 +1894,9 @@ struct napi_gro_cb {
 	/* Used in ipv6_gro_receive() and foo-over-udp */
 	u16	proto;
 
-<<<<<<< HEAD
-=======
 	/* This is non-zero if the packet may be of the same flow. */
 	u8	same_flow:1;
 
->>>>>>> linux-stable/linux-3.18.y
 	/* Used in tunnel GRO receive */
 	u8	encap_mark:1;
 

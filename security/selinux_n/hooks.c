@@ -403,20 +403,19 @@ static int selinux_is_sblabel_mnt(struct super_block *sb)
 {
 	struct superblock_security_struct *sbsec = sb->s_security;
 
-<<<<<<< HEAD:security/selinux_n/hooks.c
-	return sbsec->behavior == SECURITY_FS_USE_XATTR ||
-		sbsec->behavior == SECURITY_FS_USE_TRANS ||
-		sbsec->behavior == SECURITY_FS_USE_TASK ||
-		/* Special handling. Genfs but also in-core setxattr handler */
-		!strcmp(sb->s_type->name, "sysfs") ||
-		!strcmp(sb->s_type->name, "pstore") ||
-		!strcmp(sb->s_type->name, "debugfs") ||
-		!strcmp(sb->s_type->name, "rootfs");
-=======
 	if (sbsec->behavior == SECURITY_FS_USE_XATTR ||
 	    sbsec->behavior == SECURITY_FS_USE_TRANS ||
 	    sbsec->behavior == SECURITY_FS_USE_TASK ||
 	    sbsec->behavior == SECURITY_FS_USE_NATIVE)
+		return 1;
+
+	if (strncmp(sb->s_type->name, "pstore", sizeof("pstore")) == 0)
+		return 1;
+
+	if (strncmp(sb->s_type->name, "debugfs", sizeof("debugfs")) == 0)
+		return 1;
+
+	if (strncmp(sb->s_type->name, "f2fs", sizeof("pstore")) == 0)
 		return 1;
 
 	/* Special handling for sysfs. Is genfs but also has setxattr handler*/
@@ -431,7 +430,6 @@ static int selinux_is_sblabel_mnt(struct super_block *sb)
 		return 1;
 
 	return 0;
->>>>>>> linux-stable/linux-3.18.y:security/selinux/hooks.c
 }
 
 static int sb_finish_set_opts(struct super_block *sb)

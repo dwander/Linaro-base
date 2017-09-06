@@ -1926,10 +1926,7 @@ void page_cache_async_readahead(struct address_space *mapping,
 unsigned long max_sane_readahead(unsigned long nr);
 
 extern unsigned long stack_guard_gap;
-<<<<<<< HEAD
 
-=======
->>>>>>> linux-stable/linux-3.18.y
 /* Generic expand stack which grows the stack according to GROWS{UP,DOWN} */
 extern int expand_stack(struct vm_area_struct *vma, unsigned long address);
 
@@ -2053,12 +2050,8 @@ static inline struct page *follow_page(struct vm_area_struct *vma,
 #define FOLL_NUMA	0x200	/* force NUMA hinting page fault */
 #define FOLL_MIGRATION	0x400	/* wait for page to replace migration entry */
 #define FOLL_TRIED	0x800	/* a retry, previous pass started an IO */
-<<<<<<< HEAD
-#define FOLL_COW       0x4000  /* internal GUP flag */
+#define FOLL_COW	0x4000  /* internal GUP flag */
 #define FOLL_CMA	0x80000	/* migrate if the page is from cma pageblock */
-=======
-#define FOLL_COW	0x4000	/* internal GUP flag */
->>>>>>> linux-stable/linux-3.18.y
 
 typedef int (*pte_fn_t)(pte_t *pte, pgtable_t token, unsigned long addr,
 			void *data);

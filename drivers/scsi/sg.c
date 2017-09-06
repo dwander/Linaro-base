@@ -1038,12 +1038,7 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 			    sfp->res_in_use) {
 				mutex_unlock(&sfp->f_mutex);
 				return -EBUSY;
-<<<<<<< HEAD
 			mutex_lock(&sfp->parentdp->open_rel_lock);
-=======
-			}
-
->>>>>>> linux-stable/linux-3.18.y
 			sg_remove_scat(sfp, &sfp->reserve);
 			sg_build_reserve(sfp, val);
 			mutex_unlock(&sfp->parentdp->open_rel_lock);
@@ -1095,37 +1090,7 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 			if (!rinfo)
 				return -ENOMEM;
 			read_lock_irqsave(&sfp->rq_list_lock, iflags);
-<<<<<<< HEAD
-			for (srp = sfp->headrp, val = 0; val < SG_MAX_QUEUE;
-			     ++val, srp = srp ? srp->nextrp : srp) {
-				memset(&rinfo[val], 0, SZ_SG_REQ_INFO);
-				if (srp) {
-					rinfo[val].req_state = srp->done + 1;
-					rinfo[val].problem =
-					    srp->header.masked_status &
-					    srp->header.host_status &
-					    srp->header.driver_status;
-					if (srp->done)
-						rinfo[val].duration =
-							srp->header.duration;
-					else {
-						ms = jiffies_to_msecs(jiffies);
-						rinfo[val].duration =
-						    (ms > srp->header.duration) ?
-						    (ms - srp->header.duration) : 0;
-					}
-					rinfo[val].orphan = srp->orphan;
-					rinfo[val].sg_io_owned =
-							srp->sg_io_owned;
-					rinfo[val].pack_id =
-							srp->header.pack_id;
-					rinfo[val].usr_ptr =
-							srp->header.usr_ptr;
-				}
-			}
-=======
 			sg_fill_request_table(sfp, rinfo);
->>>>>>> linux-stable/linux-3.18.y
 			read_unlock_irqrestore(&sfp->rq_list_lock, iflags);
 			result = __copy_to_user(p, rinfo,
 						SZ_SG_REQ_INFO * SG_MAX_QUEUE);
