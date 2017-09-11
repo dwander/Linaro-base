@@ -405,6 +405,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -std=gnu89
 
+# Otimizations
+KBUILD_CFLAGS	+= -march=armv8-a+crc -mcpu=exynos-m1 -mtune=exynos-m1
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
