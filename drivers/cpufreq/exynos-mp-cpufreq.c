@@ -2728,26 +2728,26 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 	if ( (autoasv == 1) ) {
 		/* For Grade E phones, use stock for LITTLE freq_table */
 		if (asv_little < 3) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "low_cl0_max_support_idx"),
+			if (of_property_read_u32(np, (cl ? "low_cl1_max_support_idx" : "low_cl0_max_support_idx"),
 						&ptr->max_support_idx))
 				return -ENODEV;
 		/* For Grade C and D phones, use mid OC for LITTLE freq_table */
-		} else if (asv_little < 9) {
-				if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "mid_cl0_max_support_idx"),
+		} else if (asv_little < 12) {
+				if (of_property_read_u32(np, (cl ? "low_cl1_max_support_idx" : "mid_cl0_max_support_idx"),
 						&ptr->max_support_idx))
 				return -ENODEV;
 		/* Grade A and B phones? That's amazing, let's unleash the Exynos */
 		} else {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
+			if (of_property_read_u32(np, (cl ? "low_cl1_max_support_idx" : "high_cl0_max_support_idx"),
 							&ptr->max_support_idx))
 				return -ENODEV;
 		}
 	} else if ( (autoasv == 2) ) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
+			if (of_property_read_u32(np, (cl ? "high_cl1_max_support_idx" : "high_cl0_max_support_idx"),
 							&ptr->max_support_idx))
 				return -ENODEV;
 	} else if ( (autoasv == 3) ) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "stock_cl0_max_support_idx"),
+			if (of_property_read_u32(np, (cl ? "stock_cl1_max_support_idx" : "stock_cl0_max_support_idx"),
 							&ptr->max_support_idx))
 				return -ENODEV;
 	} else {
@@ -2807,7 +2807,7 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 			ret = of_property_read_u32_array(np, "low_cl1_max_support_idx_table",
 					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
 			/* For Grade C and B phones, use mid OC for BIG freq_table */
-			} else if (asv_big < 11) {
+			} else if (asv_big < 12) {
 			ret = of_property_read_u32_array(np, "mid_cl1_max_support_idx_table",
 					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
 			/* Grade A phones? That's amazing, let's unleash the Exynos */
