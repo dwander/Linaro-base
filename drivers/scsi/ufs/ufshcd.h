@@ -367,18 +367,6 @@ struct ufs_debug {
 };
 
 /**
- * struct ufs_reset_info - ufs reset reason
-*/
-struct ufs_reset_info {
-	u8 rst_type;
-	u32 rst_total; 
-	u32 rst_cnt_probe; 
-	u32 rst_cnt_uic_err; 
-	u32 rst_cnt_host_reset; 
-	u32 rst_cnt_hibern8; 
-};
-
-/**
  * struct ufs_hba - per adapter private structure
  * @mmio_base: UFSHCI base register address
  * @ucdl_base_addr: UFS Command Descriptor base address
@@ -564,7 +552,7 @@ struct ufs_hba {
 	char unique_number[UFS_UN_MAX_DIGITS];
 	u16 manufacturer_id;
 	u8 lifetime;
-	struct ufs_reset_info rst_info;
+
 	struct ufs_debug debug;
 };
 

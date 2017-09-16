@@ -8981,7 +8981,6 @@ wl_cfg80211_del_station(
 	else
 		num_associated = assoc_maclist->count;
 
-	dhd_wait_pend8021x(dev);
 	memcpy(scb_val.ea.octet, mac_addr, ETHER_ADDR_LEN);
 	scb_val.val = DOT11_RC_DEAUTH_LEAVING;
 	err = wldev_ioctl(dev, WLC_SCB_DEAUTHENTICATE_FOR_REASON, &scb_val,

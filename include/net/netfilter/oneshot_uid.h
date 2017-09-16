@@ -1,8 +1,6 @@
 #ifndef _ONESHOT_UID
 #define _ONESHOT_UID
 
-#include <linux/spinlock.h>
-
 #define RULE_STANDBY_UID "fw_standby_uid"
 
 #define ONESHOT_UID_FIND_NONE 0
@@ -13,7 +11,7 @@ struct oneshot_uid {
 	u64 myrule_offset;
 	void *myfilter_table;
 
-	rwlock_t lock;
+	atomic_t replacing_table;
 	struct list_head map_list;
 };
 

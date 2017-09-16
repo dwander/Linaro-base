@@ -760,8 +760,6 @@ static void ufshcd_gate_work(struct work_struct *work)
 			hba->clk_gating.state = __CLKS_ON;
 			spin_unlock_irqrestore(hba->host->host_lock, flags);
 			hba->clk_gating.is_suspended = true;
-			hba->rst_info.rst_type = UFS_RESET_HIBERN8;
-			hba->rst_info.rst_cnt_hibern8++;
 			ufshcd_reset_and_restore(hba);
 			spin_lock_irqsave(hba->host->host_lock, flags);
 			hba->clk_gating.state = CLKS_ON;
@@ -2843,8 +2841,6 @@ static int ufshcd_uic_hibern8_exit(struct ufs_hba *hba)
 	ret = ufshcd_uic_pwr_ctrl(hba, &uic_cmd);
 	if (ret) {
 		ufshcd_set_link_off(hba);
-		hba->rst_info.rst_type = UFS_RESET_HIBERN8;
-		hba->rst_info.rst_cnt_hibern8++;
 		ret = ufshcd_host_reset_and_restore(hba);
 	}
 
@@ -4218,9 +4214,7 @@ static void ufshcd_err_handler(struct work_struct *work)
 		dev_err(hba->dev,
 			"%s: saved_err:0x%x, saved_uic_err:0x%x\n",
 			__func__, hba->saved_err, hba->saved_uic_err);
-		
-		hba->rst_info.rst_type = UFS_RESET_UIC_ERR;
-		hba->rst_info.rst_cnt_uic_err++;
+
 		err = ufshcd_reset_and_restore(hba);
 		if (err) {
 			spin_lock_irqsave(hba->host->host_lock, flags);
@@ -4799,7 +4793,6 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 
 	ssleep(2);
-	hba->rst_info.rst_total++;
 
 	do {
 		err = ufshcd_host_reset_and_restore(hba);
@@ -4887,8 +4880,6 @@ static int ufshcd_eh_host_reset_handler(struct scsi_cmnd *cmd)
 	} while (1);
 
 	hba->ufshcd_state = UFSHCD_STATE_RESET;
-	hba->rst_info.rst_type = UFS_RESET_HOST_RESET;
-	hba->rst_info.rst_cnt_host_reset++;
 	ufshcd_set_eh_in_progress(hba);
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 	
@@ -5193,7 +5184,6 @@ retry:
 
 	spin_lock_irqsave(hba->host->host_lock, flags);
 	hba->ufshcd_state = UFSHCD_STATE_OPERATIONAL;
-	hba->rst_info.rst_type = UFS_RESET_DEFAULT;
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 
 	/*
@@ -5240,11 +5230,9 @@ out:
 		dev_err(hba->dev, "%s failed with err %d, retrying:%d\n",
 			__func__, ret, re_cnt);
 		goto retry;
-	} else if (ret && re_cnt >= UFS_LINK_SETUP_RETRIES) {
+	} else if (ret && re_cnt == UFS_LINK_SETUP_RETRIES) {
 		pr_auto(ASL6, "%s %s: %s failed after retries with err %d\n",
 			dev_driver_string(hba->dev), dev_name(hba->dev), __func__, ret);
-		hba->rst_info.rst_type = UFS_RESET_PROBE;
-		hba->rst_info.rst_cnt_probe++;
 	}
 
 	/*
@@ -6060,8 +6048,6 @@ static int ufshcd_link_state_transition(struct ufs_hba *hba,
 			spin_unlock_irqrestore(hba->host->host_lock, flags);
 
 			hba->clk_gating.is_suspended = true;
-			hba->rst_info.rst_type = UFS_RESET_HIBERN8;
-			hba->rst_info.rst_cnt_hibern8++;
 			ufshcd_host_reset_and_restore(hba);
 			spin_lock_irqsave(hba->host->host_lock, flags);
 			hba->clk_gating.state = CLKS_ON;
@@ -6597,11 +6583,6 @@ out:
 	if (ret)
 		dev_err(hba->dev, "%s failed, err %d\n", __func__, ret);
 	/* allow force shutdown even in case of errors */
-
-	dev_err(hba->dev, "Count: %d %d %d %d %d Type: %d\n", 
-		hba->rst_info.rst_total, hba->rst_info.rst_cnt_probe, hba->rst_info.rst_cnt_uic_err,
-		hba->rst_info.rst_cnt_host_reset, hba->rst_info.rst_cnt_hibern8, hba->rst_info.rst_type); 
-	
 	return 0;
 }
 EXPORT_SYMBOL(ufshcd_shutdown);

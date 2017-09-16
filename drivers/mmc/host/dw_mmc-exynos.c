@@ -1292,85 +1292,14 @@ static ssize_t sd_detection_cnt_show(struct device *dev,
 	return  sprintf(buf, "%u", host->card_detect_cnt);
 }
 
-static struct device *sd_info_cmd_dev;
-static ssize_t sd_count_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{	
-	struct dw_mci *host = dev_get_drvdata(dev);
-	struct mmc_card *cur_card = NULL;
-	struct mmc_card_error_log *err_log;
-	u64 total_cnt = 0;
-	int len = 0;
-	int i = 0;
-
-	if (host->cur_slot && host->cur_slot->mmc && host->cur_slot->mmc->card)
-		cur_card = host->cur_slot->mmc->card;
-	else {
-		len = snprintf(buf, PAGE_SIZE, "no card\n");
-		goto out;
-	}
-
-	err_log = cur_card->err_log;
-
-	for (i = 0; i < 6; i++) {
-		if(total_cnt < MAX_CNT_U64)
-			total_cnt += err_log[i].count;
-	}
-	len = snprintf(buf, PAGE_SIZE, "%lld\n", total_cnt);
-
-out:
-	return len;
-}
-
-static struct device *sd_data_cmd_dev;
-static ssize_t sd_data_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{	
-	struct dw_mci *host = dev_get_drvdata(dev);
-	struct mmc_card *cur_card = NULL;
-	struct mmc_card_error_log *err_log;
-	u64 total_c_cnt = 0;
-	u64 total_t_cnt = 0;
-	int len = 0;
-	int i = 0;
-
-	if (host->cur_slot && host->cur_slot->mmc && host->cur_slot->mmc->card)
-		cur_card = host->cur_slot->mmc->card;
-	else {
-		len = snprintf(buf, PAGE_SIZE,
-			"\"GE\":\"0\",\"CC\":\"0\",\"ECC\":\"0\",\"WP\":\"0\"\
-,\"OOR\":\"0\",\"CRC\":\"0\",\"TMO\":\"0\"\n");
-		goto out;
-	}
-
-	err_log = cur_card->err_log;
-
-	for (i = 0; i < 6; i++) {
-		if(err_log[i].err_type == -EILSEQ && total_c_cnt < MAX_CNT_U64)
-			total_c_cnt += err_log[i].count;	
-		if(err_log[i].err_type == -ETIMEDOUT && total_t_cnt < MAX_CNT_U64)
-			total_t_cnt += err_log[i].count;		
-	}	
-
-	len = snprintf(buf, PAGE_SIZE,
-			"\"GE\":\"%d\",\"CC\":\"%d\",\"ECC\":\"%d\",\"WP\":\"%d\"\
-,\"OOR\":\"%d\",\"CRC\":\"%lld\",\"TMO\":\"%lld\"\n",
-			err_log[0].ge_cnt, err_log[0].cc_cnt, err_log[0].ecc_cnt, err_log[0].wp_cnt,
-			err_log[0].oor_cnt, total_c_cnt, total_t_cnt); 
-out:
-	return len;
-}
-
 static DEVICE_ATTR(status, 0444, sd_detection_cmd_show, NULL);
 static DEVICE_ATTR(cd_cnt, 0444, sd_detection_cnt_show, NULL);
-static DEVICE_ATTR(sd_count, 0444, sd_count_show, NULL);
-static DEVICE_ATTR(sd_data, 0444, sd_data_show, NULL);
 
 static int dw_mci_exynos_request_ext_irq(struct dw_mci *host,
 		irq_handler_t func)
 {
-	struct dw_mci_exynos_priv_data *priv = host->priv;
-	int ext_cd_irq = 0;
+	 struct dw_mci_exynos_priv_data *priv = host->priv;
+	 int ext_cd_irq = 0;
 	if ((priv->sec_sd_slot_type) >= 0) {
 		if (!sd_detection_cmd_dev) {
 			sd_detection_cmd_dev = sec_device_create(host, "sdcard");
@@ -1385,40 +1314,22 @@ static int dw_mci_exynos_request_ext_irq(struct dw_mci *host,
 						&dev_attr_cd_cnt) < 0)
 				pr_err("Fail to create cd_cnt sysfs file\n");
 		}
-
-		if (!sd_info_cmd_dev) {
-			sd_info_cmd_dev = sec_device_create(host, "sdinfo");
-			if (IS_ERR(sd_info_cmd_dev))
-				pr_err("Fail to create sysfs dev\n");
-			if (device_create_file(sd_info_cmd_dev,
-						&dev_attr_sd_count) < 0)
-				pr_err("Fail to create status sysfs file\n");
-		}
-		if (!sd_data_cmd_dev) {
-			sd_data_cmd_dev = sec_device_create(host, "sddata");
-			if (IS_ERR(sd_data_cmd_dev))
-				pr_err("Fail to create sysfs dev\n");
-			if (device_create_file(sd_data_cmd_dev,
-						&dev_attr_sd_data) < 0)
-				pr_err("Fail to create status sysfs file\n");
-		}
 	}
-
-	if (gpio_is_valid(priv->cd_gpio) &&
-			!gpio_request(priv->cd_gpio, "DWMCI_EXT_CD")) {
-		ext_cd_irq = gpio_to_irq(priv->cd_gpio);
-		if (ext_cd_irq &&
+	 if (gpio_is_valid(priv->cd_gpio) &&
+			 !gpio_request(priv->cd_gpio, "DWMCI_EXT_CD")) {
+		 ext_cd_irq = gpio_to_irq(priv->cd_gpio);
+		 if (ext_cd_irq &&
 				devm_request_irq(host->dev, ext_cd_irq, func,
 					IRQF_TRIGGER_RISING |
 					IRQF_TRIGGER_FALLING |
 					IRQF_ONESHOT,
 					"tflash_det", host) == 0) {
-			dev_warn(host->dev, "success to request irq for card detect.\n");
-			enable_irq_wake(ext_cd_irq);
-		} else
-			dev_warn(host->dev, "cannot request irq for card detect.\n");
-	}
-	return 0;
+			 dev_warn(host->dev, "success to request irq for card detect.\n");
+			 enable_irq_wake(ext_cd_irq);
+		 } else
+			 dev_warn(host->dev, "cannot request irq for card detect.\n");
+	 }
+	 return 0;
 }
 
 static int dw_mci_exynos_check_cd(struct dw_mci *host)
@@ -1500,7 +1411,6 @@ static struct platform_driver dw_mci_exynos_pltfm_driver = {
 		.name		= "dwmmc_exynos",
 		.of_match_table	= dw_mci_exynos_match,
 		.pm		= &dw_mci_exynos_pmops,
-		.suppress_bind_attrs = true,
 	},
 };
 

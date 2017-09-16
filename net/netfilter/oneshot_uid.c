@@ -5,7 +5,6 @@
 #include <linux/file.h>
 #include <linux/netfilter/xt_socket.h>
 #include <net/netfilter/oneshot_uid.h>
-#include <linux/spinlock.h>
 
 struct oneshot_uid oneshot_uid_ipv4;
 struct oneshot_uid oneshot_uid_ipv6;
@@ -252,8 +251,6 @@ static int __init oneshot_uid_init(void)
 	INIT_LIST_HEAD(&oneshot_uid_ipv4.map_list);
 	INIT_LIST_HEAD(&oneshot_uid_ipv6.map_list);
 
-	rwlock_init(&oneshot_uid_ipv4.lock);
-	rwlock_init(&oneshot_uid_ipv6.lock);
 	return 0;
 }
 
