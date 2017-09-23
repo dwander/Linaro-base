@@ -43,11 +43,6 @@ unsigned long arch_scale_freq_power(struct sched_domain *sd, int cpu)
 	return per_cpu(cpu_scale, cpu);
 }
 
-static void set_power_scale(unsigned int cpu, unsigned long power)
-{
-	per_cpu(cpu_scale, cpu) = power;
-}
-
 static DEFINE_PER_CPU(unsigned long, cpu_scale);
 
 unsigned long arm_arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
@@ -346,22 +341,6 @@ static void __init parse_dt_cpu_power(void)
 	else
 		middle_capacity = ((max_capacity / 3)
 				>> (SCHED_POWER_SHIFT-1)) + 1;
-}
-
-/*
- * Look for a customed capacity of a CPU in the cpu_topo_data table during the
- * boot. The update of all CPUs is in O(n^2) for heteregeneous system but the
- * function returns directly for SMP system.
- */
-static void update_cpu_power(unsigned int cpu)
-{
-	if (!cpu_capacity(cpu))
-		return;
-
-	set_power_scale(cpu, cpu_capacity(cpu) / middle_capacity);
-
-	pr_info("CPU%u: update cpu_power %lu\n",
-		cpu, arch_scale_freq_power(NULL, cpu));
 }
 
 #ifdef CONFIG_CPU_FREQ
@@ -680,14 +659,6 @@ static void __init reset_cpu_topology(void)
 		cpumask_clear(&cpu_topo->thread_sibling);
 		cpumask_set_cpu(cpu, &cpu_topo->thread_sibling);
 	}
-}
-
-static void __init reset_cpu_power(void)
-{
-	unsigned int cpu;
-
-	for_each_possible_cpu(cpu)
-		set_power_scale(cpu, SCHED_POWER_SCALE);
 }
 
 static void __init reset_cpu_capacity(void)
