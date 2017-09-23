@@ -48,6 +48,18 @@ static void set_power_scale(unsigned int cpu, unsigned long power)
 	per_cpu(cpu_scale, cpu) = power;
 }
 
+static DEFINE_PER_CPU(unsigned long, cpu_scale);
+
+unsigned long arm_arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
+{
+	return per_cpu(cpu_scale, cpu);
+}
+
+static void set_capacity_scale(unsigned int cpu, unsigned long capacity)
+{
+	per_cpu(cpu_scale, cpu) = capacity;
+}
+
 static int __init get_cpu_for_node(struct device_node *node)
 {
 	struct device_node *cpu_node;
@@ -382,9 +394,31 @@ unsigned long arm_arch_scale_freq_capacity(int cpu)
 struct cpu_topology cpu_topology[NR_CPUS];
 EXPORT_SYMBOL_GPL(cpu_topology);
 
+static inline const struct sched_group_energy *cpu_core_energy(int cpu)
+{
+	return NULL;
+}
+
 const struct cpumask *cpu_coregroup_mask(int cpu)
 {
 	return &cpu_topology[cpu].core_sibling;
+}
+
+static void update_cpu_capacity(unsigned int cpu)
+{
+	unsigned long capacity;
+
+	if (!cpu_core_energy(cpu)) {
+		capacity = SCHED_CAPACITY_SCALE;
+	} else {
+		int max_cap_idx = cpu_core_energy(cpu)->nr_cap_states - 1;
+		capacity = cpu_core_energy(cpu)->cap_states[max_cap_idx].cap;
+	}
+
+	set_capacity_scale(cpu, capacity);
+
+	pr_info("CPU%d: update cpu_capacity %lu\n",
+		cpu, arch_scale_cpu_capacity(NULL, cpu));
 }
 
 static void update_siblings_masks(unsigned int cpuid)
@@ -621,7 +655,7 @@ void store_cpu_topology(unsigned int cpuid)
 	}
 
 	update_siblings_masks(cpuid);
-	update_cpu_power(cpuid);
+	update_cpu_capacity(cpuid);
 
 	pr_info("CPU%u: thread %d, cpu %d, cluster %d, mpidr %x\n",
 		cpuid, cpu_topology[cpuid].thread_id,
@@ -656,6 +690,14 @@ static void __init reset_cpu_power(void)
 		set_power_scale(cpu, SCHED_POWER_SCALE);
 }
 
+static void __init reset_cpu_capacity(void)
+{
+	unsigned int cpu;
+
+	for_each_possible_cpu(cpu)
+		set_capacity_scale(cpu, SCHED_CAPACITY_SCALE);
+}
+
 void __init init_cpu_topology(void)
 {
 	reset_cpu_topology();
@@ -667,6 +709,6 @@ void __init init_cpu_topology(void)
 	if (parse_dt_topology())
 		reset_cpu_topology();
 
-	reset_cpu_power();
+	reset_cpu_capacity();
 	parse_dt_cpu_power();
 }
