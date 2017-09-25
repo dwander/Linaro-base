@@ -87,5 +87,3 @@ obj-$(CONFIG_TOUCHSCREEN_FTS)          += stm/
 obj-$(CONFIG_TOUCHSCREEN_FTS7)		+= stm/fts7/
 obj-$(CONFIG_TOUCHSCREEN_FTS7_VALLEY)		+= stm/fts7/
 obj-$(CONFIG_TOUCHSCREEN_FTS7_HAECHI)		+= stm/fts7/
-obj-$(CONFIG_TOUCHSCREEN_FTS8)		+= stm/fts8/
-obj-$(CONFIG_TOUCHSCREEN_ATMEL_MXT874U)		+= mxt_t/
