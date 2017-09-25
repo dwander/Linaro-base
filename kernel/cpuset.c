@@ -324,8 +324,7 @@ static struct file_system_type cpuset_fs_type = {
 /*
  * Return in pmask the portion of a cpusets's cpus_allowed that
  * are online.  If none are online, walk up the cpuset hierarchy
- * until we find one that does have some online cpus.  The top
- * cpuset always has some cpus online.
+ * until we find one that does have some online cpus.
  *
  * One way or another, we guarantee to return some non-empty subset
  * of cpu_online_mask.
@@ -334,8 +333,20 @@ static struct file_system_type cpuset_fs_type = {
  */
 static void guarantee_online_cpus(struct cpuset *cs, struct cpumask *pmask)
 {
-	while (!cpumask_intersects(cs->effective_cpus, cpu_online_mask))
+	while (!cpumask_intersects(cs->effective_cpus, cpu_online_mask)) {
 		cs = parent_cs(cs);
+		if (unlikely(!cs)) {
+			/*
+			 * The top cpuset doesn't have any online cpu as a
+			 * consequence of a race between cpuset_hotplug_work
+			 * and cpu hotplug notifier.  But we know the top
+			 * cpuset's effective_cpus is on its way to to be
+			 * identical to cpu_online_mask.
+			 */
+			cpumask_copy(pmask, cpu_online_mask);
+			return;
+		}
+	}
 	cpumask_and(pmask, cs->effective_cpus, cpu_online_mask);
 }
 
@@ -1207,7 +1218,7 @@ static int update_nodemask(struct cpuset *cs, struct cpuset *trialcs,
 	mutex_unlock(&callback_mutex);
 
 	/* use trialcs->mems_allowed as a temp variable */
-	update_nodemasks_hier(cs, &cs->mems_allowed);
+	update_nodemasks_hier(cs, &trialcs->mems_allowed);
 done:
 	return retval;
 }
@@ -1455,6 +1466,24 @@ static int cpuset_can_attach(struct cgroup_subsys_state *css,
 out_unlock:
 	mutex_unlock(&cpuset_mutex);
 	return ret;
+}
+
+static int cpuset_allow_attach(struct cgroup_subsys_state *css,
+			       struct cgroup_taskset *tset)
+{
+	const struct cred *cred = current_cred(), *tcred;
+	struct task_struct *task;
+
+	cgroup_taskset_for_each(task, tset) {
+		tcred = __task_cred(task);
+
+		if ((current != task) && !capable(CAP_SYS_ADMIN) &&
+		    !uid_eq(cred->euid, tcred->uid) &&
+		    !uid_eq(cred->euid, tcred->suid))
+			return -EACCES;
+	}
+
+	return 0;
 }
 
 static void cpuset_cancel_attach(struct cgroup_subsys_state *css,
@@ -2055,21 +2084,18 @@ static void cpuset_bind(struct cgroup_subsys_state *root_css)
 	mutex_unlock(&cpuset_mutex);
 }
 
-static int cpuset_allow_attach(struct cgroup_subsys_state *css,
-			       struct cgroup_taskset *tset)
+/*
+ * Make sure the new task conform to the current state of its parent,
+ * which could have been changed by cpuset just after it inherits the
+ * state from the parent and before it sits on the cgroup's task list.
+ */
+void cpuset_fork(struct task_struct *task)
 {
-	const struct cred *cred = current_cred(), *tcred;
-	struct task_struct *task;
+	if (task_css_is_root(task, cpuset_cgrp_id))
+		return;
 
-	cgroup_taskset_for_each(task, tset) {
-		tcred = __task_cred(task);
-
-		if ((current != task) && !capable(CAP_SYS_ADMIN) &&
-		     cred->euid.val != tcred->uid.val && cred->euid.val != tcred->suid.val)
-			return -EACCES;
-	}
-
-	return 0;
+	set_cpus_allowed_ptr(task, &current->cpus_allowed);
+	task->mems_allowed = current->mems_allowed;
 }
 
 struct cgroup_subsys cpuset_cgrp_subsys = {
@@ -2082,6 +2108,7 @@ struct cgroup_subsys cpuset_cgrp_subsys = {
 	.cancel_attach	= cpuset_cancel_attach,
 	.attach		= cpuset_attach,
 	.bind		= cpuset_bind,
+	.fork		= cpuset_fork,
 	.legacy_cftypes	= files,
 	.early_init	= 1,
 };

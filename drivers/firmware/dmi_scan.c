@@ -495,18 +495,26 @@ static int __init dmi_present(const u8 *buf)
 	buf += 16;
 
 	if (memcmp(buf, "_DMI_", 5) == 0 && dmi_checksum(buf, 15)) {
+<<<<<<< HEAD
 		dmi_num = get_unaligned_le16(buf + 12);
 		dmi_len = get_unaligned_le16(buf + 6);
 		dmi_base = get_unaligned_le32(buf + 8);
+=======
+		if (smbios_ver)
+			dmi_ver = smbios_ver;
+		else
+			dmi_ver = (buf[14] & 0xF0) << 4 | (buf[14] & 0x0F);
+		dmi_num = (buf[13] << 8) | buf[12];
+		dmi_len = (buf[7] << 8) | buf[6];
+		dmi_base = (buf[11] << 24) | (buf[10] << 16) |
+			(buf[9] << 8) | buf[8];
+>>>>>>> linux-stable/linux-3.18.y
 
 		if (dmi_walk_early(dmi_decode) == 0) {
 			if (smbios_ver) {
-				dmi_ver = smbios_ver;
 				pr_info("SMBIOS %d.%d present.\n",
 				       dmi_ver >> 8, dmi_ver & 0xFF);
 			} else {
-				dmi_ver = (buf[14] & 0xF0) << 4 |
-					   (buf[14] & 0x0F);
 				pr_info("Legacy DMI %d.%d present.\n",
 				       dmi_ver >> 8, dmi_ver & 0xFF);
 			}
