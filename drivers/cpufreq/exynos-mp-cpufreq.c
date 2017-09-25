@@ -2149,18 +2149,6 @@ static int exynos_cluster0_min_qos_handler(struct notifier_block *b, unsigned lo
 	int cpu = boot_cluster ? NR_CLUST1_CPUS : 0;
 	unsigned int threshold_freq;
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE)
-	threshold_freq = cpufreq_interactive_get_hispeed_freq(0);
-	if (!threshold_freq)
-		threshold_freq = 1000000;	/* 1.0GHz */
-#elif defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE)
-	threshold_freq = cpufreq_cafactive_get_hispeed_freq(0);
-	if (!threshold_freq)
-		threshold_freq = 1000000;	/* 1.0GHz */
-#else
-	threshold_freq = 1000000;	/* 1.0GHz */
-#endif
-
 	freq = exynos_getspeed(cpu);
 	if (freq >= val)
 		goto good;
@@ -2181,6 +2169,17 @@ static int exynos_cluster0_min_qos_handler(struct notifier_block *b, unsigned lo
 		cpufreq_cpu_put(policy);
 		goto good;
 	}
+#endif
+
+#if defined(CONFIG_CPU_FREQ_GOV_INTERACTIVE) || defined(CONFIG_CPU_FREQ_GOV_CAFACTIVE)
+	if ((strcmp(policy->user_policy.governor->name, "interactive") == 0))
+		threshold_freq = cpufreq_interactive_get_hispeed_freq(0);
+	if ((strcmp(policy->user_policy.governor->name, "cafactive") == 0))
+		threshold_freq = cpufreq_cafactive_get_hispeed_freq(0);
+	if (!threshold_freq)
+		threshold_freq = 1000000;	/* 1.0GHz */
+#else
+	threshold_freq = 1000000;	/* 1.0GHz */
 #endif
 
 	ret = __cpufreq_driver_target(policy, val, CPUFREQ_RELATION_H);
