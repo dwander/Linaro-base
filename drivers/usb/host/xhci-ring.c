@@ -361,7 +361,6 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci)
 #else
 	temp_64 = xhci_read_64(xhci, &xhci->op_regs->cmd_ring);
 	xhci->cmd_ring_state = CMD_RING_STATE_ABORTED;
-
 	/*
 	 * Writing the CMD_RING_ABORT bit should cause a cmd completion event,
 	 * however on some host hw the CMD_RING_RUNNING bit is correctly cleared
@@ -370,6 +369,7 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci)
 	 */
 	mod_timer(&xhci->cmd_timer, jiffies + (2 * XHCI_CMD_DEFAULT_TIMEOUT));
 #endif
+
 	xhci_write_64(xhci, temp_64 | CMD_RING_ABORT,
 			&xhci->op_regs->cmd_ring);
 
@@ -1475,12 +1475,6 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 	}
 
 	cmd = list_entry(xhci->cmd_list.next, struct xhci_command, cmd_list);
-
-	if (cmd->command_trb != xhci->cmd_ring->dequeue) {
-		xhci_err(xhci,
-			 "Command completion event does not match command\n");
-		return;
-	}
 
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	cancel_delayed_work(&xhci->cmd_timer);
@@ -4169,7 +4163,7 @@ static int queue_command(struct xhci_hcd *xhci, struct xhci_command *cmd,
 
 	if ((xhci->xhc_state & XHCI_STATE_DYING) ||
 		(xhci->xhc_state & XHCI_STATE_HALTED)) {
-		xhci_err(xhci, "xHCI dying or halted, can't queue_command\n");
+		xhci_dbg(xhci, "xHCI dying or halted, can't queue_command\n");
 		return -ESHUTDOWN;
 	}
 
