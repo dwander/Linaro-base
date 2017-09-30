@@ -33,6 +33,12 @@ static bool enable_wlan_ctrl_wake_ws = true;
 module_param(enable_wlan_ctrl_wake_ws, bool, 0644);
 static bool enable_wlan_wake_ws = true;
 module_param(enable_wlan_wake_ws, bool, 0644);
+static bool enable_mmc0_detect_ws = true;
+module_param(enable_mmc0_detect_ws, bool, 0644);
+static bool enable_bbd_wake_lock_ws = true;
+module_param(enable_bbd_wake_lock_ws, bool, 0644);
+static bool enable_GPSD_ws = true;
+module_param(enable_GPSD_ws, bool, 0644);
 
 /*
  * If set, the suspend/hibernate code will abort transitions to a sleep state
@@ -552,9 +558,12 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	if (!enable_ssp_ws && !strcmp(ws->name, "ssp_wake_lock"))
 		return;
 
-	if (((!enable_wlan_rx_wake_ws && !strcmp(ws->name, "wlan_rx_wake")) ||
+	if ((!enable_wlan_rx_wake_ws && !strcmp(ws->name, "wlan_rx_wake")) ||
 		(!enable_wlan_ctrl_wake_ws && !strcmp(ws->name, "wlan_ctrl_wake")) ||
-		(!enable_wlan_wake_ws && !strcmp(ws->name, "wlan_wake")))) {
+		(!enable_mmc0_detect_ws && !strcmp(ws->name, "mmc0_detect")) ||
+		(!enable_bbd_wake_lock_ws && !strcmp(ws->name, "bbd_wake_lock")) ||
+		(!enable_GPSD_ws && !strcmp(ws->name, "GPSD")) ||
+		(!enable_wlan_wake_ws && !strcmp(ws->name, "wlan_wake"))) {
 		/*
 		 * let's try and deactivate this wakeup source since the user
 		 * clearly doesn't want it. The user is responsible for any
