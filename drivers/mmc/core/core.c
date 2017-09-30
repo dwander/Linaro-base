@@ -73,6 +73,9 @@ static const unsigned freqs[] = { 400000, 300000, 200000, 100000 };
 bool use_spi_crc = 1;
 module_param(use_spi_crc, bool, 0644);
 
+int wl_detect_timeout = 500;
+module_param(wl_detect_timeout, int, 0644);
+
 /*
  * Internal function. Schedule delayed work in the MMC work queue.
  */
@@ -1787,8 +1790,8 @@ static void _mmc_detect_change(struct mmc_host *host, unsigned long delay,
 		pm_wakeup_event(mmc_dev(host), 5000);
 
 	host->detect_change = 1;
-	/* wake lock: 500ms */
-	wake_lock_timeout(&host->detect_wake_lock, HZ / 2);
+
+	wake_lock_timeout(&host->detect_wake_lock, wl_detect_timeout);
 	mmc_schedule_delayed_work(&host->detect, delay);
 }
 
@@ -2569,7 +2572,7 @@ void mmc_rescan(struct work_struct *work)
 
  out:
 	if (!host->rescan_disable)
-		wake_lock_timeout(&host->detect_wake_lock, HZ / 2);
+		wake_lock_timeout(&host->detect_wake_lock, wl_detect_timeout);
 	if (host->caps & MMC_CAP_NEEDS_POLL)
 		mmc_schedule_delayed_work(&host->detect, HZ);
 }
