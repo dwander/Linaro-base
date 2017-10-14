@@ -19,6 +19,7 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/cpufreq.h>
+#include <linux/ipa.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/rwsem.h>
@@ -32,6 +33,10 @@
 #include <linux/slab.h>
 #ifdef CONFIG_STATE_NOTIFIER
 #include <linux/state_notifier.h>
+#endif
+
+#ifdef CONFIG_CPU_THERMAL_IPA
+#include "cpu_load_metric.h"
 #endif
 
 #define CREATE_TRACE_POINTS
@@ -329,6 +334,10 @@ static u64 update_load(int cpu)
 		active_time = delta_time - delta_idle;
 
 	pcpu->cputime_speedadj += active_time * pcpu->policy->cur;
+
+#ifdef CONFIG_CPU_THERMAL_IPA
+	update_cpu_metric(cpu, now, delta_idle, delta_time, pcpu->policy);
+#endif
 
 	pcpu->time_in_idle = now_idle;
 	pcpu->time_in_idle_timestamp = now;
