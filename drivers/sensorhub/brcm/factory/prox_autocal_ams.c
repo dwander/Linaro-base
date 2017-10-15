@@ -443,6 +443,83 @@ static ssize_t proximity_alert_thresh_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%u\n", data->uProxAlertHiThresh);
 }
 
+static ssize_t prox_light_get_dhr_sensor_info_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ssp_data *data = dev_get_drvdata(dev);
+	int iRet = 0;
+	struct ssp_msg *msg;
+	u8 buffer[18] = {0, };
+	u8 chipId = 0;
+	u16 threshold_high = 0;
+	u16 threshold_low = 0;
+	u16 threshold_detect_high = 0;
+	u16 threshold_detect_low = 0;
+	u8 p_drive_current = 0;
+	u8 persistant_time = 0;
+	u8 p_pulse = 0;
+	u8 p_gain = 0;
+	u8 p_time = 0;
+	u8 p_pulse_length = 0;
+	u8 l_atime = 0;
+	int offset = 0;
+
+	msg = kzalloc(sizeof(*msg), GFP_KERNEL);
+	if (msg == NULL) {
+		pr_err("[SSP]: %s - failed to allocate memory\n", __func__);
+		return FAIL;
+	}
+	msg->cmd = MSG2SSP_AP_GET_PROXIMITY_LIGHT_DHR_SENSOR_INFO;
+	msg->length = 18;
+	msg->options = AP2HUB_READ;
+	msg->buffer = buffer;
+	msg->free_buffer = 0;
+
+	iRet = ssp_spi_sync(data, msg, 1000);
+	if (iRet != SUCCESS) {
+		pr_err("[SSP] %s fail %d\n", __func__, iRet);
+		return FAIL;
+	}
+
+	chipId = buffer[0];
+	threshold_high = ((((u16) buffer[2]) << 8 ) & 0xff00 ) | ((((u16) buffer[1])) & 0x00ff );
+	threshold_low = ((((u16) buffer[4]) << 8 ) & 0xff00 ) | ((((u16) buffer[3])) & 0x00ff );
+	threshold_detect_high = ((((u16) buffer[6]) << 8 ) & 0xff00 ) | ((((u16) buffer[5])) & 0x00ff );
+	threshold_detect_low = ((((u16) buffer[8]) << 8 ) & 0xff00 ) | ((((u16) buffer[7])) & 0x00ff );
+	p_drive_current = buffer[9];
+	persistant_time = buffer[10];
+	p_pulse = buffer[11];
+	p_gain = buffer[12];
+	p_time = buffer[13];
+	p_pulse_length = buffer[14];
+	l_atime = buffer[15];
+
+	if(buffer[17] == 0xff)
+	{
+		offset = (0xff - buffer[16]) * (-1);
+	}
+	else
+	{
+		offset = buffer[16];
+	}
+
+	pr_info("[SSP] %s - %02x, %d, %d, %d, %d, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %d", __func__,
+		chipId, threshold_high, threshold_low, threshold_detect_high, threshold_detect_low,
+		p_drive_current, persistant_time, p_pulse, p_gain, p_time, p_pulse_length, l_atime, offset);
+	
+	return snprintf(buf, PAGE_SIZE, "\"THD\":\"%d %d %d %d\","\
+		"\"PDRIVE_CURRENT\":\"%02x\","\
+		"\"PERSIST_TIME\":\"%02x\","\
+		"\"PPULSE\":\"%02x\","\
+		"\"PGAIN\":\"%02x\","\
+		"\"PTIME\":\"%02x\","\
+		"\"PPLUSE_LEN\":\"%02x\","\
+		"\"ATIME\":\"%02x\","\
+		"\"POFFSET\":\"%d\"\n",
+		threshold_high, threshold_low, threshold_detect_high, threshold_detect_low,
+		p_drive_current, persistant_time, p_pulse, p_gain, p_time, p_pulse_length, l_atime, offset);
+}
+
 static DEVICE_ATTR(vendor, S_IRUGO, proximity_vendor_show, NULL);
 static DEVICE_ATTR(name, S_IRUGO, proximity_name_show, NULL);
 static DEVICE_ATTR(prox_probe, S_IRUGO, proximity_probe_show, NULL);
@@ -461,6 +538,7 @@ static DEVICE_ATTR(setting, S_IRUGO | S_IWUSR | S_IWGRP, proximity_setting_show,
 #endif
 
 static DEVICE_ATTR(prox_alert_thresh, S_IRUGO, proximity_alert_thresh_show, NULL);
+static DEVICE_ATTR(dhr_sensor_info, S_IRUSR | S_IRGRP, prox_light_get_dhr_sensor_info_show, NULL);
 
 static struct device_attribute *prox_attrs[] = {
 	&dev_attr_vendor,
@@ -478,6 +556,7 @@ static struct device_attribute *prox_attrs[] = {
 	&dev_attr_setting,
 #endif
 	&dev_attr_prox_alert_thresh,
+	&dev_attr_dhr_sensor_info,
 	NULL,
 };
 

@@ -36,6 +36,8 @@
 #define mc_dev_devel(...)		do {} while (0)
 #endif /* !DEBUG */
 
+#define TEEC_LOGIN_KERNEL	0xF0000001
+
 /* MobiCore Driver Kernel Module context data. */
 struct mc_device_ctx {
 	struct device		*mcd;

@@ -583,7 +583,7 @@ int client_map_session_wsms(struct tee_client *client, u32 session_id,
 		return -ENXIO;
 
 	/* Add buffer to the session */
-	ret = session_wsms_add(session, bufs);
+	ret = session_map(session, bufs);
 	/* Put session */
 	session_put(session);
 	mc_dev_devel("session %x, exit with %d\n", session_id, ret);
@@ -603,7 +603,7 @@ int client_unmap_session_wsms(struct tee_client *client, u32 session_id,
 		return -ENXIO;
 
 	/* Remove buffer from session */
-	ret = session_wsms_remove(session, bufs);
+	ret = session_unmap(session, bufs);
 	/* Put session */
 	session_put(session);
 	mc_dev_devel("session %x, exit with %d\n", session_id, ret);

@@ -10,8 +10,8 @@
 */
 
 /dts-v1/;
-#include "exynos8890.dtsi"
 #include "exynos8890-rmem.dtsi"
+#include "exynos8890.dtsi"
 #include "exynos8890-universal8890_common_battery_01.dtsi"
 #include "modem-ss335ap-pdata.dtsi"
 #include "exynos8890-display-lcd.dtsi"

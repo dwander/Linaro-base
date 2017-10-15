@@ -1,12 +1,10 @@
 /*
- *
- * Copyright 2011-2012 Maxim Integrated Products
+ * Copyright 2011-2015 Maxim Integrated Products
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
  *  Free Software Foundation;  either version 2 of the  License, or (at your
  *  option) any later version.
- *
  */
 
 #ifndef __SOUND_MAXIM_DSM_H__
@@ -29,22 +27,29 @@
 
 #define RESERVED_ADDR_COUNT		0xFF
 #define START_ADDR_FOR_LSI		0x2A004C
-#define END_ADDR_FOR_LSI		(0x2A027A + RESERVED_ADDR_COUNT)
+#define END_ADDR_FOR_LSI		0x2A0380
 
 #define AFE_PORT_ID_START		0x1000
 #define AFE_PORT_ID_END			0x400d
+
+
+#define DSM_4_0_LSI_STEREO_OFFSET				410
 
 enum maxdsm_version {
 	VERSION_3_0 = 30,
 	VERSION_3_5_A = 35,
 	VERSION_3_5_B,
 	VERSION_4_0_A = 40,
-	VERSION_4_0_B,
+	VERSION_4_0_B = 41,
+	VERSION_5_0_C,
+	VERSION_4_0_A_S = 50,
 };
 
 enum maxdsm_platform_type {
 	PLATFORM_TYPE_A = 0,
-	PLATFORM_TYPE_B,
+	PLATFORM_TYPE_B = 1,
+	PLATFORM_TYPE_C,
+	PLATFORM_TYPE_MAX,
 };
 
 enum maxdsm_ioctl_cmds {
@@ -365,6 +370,14 @@ enum maxdsm_4_0_params_a {
 	PARAM_A_Q_NOTCH_LO_SZ,
 	PARAM_A_POWER_MEASUREMENT,
 	PARAM_A_POWER_MEASUREMENT_SZ,
+	PARAM_A_MAINSPKHFCOMP,
+	PARAM_A_MAINSPKHFCOMP_SZ,
+	PARAM_A_EARPIECELEVEL,
+	PARAM_A_EARPIECELEVEL_SZ,
+	PARAM_A_XOVER_FREQ,
+	PARAM_A_XOVER_FREQ_SZ,
+	PARAM_A_STEREO_MODE_CONF,
+	PARAM_A_STEREO_MODE_CONF_SZ,
 	PARAM_A_DSM_4_0_MAX,
 };
 
@@ -389,6 +402,9 @@ enum {
 	AFTER_2_SEC_FREQ_TEMP,
 	AFTER_2_SEC_RDC_EXCUR,
 	AFTER_2_SEC_FREQ_EXCUR,
+	MAX_EXCUR,
+	MAX_TEMP,
+	OCCURRED_MUTE,
 	MAX_LOG_BUFFER_POS,
 };
 
@@ -429,12 +445,24 @@ struct maxim_dsm {
 #define USE_DSM_UPDATE_CAL
 #define USE_DSM_LOG
 #define USE_DSM_DEBUG
+
+#ifdef USE_DSM_LOG
+enum {
+	SPK_EXCURSION_MAX,
+	SPK_TEMP_MAX,
+	SPK_EXCURSION_OVERCNT,
+	SPK_TEMP_OVERCNT,
+};
+#endif
+
 #endif /* CONFIG_SND_SOC_MAXIM_DSM */
 
 int maxdsm_init(void);
 int maxdsm_deinit(void);
 
 uint32_t maxdsm_get_platform_type(void);
+uint32_t maxdsm_get_version(void);
+uint32_t maxdsm_is_stereo(void);
 int maxdsm_set_feature_en(int on);
 int maxdsm_set_rdc_temp(int rdc, int temp);
 int maxdsm_set_dsm_onoff_status(int on);
@@ -453,25 +481,47 @@ int maxdsm_get_spk_state(void);
 void maxdsm_set_spk_state(int state);
 int maxdsm_set_pilot_signal_state(int on);
 uint32_t maxdsm_get_power_measurement(void);
+void maxdsm_set_stereo_mode_configuration(unsigned int);
 
 #ifdef USE_DSM_LOG
+struct maxim_dsm_log_max_values {
+	int excursion_max;
+	int coil_temp_max;
+	int excursion_overcnt;
+	int coil_temp_overcnt;
+	char dsm_timestamp[32];
+};
+
 #define LOG_BUFFER_ARRAY_SIZE 10
 
 /* BUFSIZE must be 4 bytes allignment*/
 #define BEFORE_BUFSIZE (4+(LOG_BUFFER_ARRAY_SIZE*2))
 #define AFTER_BUFSIZE (LOG_BUFFER_ARRAY_SIZE*4)
+#define LOGMAX_BUFSIZE 4
 
 int maxdsm_get_dump_status(void);
 void maxdsm_update_param(void);
 void maxdsm_log_update(const void *byte_log_array,
 		const void *int_log_array,
 		const void *after_prob_byte_log_array,
-		const void *after_prob_int_log_array);
+		const void *after_prob_int_log_array,
+		const void *int_log_max_array);
 ssize_t maxdsm_log_prepare(char *buf);
+void maxdsm_log_max_prepare(struct maxim_dsm_log_max_values *values);
+void maxdsm_log_max_refresh(int values);
 void maxdsm_cal_update(const void *byte_log_array,
 		const void *int_log_array,
 		const void *after_prob_byte_log_array,
-		const void *after_prob_int_log_array);
+		const void *after_prob_int_log_array,
+		const void *int_log_max_array);
+#else
+static inline void maxdsm_log_update(const void *byte_log_array,
+		const void *int_log_array,
+		const void *after_prob_byte_log_array,
+		const void *after_prob_int_log_array) {}
+/* BUFSIZE must be 4 bytes allignment*/
+#define BEFORE_BUFSIZE 0
+#define AFTER_BUFSIZE 0
 #endif /* USE_DSM_LOG */
 
 #ifdef USE_DSM_UPDATE_CAL

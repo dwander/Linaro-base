@@ -30,6 +30,7 @@
 // s2mm005_cc.c called s2mm005_alternate.c
 ////////////////////////////////////////////////////////////////////////////////
 #if defined(CONFIG_CCIC_ALTERNATE_MODE)
+extern struct device *ccic_device;
 #if defined(CONFIG_SWITCH)
 static struct switch_dev switch_dock = {
 	.name = "ccic_dock",
@@ -88,17 +89,122 @@ void acc_detach_check(struct work_struct *wk)
 	}
 }
 
+void set_enable_powernego(int mode)
+{
+	struct s2mm005_data *usbpd_data;
+	u8 W_DATA[2];
+
+	if (!ccic_device)
+		return;
+	usbpd_data = dev_get_drvdata(ccic_device);
+	if (!usbpd_data)
+		return;
+
+	if (mode) {
+		W_DATA[0] = 0x3;
+		W_DATA[1] = 0x42;
+		s2mm005_write_byte(usbpd_data->i2c, 0x10, &W_DATA[0], 2);
+		pr_info("%s : Power nego start\n", __func__);
+	} else
+		pr_info("%s : Power nego stop\n", __func__);
+}
+
+void set_enable_alternate_mode(int mode)
+{
+	struct s2mm005_data *usbpd_data;
+	static int check_is_driver_loaded;
+	static int prev_alternate_mode;
+	u8 W_DATA[2];
+
+	if (!ccic_device)
+		return;
+	usbpd_data = dev_get_drvdata(ccic_device);
+	if (!usbpd_data)
+		return;
+
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+	store_usblog_notify(NOTIFY_ALTERNATEMODE, (void *)&mode, NULL);
+#endif
+	if ((mode & ALTERNATE_MODE_NOT_READY) &&
+	    (mode & ALTERNATE_MODE_READY)) {
+		pr_info("%s : mode is invalid!\n", __func__);
+		return;
+	}
+	if ((mode & ALTERNATE_MODE_START) && (mode & ALTERNATE_MODE_STOP)) {
+		pr_info("%s : mode is invalid!\n", __func__);
+		return;
+	}
+	if (mode & ALTERNATE_MODE_RESET) {
+		pr_info("%s : mode is reset! check_is_driver_loaded=%d, prev_alternate_mode=%d\n",
+			__func__, check_is_driver_loaded, prev_alternate_mode);
+		if (check_is_driver_loaded &&
+		    (prev_alternate_mode == ALTERNATE_MODE_START)) {
+			W_DATA[0] = 0x3;
+			W_DATA[1] = 0x31;
+			s2mm005_write_byte(usbpd_data->i2c, 0x10, &W_DATA[0], 2);
+			pr_info("%s : alternate mode is reset as start!\n",
+				__func__);
+			prev_alternate_mode = ALTERNATE_MODE_START;
+		} else if (check_is_driver_loaded &&
+			   (prev_alternate_mode == ALTERNATE_MODE_STOP)) {
+			W_DATA[0] = 0x3;
+			W_DATA[1] = 0x33;
+			s2mm005_write_byte(usbpd_data->i2c, 0x10, &W_DATA[0], 2);
+			pr_info("%s : alternate mode is reset as stop!\n",
+				__func__);
+			prev_alternate_mode = ALTERNATE_MODE_STOP;
+		} else
+			;
+	} else {
+		if (mode & ALTERNATE_MODE_NOT_READY) {
+			check_is_driver_loaded = 0;
+			pr_info("%s : alternate mode is not ready!\n", __func__);
+		} else if (mode & ALTERNATE_MODE_READY) {
+			check_is_driver_loaded = 1;
+			pr_info("%s : alternate mode is ready!\n", __func__);
+		} else
+			;
+
+		if (check_is_driver_loaded) {
+			if (mode & ALTERNATE_MODE_START) {
+				W_DATA[0] = 0x3;
+				W_DATA[1] = 0x31;
+				s2mm005_write_byte(usbpd_data->i2c, 0x10,
+						   &W_DATA[0], 2);
+				pr_info("%s : alternate mode is started!\n",
+					__func__);
+				prev_alternate_mode = ALTERNATE_MODE_START;
+				set_enable_powernego(1);
+			} else if (mode & ALTERNATE_MODE_STOP) {
+				W_DATA[0] = 0x3;
+				W_DATA[1] = 0x33;
+				s2mm005_write_byte(usbpd_data->i2c, 0x10,
+						   &W_DATA[0], 2);
+				pr_info("%s : alternate mode is stopped!\n",
+					__func__);
+				prev_alternate_mode = ALTERNATE_MODE_STOP;
+			}
+		}
+	}
+}
+
 static int process_check_accessory(void * data)
 {
 	struct s2mm005_data *usbpd_data = data;
+#if defined(CONFIG_USB_HW_PARAM)
 	struct otg_notify *o_notify = get_otg_notify();
+#endif
 
 	// detect Gear VR
 	if (usbpd_data->Vendor_ID == SAMSUNG_VENDOR_ID &&
 		usbpd_data->Product_ID >= GEARVR_PRODUCT_ID &&
 		usbpd_data->Product_ID <= GEARVR_PRODUCT_ID + 5) {
 		pr_info("%s : Samsung Gear VR connected.\n", __func__);
-		o_notify->hw_param[USB_CCIC_VR_USE_COUNT]++;
+#if defined(CONFIG_USB_HW_PARAM)
+		if (o_notify)
+			inc_hw_param(o_notify,
+				     USB_CCIC_VR_USE_COUNT);
+#endif
 		if (usbpd_data->acc_type == CCIC_DOCK_DETACHED) {
 			ccic_send_dock_intent(CCIC_DOCK_HMT);
 			usbpd_data->acc_type = CCIC_DOCK_HMT;
@@ -142,7 +248,9 @@ static void process_discover_svids(void * data)
 	uint16_t REG_ADD = REG_RX_DIS_SVID;
 	uint8_t ReadMSG[32] = {0,};
 	int ret = 0;
+#if defined(CONFIG_USB_HW_PARAM)
 	struct otg_notify *o_notify = get_otg_notify();
+#endif
 
 	// Message Type Definition
 	U_VDO1_Type 				  *DATA_MSG_VDO1 = (U_VDO1_Type *)&ReadMSG[8];
@@ -157,8 +265,11 @@ static void process_discover_svids(void * data)
 	usbpd_data->SVID_1 = DATA_MSG_VDO1->BITS.SVID_1;
 
 	dev_info(&i2c->dev, "%s SVID_0 : 0x%X, SVID_1 : 0x%X\n", __func__, usbpd_data->SVID_0, usbpd_data->SVID_1);
+#if defined(CONFIG_USB_HW_PARAM)
 	if (usbpd_data->SVID_0 == DISPLAY_PORT_SVID)
-		o_notify->hw_param[USB_CCIC_DP_USE_COUNT]++;
+		if (o_notify)
+			inc_hw_param(o_notify, USB_CCIC_DP_USE_COUNT);
+#endif
 }
 
 static void process_discover_modes(void * data)

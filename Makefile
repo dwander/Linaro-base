@@ -766,6 +766,7 @@ endif
 ifdef CONFIG_RKP_CFP_JOPP
 # Don't use jump tables for switch statements, since this generates indirect jump (br) 
 # instructions, which are very dangerous for kernel control flow integrity.
+CC		= $(srctree)/tools/prebuilts/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-gcc
 KBUILD_CFLAGS	+= -fno-jump-tables
 endif 
 

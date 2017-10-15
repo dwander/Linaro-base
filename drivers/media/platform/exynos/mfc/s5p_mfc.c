@@ -980,7 +980,6 @@ static void s5p_mfc_handle_frame_new(struct s5p_mfc_ctx *ctx, unsigned int err)
 	}
 }
 
-
 static void s5p_mfc_handle_frame_error(struct s5p_mfc_ctx *ctx,
 		unsigned int reason, unsigned int err)
 {
@@ -1206,7 +1205,7 @@ static void s5p_mfc_handle_frame(struct s5p_mfc_ctx *ctx,
 	if (dst_frame_status == S5P_FIMV_DEC_STATUS_DECODING_EMPTY) {
 		if (ctx->state == MFCINST_RES_CHANGE_FLUSH) {
 			struct mfc_timestamp *temp_ts = NULL;
-			
+
 			mfc_debug(2, "Last frame received after resolution change.\n");
 			s5p_mfc_handle_frame_all_extracted(ctx);
 			s5p_mfc_change_state(ctx, MFCINST_RES_CHANGE_END);
@@ -1244,7 +1243,7 @@ static void s5p_mfc_handle_frame(struct s5p_mfc_ctx *ctx,
 			ctx->ts_is_full = 0;
 			ctx->last_framerate = 0;
 			ctx->framerate = DEC_MAX_FPS;
-			
+
 			goto leave_handle_frame;
 		} else {
 			s5p_mfc_handle_frame_all_extracted(ctx);
@@ -1287,9 +1286,8 @@ static void s5p_mfc_handle_frame(struct s5p_mfc_ctx *ctx,
 		dec->consumed += s5p_mfc_get_consumed_stream();
 		remained = (unsigned int)(src_buf->vb.v4l2_planes[0].bytesused - dec->consumed);
 
-
-		if ((prev_offset == 0) && (remained > STUFF_BYTE)) {
-
+		if ((prev_offset == 0) && (remained > STUFF_BYTE) && (err == 0) &&
+				(src_buf->vb.v4l2_planes[0].bytesused > dec->consumed)) {
 			/* Run MFC again on the same buffer */
 			mfc_debug(2, "Running again the same buffer.\n");
 
@@ -3094,7 +3092,7 @@ static struct platform_driver s5p_mfc_driver = {
 		.owner	= THIS_MODULE,
 		.pm	= &s5p_mfc_pm_ops,
 		.of_match_table = exynos_mfc_match,
-		.suppress_bind_attrs = true,		
+		.suppress_bind_attrs = true,
 	},
 };
 

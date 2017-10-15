@@ -94,5 +94,10 @@
 			reg = <0x0 0xFC000000 0x1C00000>;
 			id = <11>;
 		};
+
+		modem_if_reserved: modem_if@0xF0000000 {
+			compatible = "exynos,modem_if";
+			reg = <0x0 0xF0000000 0x8800000>;
+		};
 	};
 };

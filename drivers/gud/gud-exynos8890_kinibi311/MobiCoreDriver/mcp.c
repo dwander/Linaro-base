@@ -847,7 +847,7 @@ void mcp_kill_session(struct mcp_session *session)
 	mutex_unlock(&mcp_ctx.sessions_lock);
 }
 
-int mcp_map(u32 session_id, struct mcp_buffer_map *map)
+static int _mcp_map(u32 session_id, struct mcp_buffer_map *map)
 {
 	union mcp_message cmd;
 	int ret;
@@ -866,7 +866,7 @@ int mcp_map(u32 session_id, struct mcp_buffer_map *map)
 	return ret;
 }
 
-int mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
+static int _mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
 {
 	union mcp_message cmd;
 
@@ -879,7 +879,7 @@ int mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
 	return mcp_cmd(&cmd, session_id, NULL, NULL);
 }
 
-int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
+static int _mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
 {
 	struct mcp_buffer_map *map = maps;
 	union mcp_message cmd;
@@ -910,7 +910,7 @@ int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
 	return 0;
 }
 
-int mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
+static int _mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
 {
 	const struct mcp_buffer_map *map = maps;
 	union mcp_message cmd;
@@ -926,6 +926,92 @@ int mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
 	}
 
 	return mcp_cmd(&cmd, session_id, NULL, NULL);
+}
+
+int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps, bool use_multimap)
+{
+	int i, ret = 0;
+
+	/* Use multimap feature if available */
+	if (g_ctx.f_multimap && use_multimap) {
+		/* Send MCP message to map buffers in SWd */
+		ret = _mcp_multimap(session_id, maps);
+		if (!ret) {
+			for (i = 0; i < MC_MAP_MAX; i++)
+				if (maps[i].secure_va)
+					atomic_inc(&g_ctx.c_maps);
+		} else {
+			mc_dev_devel("multimap failed: %d\n", ret);
+		}
+
+		return ret;
+	}
+
+	/* Revert to old-style map */
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		if (maps[i].type == WSM_INVALID)
+			continue;
+
+		/* Send MCP message to map buffer in SWd */
+		ret = _mcp_map(session_id, &maps[i]);
+		if (ret) {
+			mc_dev_devel("maps[%d] map failed: %d\n", i, ret);
+			break;
+		}
+
+		atomic_inc(&g_ctx.c_maps);
+	}
+
+	/* On failure, unmap what was mapped */
+	if (ret) {
+		for (i = 0; i < MC_MAP_MAX; i++) {
+			if ((maps[i].type == WSM_INVALID) || !maps[i].secure_va)
+				continue;
+
+			if (_mcp_unmap(session_id, &maps[i]))
+				mc_dev_devel("maps[%d] unmap failed: %d\n",
+					     i, ret);
+			else
+				atomic_dec(&g_ctx.c_maps);
+		}
+	}
+
+	return ret;
+}
+
+int mcp_multiunmap(u32 session_id, struct mcp_buffer_map *maps,
+		   bool use_multimap)
+{
+	int i, ret = 0;
+
+	/* Use multimap feature if available */
+	if (g_ctx.f_multimap && use_multimap) {
+		/* Send MCP command to unmap buffers in SWd */
+		ret = _mcp_multiunmap(session_id, maps);
+		if (ret) {
+			mc_dev_devel("mcp_multiunmap failed: %d\n", ret);
+		} else {
+			for (i = 0; i < MC_MAP_MAX; i++)
+				if (maps[i].secure_va)
+					atomic_dec(&g_ctx.c_maps);
+		}
+	} else {
+		for (i = 0; i < MC_MAP_MAX; i++) {
+			if (!maps[i].secure_va)
+				continue;
+
+			/* Send MCP command to unmap buffer in SWd */
+			ret = _mcp_unmap(session_id, &maps[i]);
+			if (ret)
+				mc_dev_devel("maps[%d] unmap failed: %d\n",
+					     i, ret);
+				/* Keep going */
+			else
+				atomic_dec(&g_ctx.c_maps);
+		}
+	}
+
+	return ret;
 }
 
 static int mcp_close(void)
@@ -1118,7 +1204,7 @@ static int irq_bh_worker(void *arg)
 	struct notification_queue *rx = mcp_ctx.nq.rx;
 
 	while (mcp_ctx.irq_bh_active) {
-		wait_for_completion(&mcp_ctx.irq_bh_complete);
+		wait_for_completion_killable(&mcp_ctx.irq_bh_complete);
 
 		/* Deal with all pending notifications in one go */
 		while ((rx->hdr.write_cnt - rx->hdr.read_cnt) > 0) {

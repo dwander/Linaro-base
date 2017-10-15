@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver - Android related functions
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_android.c 675083 2016-12-14 05:36:31Z $
+ * $Id: wl_android.c 684026 2017-02-10 05:45:31Z $
  */
 
 #include <linux/module.h>
@@ -220,11 +220,6 @@
 #define CMD_OKC_SET_PMK		"SET_PMK"
 #define CMD_OKC_ENABLE		"OKC_ENABLE"
 
-#ifdef FCC_PWR_LIMIT_2G
-#define CMD_GET_FCC_PWR_LIMIT_2G "GET_FCC_CHANNEL"
-#define CMD_SET_FCC_PWR_LIMIT_2G "SET_FCC_CHANNEL"
-#endif /* FCC_PWR_LIMIT_2G */
-
 #define ANDROID_WIFI_MAX_ROAM_SCAN_CHANNELS 100
 
 typedef struct android_wifi_reassoc_params {
@@ -263,10 +258,14 @@ typedef struct android_wifi_af_params {
 #define CMD_SET_SCSCAN		"SETSINGLEANT"
 #define CMD_GET_SCSCAN		"GETSINGLEANT"
 
-/* FCC_PWR_LIMIT_2G */
+#ifdef FCC_PWR_LIMIT_2G
+#define CMD_GET_FCC_PWR_LIMIT_2G "GET_FCC_CHANNEL"
+#define CMD_SET_FCC_PWR_LIMIT_2G "SET_FCC_CHANNEL"
+/* CUSTOMER_HW4's value differs from BRCM FW value for enable/disable */
 #define CUSTOMER_HW4_ENABLE		0
 #define CUSTOMER_HW4_DISABLE	-1
 #define CUSTOMER_HW4_EN_CONVERT(i)	(i += 1)
+#endif /* FCC_PWR_LIMIT_2G */
 
 #ifdef WLTDLS
 #define CMD_TDLS_RESET "TDLS_RESET"
@@ -380,6 +379,11 @@ static u8 miracast_cur_mode;
 extern void dhd_schedule_log_dump(dhd_pub_t *dhdp);
 extern int dhd_bus_mem_dump(dhd_pub_t *dhd);
 #endif /* DHD_LOG_DUMP */
+
+#ifdef DHD_HANG_SEND_UP_TEST
+#define CMD_MAKE_HANG  "MAKE_HANG"
+#endif /* CMD_DHD_HANG_SEND_UP_TEST */
+
 #ifdef DHD_TRACE_WAKE_LOCK
 extern void dhd_wk_lock_stats_dump(dhd_pub_t *dhdp);
 #endif /* DHD_TRACE_WAKE_LOCK */
@@ -2195,9 +2199,8 @@ wls_parse_batching_cmd(struct net_device *dev, char *command, int total_len)
 					" <> params\n", __FUNCTION__));
 					goto exit;
 				}
-
-				while ((token2 = strsep(&pos2, PNO_PARAM_CHANNEL_DELIMETER))
-						!= NULL) {
+				while ((token2 = strsep(&pos2,
+						PNO_PARAM_CHANNEL_DELIMETER)) != NULL) {
 					if (token2 == NULL || !*token2)
 						break;
 					if (*token2 == '\0')
@@ -2209,7 +2212,7 @@ wls_parse_batching_cmd(struct net_device *dev, char *command, int total_len)
 							(*token2 == 'A')? "A" : "B"));
 					} else {
 						if ((batch_params.nchan >= WL_NUMCHANNELS) ||
-						    	(i >= WL_NUMCHANNELS)) {
+							(i >= WL_NUMCHANNELS)) {
 							DHD_ERROR(("Too many nchan %d\n",
 								batch_params.nchan));
 							err = BCME_BUFTOOSHORT;
@@ -4592,6 +4595,14 @@ wl_android_get_bss_support_mumimo(struct net_device *dev, char *command, int tot
 }
 #endif /* DYNAMIC_MUMIMO_CONTROL */
 
+#if defined(DHD_HANG_SEND_UP_TEST)
+void
+wl_android_make_hang_with_reason(struct net_device *dev, const char *string_num)
+{
+	dhd_make_hang_with_reason(dev, string_num);
+}
+#endif /* DHD_HANG_SEND_UP_TEST */
+
 int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 {
 #define PRIVATE_COMMAND_MAX_LEN	8192
@@ -4784,6 +4795,13 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		struct wireless_dev *wdev = ndev_to_wdev(net);
 		struct wiphy *wiphy = wdev->wiphy;
 
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+		dhd_pub_t *dhdp = wl_cfg80211_get_dhdp();
+
+		if (dhdp->is_blob) {
+			revinfo = 0;
+		} else
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
 		if ((rev_info_delim) &&
 			(strnicmp(rev_info_delim, CMD_COUNTRY_DELIMITER,
 			strlen(CMD_COUNTRY_DELIMITER)) == 0) &&
@@ -4794,16 +4812,18 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		DHD_ERROR(("%s: country_code %s \n", __FUNCTION__, country_code));
 		if((strncmp(country_code, "SY", 3) == 0) || (strncmp(country_code, "KP", 3) == 0)) {
 			strncpy(country_code, "XZ", 3);
-			revinfo = 11;
+			if (!dhdp->is_blob)
+				revinfo = 11;
 			DHD_ERROR(("%s: change to %s \n", __FUNCTION__, country_code));
 		}
-
 
 		if (wl_check_dongle_idle(wiphy) != TRUE) {
 			DHD_ERROR(("FW is busy to check dongle idle\n"));
 			goto exit;
 		}
+
 		bytes_written = wldev_set_country(net, country_code, true, true, revinfo);
+#ifdef CUSTOMER_HW4_PRIVATE_CMD
 #ifdef FCC_PWR_LIMIT_2G
 		if (wldev_iovar_setint(net, "fccpwrlimit2g", FALSE)) {
 			DHD_ERROR(("%s: fccpwrlimit2g deactivation is failed\n", __FUNCTION__));
@@ -4811,6 +4831,7 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 			DHD_ERROR(("%s: fccpwrlimit2g is deactivated\n", __FUNCTION__));
 		}
 #endif /* FCC_PWR_LIMIT_2G */
+#endif /* CUSTOMER_HW4_PRIVATE_CMD */
 	}
 #endif /* CUSTOMER_SET_COUNTRY */
 #endif /* WL_CFG80211 */
@@ -5307,6 +5328,7 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	    ret = wl_tbow_teardown(net, command, priv_cmd.total_len);
 	}
 #endif /* BT_WIFI_HANDOVER */
+#ifdef CUSTOMER_HW4_PRIVATE_CMD
 #ifdef FCC_PWR_LIMIT_2G
 	else if (strnicmp(command, CMD_GET_FCC_PWR_LIMIT_2G,
 		strlen(CMD_GET_FCC_PWR_LIMIT_2G)) == 0) {
@@ -5317,6 +5339,7 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		bytes_written = wl_android_set_fcc_pwr_limit_2g(net, command, priv_cmd.total_len);
 	}
 #endif /* FCC_PWR_LIMIT_2G */
+#endif /* CUSTOMER_HW4_PRIVATE_CMD */
 #ifdef DYNAMIC_MUMIMO_CONTROL
 	else if (strnicmp(command, CMD_GET_MURX_BFE_CAP,
 		strlen(CMD_GET_MURX_BFE_CAP)) == 0) {
@@ -5369,6 +5392,12 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		bytes_written = wl_cfg80211_enable_cac(enable);
 	}
 #endif	/* SUPPORT_SET_CAC */
+#if defined(DHD_HANG_SEND_UP_TEST)
+	else if (strnicmp(command, CMD_MAKE_HANG, strlen(CMD_MAKE_HANG)) == 0) {
+		int skip = strlen(CMD_MAKE_HANG) + 1;
+		wl_android_make_hang_with_reason(net, (const char*)command+skip);
+	}
+#endif /* DHD_HANG_SEND_UP_TEST */
 	else {
 		DHD_ERROR(("Unknown PRIVATE command %s - ignored\n", command));
 		bytes_written = scnprintf(command, sizeof("FAIL"), "FAIL");

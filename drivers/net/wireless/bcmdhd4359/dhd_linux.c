@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -25,7 +25,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_linux.c 674974 2016-12-13 12:58:55Z $
+ * $Id: dhd_linux.c 684403 2017-02-13 07:59:14Z $
  */
 
 #include <typedefs.h>
@@ -867,6 +867,11 @@ module_param(dhd_dongle_ramsize, int, 0);
 static int dhd_found = 0;
 static int instance_base = 0; /* Starting instance number */
 module_param(instance_base, int, 0644);
+
+#ifdef DHD_ICMP_DUMP
+#include <net/icmp.h>
+static void dhd_icmp_dump(char *ifname, uint8 *pktdata, bool tx);
+#endif /* DHD_ICMP_DUMP */
 
 /* Functions to manage sysfs interface for dhd */
 static int dhd_sysfs_init(dhd_info_t *dhd);
@@ -3859,8 +3864,8 @@ __dhd_sendpkt(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 #endif /* DHD_LOSSLESS_ROAMING */
 			atomic_inc(&dhd->pend_8021x_cnt);
 		}
-#ifdef DHD_DHCP_DUMP
 		if (ntoh16(eh->ether_type) == ETHER_TYPE_IP) {
+#ifdef DHD_DHCP_DUMP
 			uint16 dump_hex;
 			uint16 source_port;
 			uint16 dest_port;
@@ -3898,8 +3903,11 @@ __dhd_sendpkt(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 			} else if (source_port == 0x0043 || dest_port == 0x0043) {
 				DHD_ERROR(("DHCP[%s] - BOOTP [RX]\n", ifname));
 			}
-		}
 #endif /* DHD_DHCP_DUMP */
+#ifdef DHD_ICMP_DUMP
+			dhd_icmp_dump(dhd_ifname(dhdp, ifidx), pktdata, TRUE);
+#endif /* DHD_ICMP_DUMP */
+		}
 	} else {
 			PKTCFREE(dhdp->osh, pktbuf, TRUE);
 			return BCME_ERROR;
@@ -4084,6 +4092,13 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 
 	DHD_OS_WAKE_LOCK(&dhd->pub);
 	DHD_PERIM_LOCK_TRY(DHD_FWDER_UNIT(dhd), lock_taken);
+
+
+#if defined(DHD_HANG_SEND_UP_TEST)
+	if (dhd->pub.req_hang_type == HANG_REASON_BUS_DOWN) {
+		dhd->pub.busstate = DHD_BUS_DOWN;
+	}
+#endif /* DHD_HANG_SEND_UP_TEST */
 
 	/* Reject if down */
 	if (dhd->pub.hang_was_sent || dhd->pub.busstate == DHD_BUS_DOWN ||
@@ -4338,11 +4353,12 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 	int tout_ctrl = 0;
 	void *skbhead = NULL;
 	void *skbprev = NULL;
-#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP)
+#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP) || \
+	defined(DHD_ICMP_DUMP)
 	char *dump_data;
 	uint16 protocol;
 	char *ifname;
-#endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_DHCP_DUMP */
+#endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_DHCP_DUMP || DHD_ICMP_DUMP */
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
@@ -4483,18 +4499,18 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 		eth = skb->data;
 		len = skb->len;
 
-#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP)
+#if defined(DHD_RX_DUMP) || defined(DHD_8021X_DUMP) || defined(DHD_DHCP_DUMP) || \
+	defined(DHD_ICMP_DUMP)
 		dump_data = skb->data;
 		protocol = (dump_data[12] << 8) | dump_data[13];
 		ifname = skb->dev ? skb->dev->name : "N/A";
-#endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_DHCP_DUMP */
 #ifdef DHD_8021X_DUMP
 		if (protocol == ETHER_TYPE_802_1X) {
 			dhd_dump_eapol_4way_message(ifname, dump_data, FALSE);
 		}
 #endif /* DHD_8021X_DUMP */
-#ifdef DHD_DHCP_DUMP
 		if (protocol != ETHER_TYPE_BRCM && protocol == ETHER_TYPE_IP) {
+#ifdef DHD_DHCP_DUMP
 			uint16 dump_hex;
 			uint16 source_port;
 			uint16 dest_port;
@@ -4522,8 +4538,11 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 			} else if (source_port == 0x0043 || dest_port == 0x0043) {
 				DHD_ERROR(("DHCP[%s] - BOOTP [RX]\n", ifname));
 			}
-		}
 #endif /* DHD_DHCP_DUMP */
+#ifdef DHD_ICMP_DUMP
+			dhd_icmp_dump(ifname, dump_data, FALSE);
+#endif /* DHD_ICMP_DUMP */
+		}
 #if defined(DHD_RX_DUMP)
 		DHD_ERROR(("RX DUMP[%s] - %s\n", ifname, _get_packet_type_str(protocol)));
 		if (protocol != ETHER_TYPE_BRCM) {
@@ -4552,6 +4571,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 #endif /* DHD_RX_FULL_DUMP */
 		}
 #endif /* DHD_RX_DUMP */
+#endif /* DHD_RX_DUMP || DHD_8021X_DUMP || DHD_DHCP_DUMP || DHD_ICMP_DUMP */
 
 		skb->protocol = eth_type_trans(skb, skb->dev);
 
@@ -5238,11 +5258,13 @@ dhd_rxf_thread(void *data)
 #ifdef BCMPCIE
 void dhd_dpc_enable(dhd_pub_t *dhdp)
 {
+#if defined(DHD_LB_RXP)
 	dhd_info_t *dhd;
 
 	if (!dhdp || !dhdp->info)
 		return;
 	dhd = dhdp->info;
+#endif /* DHD_LB_RXP */
 
 #ifdef DHD_LB
 #ifdef DHD_LB_RXP
@@ -5274,10 +5296,10 @@ dhd_dpc_kill(dhd_pub_t *dhdp)
 		DHD_ERROR(("%s: tasklet disabled\n", __FUNCTION__));
 	}
 #if defined(DHD_LB)
+	/* Kill the Load Balancing Tasklets */
 #ifdef DHD_LB_RXP
 	__skb_queue_purge(&dhd->rx_pend_queue);
 #endif /* DHD_LB_RXP */
-	/* Kill the Load Balancing Tasklets */
 #if defined(DHD_LB_TXC)
 	tasklet_kill(&dhd->tx_compl_tasklet);
 #endif /* DHD_LB_TXC */
@@ -5975,6 +5997,13 @@ dhd_stop(struct net_device *net)
 	if (dhd->pub.up == 0) {
 		goto exit;
 	}
+#if defined(DHD_HANG_SEND_UP_TEST)
+	if (dhd->pub.req_hang_type) {
+		DHD_ERROR(("%s, Clear HANG test request 0x%x\n",
+			__FUNCTION__, dhd->pub.req_hang_type));
+		dhd->pub.req_hang_type = 0;
+	}
+#endif /* DHD_HANG_SEND_UP_TEST */
 
 	dhd_if_flush_sta(DHD_DEV_IFP(net));
 
@@ -7202,6 +7231,10 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	mutex_init(&dhd->dhd_iovar_mutex);
 	sema_init(&dhd->proto_sem, 1);
 
+#if defined(DHD_HANG_SEND_UP_TEST)
+	dhd->pub.req_hang_type = 0;
+#endif /* DHD_HANG_SEND_UP_TEST */
+
 #ifdef PROP_TXSTATUS
 	spin_lock_init(&dhd->wlfc_spinlock);
 
@@ -8279,6 +8312,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* CUSTOMER_HW4_DEBUG */
 	if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) ||
 		(op_mode == DHD_FLAG_MFG_MODE)) {
+		dhd->op_mode = DHD_FLAG_MFG_MODE;
 #ifdef DHD_PCIE_RUNTIMEPM
 		/* Disable RuntimePM in mfg mode */
 		DHD_DISABLE_RUNTIME_PM(dhd);
@@ -8322,13 +8356,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	}
 #endif /* GET_CUSTOM_MAC_ENABLE */
 
-#ifdef DHD_USE_CLMINFO_PARSER
-	if ((ret = dhd_get_clminfo(dhd, clm_path)) < 0) {
-		DHD_ERROR(("%s: CLM Information load failed. Abort initialization.\n",
-			__FUNCTION__));
-		goto done;
-	}
-#endif /* DHD_USE_CLMINFO_PARSER */
 	if ((ret = dhd_apply_default_clm(dhd, clm_path)) < 0) {
 		DHD_ERROR(("%s: CLM set failed. Abort initialization.\n", __FUNCTION__));
 		goto done;
@@ -10259,12 +10286,12 @@ dhd_reboot_callback(struct notifier_block *this, unsigned long code, void *unuse
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0)
 #if defined(CONFIG_DEFERRED_INITCALLS) && !defined(EXYNOS_PCIE_MODULE_PATCH)
 #if defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_SOC_EXYNOS8890) || \
-	defined(CONFIG_ARCH_MSM8996)
+	defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998)
 deferred_module_init_sync(dhd_module_init);
 #else
 deferred_module_init(dhd_module_init);
 #endif /* CONFIG_MACH_UNIVERSAL7420 || CONFIG_SOC_EXYNOS8890 ||
-	* CONFIG_ARCH_MSM8996
+	* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998
 	*/
 #elif defined(USE_LATE_INITCALL_SYNC)
 late_initcall_sync(dhd_module_init);
@@ -12215,6 +12242,14 @@ int dhd_os_send_hang_message(dhd_pub_t *dhdp)
 {
 	int ret = 0;
 	if (dhdp) {
+#if defined(DHD_HANG_SEND_UP_TEST)
+		if (dhdp->req_hang_type) {
+			DHD_ERROR(("%s, Clear HANG test request 0x%x\n",
+				__FUNCTION__, dhdp->req_hang_type));
+			dhdp->req_hang_type = 0;
+		}
+#endif /* DHD_HANG_SEND_UP_TEST */
+
 		if (!dhdp->hang_was_sent) {
 #ifdef DHD_DEBUG_UART
 			/* If PCIe lane has broken, execute the debug uart application
@@ -12301,22 +12336,45 @@ void dhd_get_customized_country_code(struct net_device *dev, char *country_iso_c
 	wl_country_t *cspec)
 {
 	dhd_info_t *dhd = DHD_DEV_INFO(dev);
-#ifdef CUSTOM_COUNTRY_CODE
-	get_customized_country_code(dhd->adapter, country_iso_code, cspec,
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+	if (!dhd->pub.is_blob)
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+	{
+#if defined(CUSTOM_COUNTRY_CODE)
+		get_customized_country_code(dhd->adapter, country_iso_code, cspec,
 			dhd->pub.dhd_cflags);
 #else
-	get_customized_country_code(dhd->adapter, country_iso_code, cspec);
+		get_customized_country_code(dhd->adapter, country_iso_code, cspec);
 #endif /* CUSTOM_COUNTRY_CODE */
+	}
 
-#ifdef KEEP_KR_REGREV
-	if (strncmp(country_iso_code, "KR", 3) == 0 && strncmp(dhd->pub.vars_ccode, "KR", 3) == 0) {
-		cspec->rev = dhd->pub.vars_regrev;
+#if defined(KEEP_KR_REGREV)
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+	if (!dhd->pub.is_blob)
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+	{
+		if (strncmp(country_iso_code, "KR", 3) == 0 &&
+			strncmp(dhd->pub.vars_ccode, "KR", 3) == 0) {
+			cspec->rev = dhd->pub.vars_regrev;
+		}
 	}
 #endif /* KEEP_KR_REGREV */
 
 #ifdef KEEP_JP_REGREV
-	if (strncmp(country_iso_code, "JP", 3) == 0 && strncmp(dhd->pub.vars_ccode, "JP", 3) == 0) {
-		cspec->rev = dhd->pub.vars_regrev;
+	if (strncmp(country_iso_code, "JP", 3) == 0) {
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+		if (dhd->pub.is_blob) {
+			if (strncmp(dhd->pub.vars_ccode, "J1", 3) == 0) {
+				memcpy(cspec->ccode, dhd->pub.vars_ccode,
+					sizeof(dhd->pub.vars_ccode));
+			}
+		} else
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+		{
+			if (strncmp(dhd->pub.vars_ccode, "JP", 3) == 0) {
+				cspec->rev = dhd->pub.vars_regrev;
+			}
+		}
 	}
 #endif /* KEEP_JP_REGREV */
 }
@@ -14760,11 +14818,15 @@ dhd_pktid_audit_fail_cb(dhd_pub_t *dhdp)
 	DHD_OS_WAKE_LOCK(dhdp);
 	dhd_dump_to_kernelog(dhdp);
 #if defined(BCMPCIE) && defined(DHD_FW_COREDUMP)
-	/* Load the dongle side dump to host memory and then BUG_ON() */
-	dhdp->memdump_enabled = DUMP_MEMFILE_BUGON;
+	/* Load the dongle side dump to host memory */
+	if (dhdp->memdump_enabled == DUMP_DISABLED) {
+		dhdp->memdump_enabled = DUMP_MEMFILE;
+	}
 	dhdp->memdump_type = DUMP_TYPE_PKTID_AUDIT_FAILURE;
 	dhd_bus_mem_dump(dhdp);
 #endif /* BCMPCIE && DHD_FW_COREDUMP */
+	dhdp->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
+	dhd_os_check_hang(dhdp, 0, -EREMOTEIO);
 	DHD_OS_WAKE_UNLOCK(dhdp);
 }
 #endif /* DHD_PKTID_AUDIT_ENABLED */
@@ -14780,6 +14842,33 @@ dhd_linux_get_primary_netdev(dhd_pub_t *dhdp)
 		return NULL;
 	}
 }
+
+#ifdef DHD_ICMP_DUMP
+static void
+dhd_icmp_dump(char *ifname, uint8 *pktdata, bool tx)
+{
+	uint8 *pkt = (uint8 *)&pktdata[ETHER_HDR_LEN];
+	struct iphdr *iph = (struct iphdr *)pkt;
+	struct icmphdr *icmph;
+
+	/* check IP header */
+	if (iph->ihl != 5 || iph->version != 4 || iph->protocol != IP_PROT_ICMP) {
+		return;
+	}
+
+	icmph = (struct icmphdr *)((uint8 *)pkt + sizeof(struct iphdr));
+	if (icmph->type == ICMP_ECHO) {
+		DHD_ERROR(("PING REQUEST[%s] [%s] : SEQNUM=%d\n",
+			ifname, tx ? "TX" : "RX", ntoh16(icmph->un.echo.sequence)));
+	} else if (icmph->type == ICMP_ECHOREPLY) {
+		DHD_ERROR(("PING REPLY[%s] [%s] : SEQNUM=%d\n",
+			ifname, tx ? "TX" : "RX", ntoh16(icmph->un.echo.sequence)));
+	} else {
+		DHD_ERROR(("ICMP [%s] [%s] : TYPE=%d, CODE=%d\n",
+			ifname, tx ? "TX" : "RX", icmph->type, icmph->code));
+	}
+}
+#endif /* DHD_ICMP_DUMP */
 
 /* ----------------------------------------------------------------------------
  * Infrastructure code for sysfs interface support for DHD
@@ -15154,6 +15243,30 @@ dhd_debug_uart_exec(dhd_pub_t *dhdp, char *cmd)
 }
 #endif	/* DHD_DEBUG_UART */
 
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+void
+dhd_set_blob_support(dhd_pub_t *dhdp, char *fw_path)
+{
+	struct file *fp;
+	char *filepath = CONFIG_BCMDHD_CLM_PATH;
+
+	fp = filp_open(filepath, O_RDONLY, 0);
+	if (IS_ERR(fp)) {
+		DHD_ERROR(("%s: ----- blob file dosen't exist -----\n", __FUNCTION__));
+		dhdp->is_blob = FALSE;
+	} else {
+		DHD_ERROR(("%s: ----- blob file exist -----\n", __FUNCTION__));
+		dhdp->is_blob = TRUE;
+#if defined(CONCATE_BLOB)
+		strncat(fw_path, "_blob", strlen("_blob"));
+#else
+		BCM_REFERENCE(fw_path);
+#endif /* SKIP_CONCATE_BLOB */
+		filp_close(fp, NULL);
+	}
+}
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+
 int
 dhd_write_file(const char *filepath, char *buf, int buf_len)
 {
@@ -15244,3 +15357,93 @@ dhd_write_file_and_check(const char *filepath, char *buf, int buf_len)
 
 	return ret;
 }
+
+#if defined(DHD_HANG_SEND_UP_TEST)
+void
+dhd_make_hang_with_reason(struct net_device *dev, const char *string_num)
+{
+	dhd_info_t *dhd = NULL;
+	dhd_pub_t *dhdp = NULL;
+	uint reason = HANG_REASON_MAX;
+	char buf[WLC_IOCTL_SMLEN] = {0, };
+	uint32 fw_test_code = 0;
+	dhd = DHD_DEV_INFO(dev);
+
+	if (dhd) {
+		dhdp = &dhd->pub;
+	}
+
+	if (!dhd || !dhdp) {
+		return;
+	}
+
+	reason = (uint) bcm_strtoul(string_num, NULL, 0);
+	DHD_ERROR(("Enter %s, reason=0x%x\n", __FUNCTION__,  reason));
+
+	if (reason == 0) {
+		if (dhdp->req_hang_type) {
+			DHD_ERROR(("%s, Clear HANG test request 0x%x\n",
+				__FUNCTION__, dhdp->req_hang_type));
+			dhdp->req_hang_type = 0;
+			return;
+		} else {
+			DHD_ERROR(("%s, No requested HANG test\n", __FUNCTION__));
+			return;
+		}
+	} else if ((reason <= HANG_REASON_MASK) || (reason >= HANG_REASON_MAX)) {
+		DHD_ERROR(("Invalid HANG request, reason 0x%x\n", reason));
+		return;
+	}
+
+	if (dhdp->req_hang_type != 0) {
+		DHD_ERROR(("Already HANG requested for test\n"));
+		return;
+	}
+
+	switch (reason) {
+		case HANG_REASON_IOCTL_RESP_TIMEOUT:
+			DHD_ERROR(("Make HANG!!!: IOCTL response timeout(0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			fw_test_code = 102; /* resumed on timeour */
+			bcm_mkiovar("bus:disconnect", (void *)&fw_test_code, 4, buf, sizeof(buf));
+			dhd_wl_ioctl_cmd(dhdp, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
+			break;
+		case HANG_REASON_DONGLE_TRAP:
+			DHD_ERROR(("Make HANG!!!: Dongle trap (0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			fw_test_code = 99; /* dongle trap */
+			bcm_mkiovar("bus:disconnect", (void *)&fw_test_code, 4, buf, sizeof(buf));
+			dhd_wl_ioctl_cmd(dhdp, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
+			break;
+		case HANG_REASON_D3_ACK_TIMEOUT:
+			DHD_ERROR(("Make HANG!!!: D3 ACK timeout (0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			break;
+		case HANG_REASON_BUS_DOWN:
+			DHD_ERROR(("Make HANG!!!: BUS down(0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			break;
+		case HANG_REASON_PCIE_LINK_DOWN:
+		case HANG_REASON_MSGBUF_LIVELOCK:
+			dhdp->req_hang_type = 0;
+			DHD_ERROR(("Does not support requested HANG(0x%x)\n", reason));
+			break;
+		case HANG_REASON_P2P_IFACE_DEL_FAILURE:
+			DHD_ERROR(("Make HANG!!!: P2P inrerface delete failure(0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			break;
+		case HANG_REASON_HT_AVAIL_ERROR:
+			dhdp->req_hang_type = 0;
+			DHD_ERROR(("PCIe does not support requested HANG(0x%x)\n", reason));
+			break;
+		case HANG_REASON_PCIE_RC_LINK_UP_FAIL:
+			DHD_ERROR(("Make HANG!!!:Link Up(0x%x)\n", reason));
+			dhdp->req_hang_type = reason;
+			break;
+		default:
+			dhdp->req_hang_type = 0;
+			DHD_ERROR(("Unknown HANG request (0x%x)\n", reason));
+			break;
+	}
+}
+#endif /* DHD_HANG_SEND_UP_TEST */

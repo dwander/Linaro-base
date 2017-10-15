@@ -34,6 +34,7 @@
 
 #ifdef CONFIG_ONESHOT_UID
 #include <net/netfilter/oneshot_uid.h>
+#include <linux/spinlock.h>
 #endif
 
 MODULE_LICENSE("GPL");
@@ -433,16 +434,19 @@ stackpopup:
 			if (unlikely(e == table_base +
 				oneshot_uid_ipv6.myrule_offset))
 				if (table == oneshot_uid_ipv6.myfilter_table &&
-				    !atomic_read(&oneshot_uid_ipv6.replacing_table)) {
+				    read_trylock(&oneshot_uid_ipv6.lock)) {
 					xt_ematch_foreach(ematch, e) {
 						acpar.match =
 							ematch->u.kernel.match;
 						acpar.matchinfo = ematch->data;
 						if (!oneshot_uid_checkmap(
 							&oneshot_uid_ipv6, skb,
-							&acpar))
+							&acpar)) {
+							read_unlock(&oneshot_uid_ipv6.lock);
 							goto stackpopup;
+						}
 					}
+					read_unlock(&oneshot_uid_ipv6.lock);
 				}
 #endif
 			continue;
@@ -847,6 +851,11 @@ translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
 	if (!offsets)
 		return -ENOMEM;
 	i = 0;
+	
+#ifdef CONFIG_ONESHOT_UID
+	write_lock(&oneshot_uid_ipv6.lock);
+#endif
+
 	/* Walk through entries, checking offsets. */
 	xt_entry_foreach(iter, entry0, newinfo->size) {
 		ret = check_entry_size_and_hooks(iter, newinfo, entry0,
@@ -854,8 +863,12 @@ translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
 						 repl->hook_entry,
 						 repl->underflow,
 						 repl->valid_hooks);
-		if (ret != 0)
+		if (ret != 0) {
+#ifdef CONFIG_ONESHOT_UID
+			write_unlock(&oneshot_uid_ipv6.lock);
+#endif
 			goto out_free;
+		}
 		if (i < repl->num_entries)
 			offsets[i] = (void *)iter - entry0;
 		++i;
@@ -881,21 +894,31 @@ translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
 			}
 		} else if (ourchain == ONESHOT_UID_FIND_UIDCHAIN) {
 			if (previous_ematch) {
-				oneshot_uid_addrule_to_map(&oneshot_uid_ipv6,
-								previous_ematch);
+				int ret = oneshot_uid_addrule_to_map(&oneshot_uid_ipv6,
+							     previous_ematch);
+				if (ret == -ENOMEM) {
+					ourchain = ONESHOT_UID_FINE_END;
+					oneshot_uid_ipv6.myfilter_table = NULL;
+					oneshot_uid_ipv6.myrule_offset = 0;
+					pr_err("ip6tables: oneshot_uid failed to alloc memory\n");
+					continue;
+				}
 			}
 
 			xt_ematch_foreach(ematch, iter) {
 				previous_ematch = ematch->data;
 			}
+
 			if (rulenum == 0)
 				oneshot_uid_ipv6.myrule_offset =
-							((void *)iter - entry0);
-
+						((void *)iter - entry0);
 			rulenum++;
 #endif
 		}
 	}
+#ifdef CONFIG_ONESHOT_UID
+	write_unlock(&oneshot_uid_ipv6.lock);
+#endif
 
 	ret = -EINVAL;
 	if (i != repl->num_entries) {
@@ -1358,25 +1381,14 @@ do_replace(struct net *net, const void __user *user, unsigned int len)
 		goto free_newinfo;
 	}
 
-#ifdef CONFIG_ONESHOT_UID
-	atomic_inc(&oneshot_uid_ipv6.replacing_table);
-#endif
 	ret = translate_table(net, newinfo, loc_cpu_entry, &tmp);
-	if (ret != 0) {
-#ifdef CONFIG_ONESHOT_UID
-		atomic_dec(&oneshot_uid_ipv6.replacing_table);
-#endif
+	if (ret != 0)
 		goto free_newinfo;
-	}
 
 	duprintf("ip_tables: Translated table\n");
 
 	ret = __do_replace(net, tmp.name, tmp.valid_hooks, newinfo,
 			   tmp.num_counters, tmp.counters);
-
-#ifdef CONFIG_ONESHOT_UID
-	atomic_dec(&oneshot_uid_ipv6.replacing_table);
-#endif
 
 	if (ret)
 		goto free_newinfo_untrans;

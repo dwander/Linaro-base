@@ -59,6 +59,12 @@
 #include <linux/hall.h>
 #endif
 
+#include "ssp_dump.h"
+
+#ifdef CONFIG_SENSORS_SSP_LUCKY
+/* Hero proximity : dualization tmd4904, tmd4903*/
+#define CONFIG_SENSORS_SSP_PROX_DUALIZATION
+#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #undef CONFIG_HAS_EARLYSUSPEND
@@ -108,17 +114,17 @@
 #else
 #define DATA_PACKET_SIZE	960
 #endif
-#define MAX_SSP_PACKET_SIZE	1000 // this packet size related when AP send ssp packet to MCU. 
+#define MAX_SSP_PACKET_SIZE	1000 // this packet size related when AP send ssp packet to MCU.
 
-#define SSP_DEBUG_TIME_FLAG_ON        "SSP:DEBUG_TIME=1" 
-#define SSP_DEBUG_TIME_FLAG_OFF        "SSP:DEBUG_TIME=0" 
- 
-extern bool ssp_debug_time_flag; 
+#define SSP_DEBUG_TIME_FLAG_ON        "SSP:DEBUG_TIME=1"
+#define SSP_DEBUG_TIME_FLAG_OFF        "SSP:DEBUG_TIME=0"
+
+extern bool ssp_debug_time_flag;
 
 #define DEBUG_SSP_PACKET_HEX_RECV(msg, len) \
         print_hex_dump(KERN_INFO, "SSP<-MCU: ", \
         DUMP_PREFIX_NONE, 16, 1, (msg), (len), true) \
- 
+
 #define ssp_debug_time(format, ...) \
 	if (unlikely(ssp_debug_time_flag)) \
 		pr_info(format, ##__VA_ARGS__)
@@ -162,6 +168,7 @@ enum {
 /* Gyroscope DPS */
 #define GYROSCOPE_DPS250		250
 #define GYROSCOPE_DPS500		500
+#define GYROSCOPE_DPS1000		1000
 #define GYROSCOPE_DPS2000		2000
 
 /* Gesture Sensor Current */
@@ -197,6 +204,7 @@ enum {
 #define MSG2SSP_AP_MCU_DUMP_CHECK		0xDC
 #define MSG2SSP_AP_MCU_BATCH_FLUSH		0xDD
 #define MSG2SSP_AP_MCU_BATCH_COUNT		0xDF
+#define MSG2SSP_AP_MCU_GET_ACCEL_RANGE    0xE1
 
 #ifdef CONFIG_SENSORS_MULTIPLE_GLASS_TYPE
 #define MSG2SSP_AP_GLASS_TYPE             0xEC
@@ -240,6 +248,11 @@ enum {
 #define SH_MSG2AP_GYRO_CALIBRATION_STOP    0x44
 #define SH_MSG2AP_GYRO_CALIBRATION_EVENT_OCCUR  0x45
 
+#ifdef CONFIG_SENSORS_SSP_MAGNETIC_COMMON
+// to set mag cal data to ssp
+#define MSG2SSP_AP_MAG_CAL_PARAM     (0x46)
+#endif
+
 // for data injection
 #define MSG2SSP_AP_DATA_INJECTION_MODE_ON_OFF 0x41
 #define MSG2SSP_AP_DATA_INJECTION_SEND 0x42
@@ -252,7 +265,11 @@ enum {
 #define MSG2SSP_AP_SENSOR_PROX_GET_DEVICE_ID 0x52
 
 #define MSG2SSP_AP_REGISTER_DUMP		0x4A
+#define MSG2SSP_AP_REGISTER_SETTING          0x4B
+
 #define MSG2SSP_AP_FUSEROM			0X01
+
+#define MSG2SSP_AP_GET_PROXIMITY_LIGHT_DHR_SENSOR_INFO 0x4C
 
 /* voice data */
 #define TYPE_WAKE_UP_VOICE_SERVICE			0x01
@@ -294,10 +311,17 @@ enum {
 #define DEFUALT_DETECT_HIGH_THRESHOLD		8192
 #define DEFUALT_DETECT_LOW_THRESHOLD		5000
 #elif defined(CONFIG_SENSORS_SSP_TMD4904)/*CONFIG_SENSORS_SSP_PROX_AUTOCAL_AMS*/
+#ifdef CONFIG_SENSORS_SSP_PROX_AUTOCAL_AMS
 #define DEFUALT_HIGH_THRESHOLD				420
 #define DEFUALT_LOW_THRESHOLD				290
 #define DEFUALT_DETECT_HIGH_THRESHOLD		16383
 #define DEFUALT_DETECT_LOW_THRESHOLD		5000
+#else
+#define DEFUALT_HIGH_THRESHOLD				1500
+#define DEFUALT_LOW_THRESHOLD				1100
+#define DEFUALT_CAL_HIGH_THRESHOLD			1500
+#define DEFUALT_CAL_LOW_THRESHOLD			660
+#endif
 #else /*CONFIG_SENSORS_SSP_TMD4903*/
 #ifdef CONFIG_SENSORS_SSP_PROX_AUTOCAL_AMS
 #define DEFUALT_HIGH_THRESHOLD				400
@@ -309,11 +333,13 @@ enum {
 #define DEFUALT_LOW_THRESHOLD			1400
 #define DEFUALT_CAL_HIGH_THRESHOLD		2000
 #define DEFUALT_CAL_LOW_THRESHOLD		840
+#ifdef CONFIG_SENSORS_SSP_PROX_DUALIZATION
 //for TMD4904
 #define DEFUALT_HIGH_THRESHOLD_TMD4904			1500
 #define DEFUALT_LOW_THRESHOLD_TMD4904			1100
 #define DEFUALT_CAL_HIGH_THRESHOLD_TMD4904		1500
 #define DEFUALT_CAL_LOW_THRESHOLD_TMD4904		660
+#endif
 #endif
 #endif
 
@@ -347,6 +373,24 @@ enum {
 #define SIZE_MOVING_AVG_BUFFER	20
 #define SKIP_CNT_MOVING_AVG_ADD	2
 #define SKIP_CNT_MOVING_AVG_CHANGE	4
+#endif
+
+/* Mag type definition */
+#define MAG_TYPE_YAS  0
+#define MAG_TYPE_AKM  1
+
+#ifdef CONFIG_SENSORS_SSP_MAGNETIC_COMMON
+/* Magnetic cal parameter size */
+#define MAC_CAL_PARAM_SIZE_AKM  13
+#define MAC_CAL_PARAM_SIZE_YAS  7
+#endif
+/* Magnetic Read Size */
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW
+    #define UNCAL_MAGNETIC_SIZE     13
+    #define MAGNETIC_SIZE           8
+#else
+    #define UNCAL_MAGNETIC_SIZE     12
+    #define MAGNETIC_SIZE           7
 #endif
 
 /* ak0911 magnetic pdc matrix size */
@@ -500,6 +544,9 @@ struct sensor_value {
 			s16 cal_y;
 			s16 cal_z;
 			u8 accuracy;
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW
+            u8 overflow;
+#endif
 		};
 		struct {		/*uncalibrated mag, gyro*/
 			s16 uncal_x;
@@ -508,6 +555,9 @@ struct sensor_value {
 			s16 offset_x;
 			s16 offset_y;
 			s16 offset_z;
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW
+            u8 uncaloverflow;
+#endif
 		};
 		struct {		/* rotation vector */
 			s32 quat_a;
@@ -704,7 +754,7 @@ struct ssp_data {
 	struct work_struct work_bbd_on_packet;
 	struct workqueue_struct *bbd_mcu_ready_wq;
 	struct work_struct work_bbd_mcu_ready;
-	
+
 #if defined(CONFIG_SSP_MOTOR)
 	struct workqueue_struct *ssp_motor_wq;
 	struct work_struct work_ssp_motor;
@@ -789,6 +839,7 @@ struct ssp_data {
 	unsigned int uProxHiThresh_cal;
 	unsigned int uProxLoThresh_cal;
 
+#ifdef CONFIG_SENSORS_SSP_PROX_DUALIZATION
 	// for tmd4904
 	unsigned int uProxHiThresh_tmd4904;
 	unsigned int uProxLoThresh_tmd4904;
@@ -796,6 +847,7 @@ struct ssp_data {
 	unsigned int uProxLoThresh_default_tmd4904;
 	unsigned int uProxHiThresh_cal_tmd4904;
 	unsigned int uProxLoThresh_cal_tmd4904;
+#endif
 #endif
 
 	unsigned int uProxAlertHiThresh;
@@ -905,7 +957,7 @@ struct ssp_data {
 	struct mutex comm_mutex;
 	struct mutex pending_mutex;
 	struct mutex enable_mutex;
-	struct mutex ssp_enable_mutex; 
+	struct mutex ssp_enable_mutex;
 
 	s16 *static_matrix;
 	struct list_head pending_list;
@@ -922,7 +974,7 @@ struct ssp_data {
 	int acc_type;
 	int gyro_lib_state;
 	int mag_type;
-	
+
 	/* data for injection */
 	u8 data_injection_enable;
 	struct miscdevice ssp_data_injection_device;
@@ -944,7 +996,7 @@ struct ssp_data {
 	bool IsMcuCrashed;
 
 /* variables for conditional leveling timestamp */
-	bool first_sensor_data[SENSOR_MAX];	
+	bool first_sensor_data[SENSOR_MAX];
 	u64 timestamp_factor;
 
 	struct regulator *regulator_vdd_mcu_1p8;
@@ -952,6 +1004,9 @@ struct ssp_data {
 
 	int shub_en;
 	bool intendedMcuReset;
+    char registerValue[5];
+
+    u8 dhrAccelScaleRange;
 
 /* for sensordump */
 	char* sensor_dump[SENSOR_MAX];
@@ -1036,6 +1091,11 @@ int accel_open_calibration(struct ssp_data *);
 int gyro_open_calibration(struct ssp_data *);
 int pressure_open_calibration(struct ssp_data *);
 int proximity_open_calibration(struct ssp_data *);
+#ifdef CONFIG_SENSORS_SSP_MAGNETIC_COMMON
+int load_magnetic_cal_param_from_nvm(u8 *data, u8 length);
+int set_magnetic_cal_param_to_ssp(struct ssp_data *data);
+int save_magnetic_cal_param_to_nvm(struct ssp_data *data, char *pchRcvDataFrame, int *iDataIdx);
+#endif
 int check_fwbl(struct ssp_data *);
 void remove_input_dev(struct ssp_data *);
 void remove_sysfs(struct ssp_data *);
@@ -1063,8 +1123,10 @@ int set_glass_type(struct ssp_data *);
 int set_magnetic_static_matrix(struct ssp_data *);
 void sync_sensor_state(struct ssp_data *);
 void set_proximity_threshold(struct ssp_data *);
+#ifdef CONFIG_SENSORS_SSP_PROX_DUALIZATION
 //for tmd4904
 int get_proximity_device_id(struct ssp_data *);
+#endif
 void set_proximity_alert_threshold(struct ssp_data *data);
 void set_proximity_barcode_enable(struct ssp_data *, bool);
 void set_gesture_current(struct ssp_data *, unsigned char);
@@ -1082,6 +1144,7 @@ int send_motor_state(struct ssp_data *);
 #endif
 u64 get_sensor_scanning_info(struct ssp_data *);
 unsigned int get_firmware_rev(struct ssp_data *);
+u8 get_accel_range (struct ssp_data *);
 int forced_to_download_binary(struct ssp_data *, int);
 int parse_dataframe(struct ssp_data *, char *, int);
 void enable_debug_timer(struct ssp_data *);
@@ -1129,12 +1192,6 @@ void sensors_unregister(struct device *,
 ssize_t mcu_reset_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_dump_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_revision_show(struct device *, struct device_attribute *, char *);
-ssize_t mcu_update_ums_bin_show(struct device *,
-	struct device_attribute *, char *);
-ssize_t mcu_update_kernel_bin_show(struct device *,
-	struct device_attribute *, char *);
-ssize_t mcu_update_kernel_crashed_bin_show(struct device *,
-	struct device_attribute *, char *);
 ssize_t mcu_factorytest_store(struct device *, struct device_attribute *,
 	const char *, size_t);
 ssize_t mcu_factorytest_show(struct device *,

@@ -97,27 +97,9 @@ void report_acc_data(struct ssp_data *data, struct sensor_value *accdata)
 {
 	s16 accel_buf[3];
 
-#if defined (CONFIG_SENSORS_SSP_VLTE)
-	if(data->change_axis == true && folder_state == true)
-	{
-		//pr_info("[SSP] %s folder_state %d, changed axis changed %d \n", __func__, folder_state, data->change_axis);
-		data->buf[ACCELEROMETER_SENSOR].x = (accdata->x) * (-1);
-		data->buf[ACCELEROMETER_SENSOR].y = (accdata->y);
-		data->buf[ACCELEROMETER_SENSOR].z = (accdata->z) * (-1);
-	}
-	else
-	{
-		data->change_axis = false;
-		//pr_info("[SSP] %s unfolder_state %d, changed axis changed %d \n", __func__, folder_state, data->change_axis);
-		data->buf[ACCELEROMETER_SENSOR].x = accdata->x;
-		data->buf[ACCELEROMETER_SENSOR].y = accdata->y;
-		data->buf[ACCELEROMETER_SENSOR].z = accdata->z;
-	}
-#else
 	data->buf[ACCELEROMETER_SENSOR].x = accdata->x;
 	data->buf[ACCELEROMETER_SENSOR].y = accdata->y;
 	data->buf[ACCELEROMETER_SENSOR].z = accdata->z;
-#endif
 	accel_buf[0] = data->buf[ACCELEROMETER_SENSOR].x;
 	accel_buf[1] = data->buf[ACCELEROMETER_SENSOR].y;
 	accel_buf[2] = data->buf[ACCELEROMETER_SENSOR].z;
@@ -129,27 +111,9 @@ void report_gyro_data(struct ssp_data *data, struct sensor_value *gyrodata)
 {
 	int lTemp[3] = {0,};
 
-#if defined (CONFIG_SENSORS_SSP_VLTE)
-	if(data->change_axis == true && folder_state == true)
-	{
-		//pr_info("[SSP] %s folder_state %d, changed axis %d \n", __func__, folder_state, data->change_axis);
-		data->buf[GYROSCOPE_SENSOR].x = (gyrodata->x) * (-1);
-		data->buf[GYROSCOPE_SENSOR].y = (gyrodata->y);
-		data->buf[GYROSCOPE_SENSOR].z = (gyrodata->z) * (-1);
-	}
-	else
-	{
-		data->change_axis = false;
-		//pr_info("[SSP] %s unfolder_state %d, changed axis %d \n", __func__, folder_state, data->change_axis);
-		data->buf[GYROSCOPE_SENSOR].x = gyrodata->x;
-		data->buf[GYROSCOPE_SENSOR].y = gyrodata->y;
-		data->buf[GYROSCOPE_SENSOR].z = gyrodata->z;
-	}
-#else
 	data->buf[GYROSCOPE_SENSOR].x = gyrodata->x;
 	data->buf[GYROSCOPE_SENSOR].y = gyrodata->y;
 	data->buf[GYROSCOPE_SENSOR].z = gyrodata->z;
-#endif
 
 	if (data->uGyroDps == GYROSCOPE_DPS500) {
 		lTemp[0] = (int)data->buf[GYROSCOPE_SENSOR].x >> 2;
@@ -209,36 +173,35 @@ void report_geomagnetic_raw_data(struct ssp_data *data,
 
 void report_mag_data(struct ssp_data *data, struct sensor_value *magdata)
 {
-	u8 lTemp[7] = { 0, };
-	
-	data->buf[GEOMAGNETIC_SENSOR].cal_x = magdata->cal_x;
-	data->buf[GEOMAGNETIC_SENSOR].cal_y = magdata->cal_y;
-	data->buf[GEOMAGNETIC_SENSOR].cal_z = magdata->cal_z;
-	data->buf[GEOMAGNETIC_SENSOR].accuracy = magdata->accuracy;
+    u8 lTemp[8] = { 0, };
 
-	memcpy(lTemp, magdata, sizeof(lTemp));
+    data->buf[GEOMAGNETIC_SENSOR].cal_x = magdata->cal_x;
+    data->buf[GEOMAGNETIC_SENSOR].cal_y = magdata->cal_y;
+    data->buf[GEOMAGNETIC_SENSOR].cal_z = magdata->cal_z;
+    data->buf[GEOMAGNETIC_SENSOR].accuracy = magdata->accuracy;
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW
+    data->buf[GEOMAGNETIC_SENSOR].overflow = magdata->overflow;
+#endif
 
-	ssp_push_iio_buffer(data->mag_indio_dev, magdata->timestamp, (u8*)lTemp, sizeof(lTemp));
+    memcpy(lTemp, magdata, sizeof(u8)*MAGNETIC_SIZE);
+    ssp_push_iio_buffer(data->mag_indio_dev, magdata->timestamp, (u8*)lTemp, sizeof(u8)*MAGNETIC_SIZE);
 }
 
 void report_mag_uncaldata(struct ssp_data *data, struct sensor_value *magdata)
 {
-	s16 lTemp[6] = {0,};
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_x = magdata->uncal_x;
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_y = magdata->uncal_y;
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_z = magdata->uncal_z;
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_x= magdata->offset_x;
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_y= magdata->offset_y;
-	data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_z= magdata->offset_z;
+    u8 lTemp[13] = {0,};
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_x = magdata->uncal_x;
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_y = magdata->uncal_y;
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_z = magdata->uncal_z;
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_x= magdata->offset_x;
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_y= magdata->offset_y;
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_z= magdata->offset_z;
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW    
+    data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncaloverflow= magdata->uncaloverflow;
+#endif
 
-	lTemp[0] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_x;
-	lTemp[1] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_y;
-	lTemp[2] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].uncal_z;
-	lTemp[3] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_x;
-	lTemp[4] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_y;
-	lTemp[5] = data->buf[GEOMAGNETIC_UNCALIB_SENSOR].offset_z;
-
-	ssp_push_iio_buffer(data->uncal_mag_indio_dev, magdata->timestamp, (u8*)lTemp, sizeof(lTemp));
+    memcpy(lTemp, magdata, sizeof(u8)*UNCAL_MAGNETIC_SIZE);
+    ssp_push_iio_buffer(data->uncal_mag_indio_dev, magdata->timestamp, (u8*)lTemp, sizeof(u8)*UNCAL_MAGNETIC_SIZE);
 }
 
 void report_uncalib_gyro_data(struct ssp_data *data, struct sensor_value *gyrodata)

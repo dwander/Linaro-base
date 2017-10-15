@@ -15,7 +15,7 @@
 
 #if defined(CONFIG_PANEL_S6E3HA3_DYNAMIC)
 #include "s6e3ha3_wqhd_dimming.h"
-#elif defined(CONFIG_PANEL_S6E3HF4_WQHD)
+#elif defined(CONFIG_PANEL_S6E3HF4_WQHD) || defined(CONFIG_PANEL_S6E3HF4_WQHD_HAECHI)
 #include "s6e3hf4_wqhd_dimming.h"
 #elif defined(CONFIG_PANEL_S6E3HA5_WQHD)
 #include "s6e3ha5_wqhd_dimming.h"

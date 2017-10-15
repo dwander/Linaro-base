@@ -15,6 +15,7 @@
 
 
 
+
 # Add your platform specific Kconfig file here
 #
 # "drivers/gpu/arm/.../platform/Kconfig"

@@ -35,6 +35,11 @@ static ssize_t s2mm005_cur_ver_show(struct device *dev,
 	struct s2mm005_version chip_swver;
 	struct s2mm005_data *usbpd_data = dev_get_drvdata(dev);
 
+	if (!usbpd_data) {
+		pr_err("usbpd_data is NULL\n");
+		return -ENODEV;
+	}
+
 	s2mm005_get_chip_swversion(usbpd_data, &chip_swver);
 	pr_err("%s CHIP SWversion %2x %2x %2x %2x\n", __func__,
 	       chip_swver.main[2] , chip_swver.main[1], chip_swver.main[0], chip_swver.boot);
@@ -56,6 +61,11 @@ static ssize_t s2mm005_src_ver_show(struct device *dev,
 {
 	struct s2mm005_data *usbpd_data = dev_get_drvdata(dev);
 	struct s2mm005_version fw_swver;
+
+	if (!usbpd_data) {
+		pr_err("usbpd_data is NULL\n");
+		return -ENODEV;
+	}
 
 	s2mm005_get_fw_version(&fw_swver, usbpd_data->firm_ver[3], usbpd_data->hw_rev);
 	return sprintf(buf, "%02X %02X %02X %02X\n",
@@ -92,39 +102,31 @@ static ssize_t s2mm005_store_manual_lpm_mode(struct device *dev,
 
 	switch(mode){
 	case 0:
-		/* Disable Low Power Mode for App (JIGON Low + LP Off) */
-		s2mm005_manual_LPM(usbpd_data, 0x3);
+		/* Disable Low Power Mode for App (SW JIGON Disable) */
 		s2mm005_manual_JIGON(usbpd_data, 0);
 		usbpd_data->manual_lpm_mode = 0;
 		break;
 	case 1:
-		/* Enable Low Power Mode (JIGON High + Force LP On) */
+		/* Enable Low Power Mode for App (SW JIGON Enable) */
 		s2mm005_manual_JIGON(usbpd_data, 1);
-		s2mm005_manual_LPM(usbpd_data, 0x8);	// force Low power mode
 		usbpd_data->manual_lpm_mode = 1;
 		break;
 	case 2:
-		/* Enable Low Power Mode (Normal LP On) */
+		/* SW JIGON Enable */
 		s2mm005_manual_JIGON(usbpd_data, 1);
-		s2mm005_manual_LPM(usbpd_data, 0x1);	// normal power mode
+//		s2mm005_manual_LPM(usbpd_data, 0x1);
 		usbpd_data->manual_lpm_mode = 1;
 		break;
-	case 3:
-		/* Disable Low Power Mode (LP Off) */
-		s2mm005_manual_LPM(usbpd_data, 0x3);
-		usbpd_data->manual_lpm_mode = 0;
-		break;
 	default:
-		/* Disable Low Power Mode (JIGON Low + LP Off) */
-		s2mm005_manual_LPM(usbpd_data, 0x3);
+		/* SW JIGON Disable */
 		s2mm005_manual_JIGON(usbpd_data, 0);
 		usbpd_data->manual_lpm_mode = 0;
-		break;		
+		break;
 	}
 
 	return size;
 }
-static DEVICE_ATTR(lpm_mode, 0664, 
+static DEVICE_ATTR(lpm_mode, 0664,
 	s2mm005_show_manual_lpm_mode, s2mm005_store_manual_lpm_mode);
 
 static ssize_t ccic_state_show(struct device *dev,
@@ -136,7 +138,7 @@ static ssize_t ccic_state_show(struct device *dev,
 		pr_err("%s usbpd_data is null!!\n", __func__);
 		return -ENODEV;
 	}
-	
+
 	return sprintf(buf, "%d\n", usbpd_data->pd_state);
 }
 static DEVICE_ATTR(state, 0444, ccic_state_show, NULL);
@@ -151,7 +153,7 @@ static ssize_t ccic_rid_show(struct device *dev,
 		pr_err("%s usbpd_data is null!!\n", __func__);
 		return -ENODEV;
 	}
-	
+
 	return sprintf(buf, "%d\n", usbpd_data->cur_rid);
 }
 static DEVICE_ATTR(rid, 0444, ccic_rid_show, NULL);
@@ -175,6 +177,22 @@ static ssize_t s2mm005_store_control_option_command(struct device *dev,
 	return size;
 }
 static DEVICE_ATTR(ccic_control_option, 0220, NULL, s2mm005_store_control_option_command);
+
+static ssize_t ccic_booting_dry_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct s2mm005_data *usbpd_data = dev_get_drvdata(dev);
+
+	if(!usbpd_data) {
+		pr_err("%s usbpd_data is null!!\n", __func__);
+		return -ENODEV;
+	}
+	pr_info("%s booting_run_dry=%d\n", __func__,
+		usbpd_data->fac_booting_dry_check);
+
+	return sprintf(buf, "%d\n", (usbpd_data->fac_booting_dry_check));
+}
+static DEVICE_ATTR(booting_dry, 0444, ccic_booting_dry_show, NULL);
 #endif
 static int ccic_firmware_update_built_in(struct device *dev)
 {
@@ -202,12 +220,8 @@ static int ccic_firmware_update_built_in(struct device *dev)
 		else
 			s2mm005_flash_fw(usbpd_data, FLASH_WRITE4);
 	} else if (chip_swver.boot == 5) {
-		if (usbpd_data->hw_rev >= 9)
 			s2mm005_flash_fw(usbpd_data, FLASH_WRITE5);
-		else
-			s2mm005_flash_fw(usbpd_data, FLASH_WRITE5_NODPDM);
 	} else if (chip_swver.boot == 6) {
-		if (usbpd_data->hw_rev >= 9)
 			s2mm005_flash_fw(usbpd_data, FLASH_WRITE6);
 	} else {
 		pr_err("%s: Didn't have same FW boot version. Stop FW update. src_boot:%2x chip_boot:%2x\n", 
@@ -223,10 +237,10 @@ static int ccic_firmware_update_ums(struct device *dev)
 	struct s2mm005_data *usbpd_data = dev_get_drvdata(dev);
 	unsigned char *fw_data;
 	struct s2mm005_fw *fw_hd;
-	struct file *fp; 
-	mm_segment_t old_fs; 
-	long fw_size, nread; 
-	int error = 0; 
+	struct file *fp;
+	mm_segment_t old_fs;
+	long fw_size, nread;
+	int error = 0;
 
 	if(!usbpd_data) {
 		pr_err("%s usbpd_data is null!!\n", __func__);
@@ -280,7 +294,7 @@ done:
 
 open_err:
 	set_fs(old_fs);
-	return error; 
+	return error;
 }
 
 static ssize_t ccic_store_firmware_status_show(struct device *dev,
@@ -386,6 +400,7 @@ static ssize_t ccic_send_attention_message(struct device *dev,
 	return size;
 }
 static DEVICE_ATTR(attention, 0220, NULL, ccic_send_attention_message);
+
 static ssize_t ccic_send_role_swap_message(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -406,6 +421,23 @@ static ssize_t ccic_send_role_swap_message(struct device *dev,
 }
 static DEVICE_ATTR(role_swap, 0220, NULL, ccic_send_role_swap_message);
 #endif
+
+static ssize_t ccic_water_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct s2mm005_data *usbpd_data = dev_get_drvdata(dev);
+
+	if(!usbpd_data) {
+		pr_err("%s usbpd_data is null!!\n", __func__);
+		return -ENODEV;
+	}
+	pr_info("%s water=%d, run_dry=%d\n", __func__,
+		usbpd_data->water_det, usbpd_data->run_dry);
+
+	return sprintf(buf, "%d\n", (usbpd_data->water_det | !usbpd_data->run_dry));
+}
+static DEVICE_ATTR(water, 0444, ccic_water_show, NULL);
+
 static struct attribute *ccic_attributes[] = {
 	&dev_attr_cur_version.attr,
 	&dev_attr_src_version.attr,
@@ -414,6 +446,7 @@ static struct attribute *ccic_attributes[] = {
 #if defined(CONFIG_SEC_FACTORY)
 	&dev_attr_rid.attr,
 	&dev_attr_ccic_control_option.attr,
+	&dev_attr_booting_dry.attr,
 #endif
 	&dev_attr_fw_update.attr,
 	&dev_attr_fw_update_status.attr,
@@ -422,6 +455,7 @@ static struct attribute *ccic_attributes[] = {
 	&dev_attr_attention.attr,
 	&dev_attr_role_swap.attr,
 #endif
+	&dev_attr_water.attr,
 	NULL
 };
 

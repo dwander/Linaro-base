@@ -3,7 +3,7 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -26,7 +26,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_msgbuf.c 675075 2016-12-14 05:07:30Z $
+ * $Id: dhd_msgbuf.c 682620 2017-02-02 13:30:26Z $
  */
 
 
@@ -1062,7 +1062,7 @@ static INLINE uint32 dhd_pktid_map_avail_cnt(dhd_pktid_map_handle_t *handle);
 
 /* Allocate a unique pktid against which a pkt and some metadata is saved */
 static INLINE uint32 dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle,
-	void *pkt);
+	void *pkt, dhd_pkttype_t pkttype);
 static INLINE void dhd_pktid_map_save(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle,
 	void *pkt, uint32 nkey, dmaaddr_t pa, uint32 len, uint8 dma,
 	void *dmah, void *secdma, dhd_pkttype_t pkttype);
@@ -1202,7 +1202,8 @@ typedef struct dhd_pktid_map {
 #define DHD_NATIVE_TO_PKTID_FINI_IOCTL(dhd, map)  dhd_pktid_map_fini_ioctl((dhd), (map))
 
 /* Convert a packet to a pktid, and save pkt pointer in busy locker */
-#define DHD_NATIVE_TO_PKTID_RSV(dhd, map, pkt)    dhd_pktid_map_reserve((dhd), (map), (pkt))
+#define DHD_NATIVE_TO_PKTID_RSV(dhd, map, pkt, pkttype)	\
+	dhd_pktid_map_reserve((dhd), (map), (pkt), (pkttype))
 
 /* Reuse a previously reserved locker to save packet params */
 #define DHD_NATIVE_TO_PKTID_SAVE(dhd, map, pkt, nkey, pa, len, dir, dmah, secdma, pkttype) \
@@ -1649,7 +1650,8 @@ dhd_pktid_map_avail_cnt(dhd_pktid_map_handle_t *handle)
  */
 
 static INLINE uint32
-__dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt)
+__dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt,
+	dhd_pkttype_t pkttype)
 {
 	uint32 nkey;
 	dhd_pktid_map_t *map;
@@ -1666,6 +1668,16 @@ __dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pk
 
 	ASSERT(map->avail <= map->items);
 	nkey = map->keys[map->avail]; /* fetch a free locker, pop stack */
+
+	if ((map->avail > map->items) || (nkey > map->items)) {
+		map->failures++;
+		DHD_ERROR(("%s:%d: failed to allocate a new pktid,"
+			" map->avail<%u>, nkey<%u>, pkttype<%u>\n",
+			__FUNCTION__, __LINE__, map->avail, nkey,
+			pkttype));
+		return DHD_PKTID_INVALID; /* failed alloc request */
+	}
+
 	locker = &map->lockers[nkey]; /* save packet metadata in locker */
 	map->avail--;
 	locker->pkt = pkt; /* pkt is saved, other params not yet saved. */
@@ -1688,7 +1700,8 @@ __dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pk
  * Wrapper that takes the required lock when called directly.
  */
 static INLINE uint32
-dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt)
+dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle,
+	void *pkt, dhd_pkttype_t pkttype)
 {
 	dhd_pktid_map_t *map;
 	uint32 flags;
@@ -1697,7 +1710,7 @@ dhd_pktid_map_reserve(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt)
 	ASSERT(handle != NULL);
 	map = (dhd_pktid_map_t *)handle;
 	flags = DHD_PKTID_LOCK(map->pktid_lock);
-	ret = __dhd_pktid_map_reserve(dhd, handle, pkt);
+	ret = __dhd_pktid_map_reserve(dhd, handle, pkt, pkttype);
 	DHD_PKTID_UNLOCK(map->pktid_lock, flags);
 
 	return ret;
@@ -1715,6 +1728,12 @@ __dhd_pktid_map_save(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt,
 	map = (dhd_pktid_map_t *)handle;
 
 	ASSERT((nkey != DHD_PKTID_INVALID) && (nkey <= DHD_PKIDMAP_ITEMS(map->items)));
+
+	if ((nkey == DHD_PKTID_INVALID) || (nkey > DHD_PKIDMAP_ITEMS(map->items))) {
+		DHD_ERROR(("%s:%d: Error! saving invalid pktid<%u> pkttype<%u>\n",
+			__FUNCTION__, __LINE__, nkey, pkttype));
+		return;
+	}
 
 	locker = &map->lockers[nkey];
 
@@ -1775,7 +1794,7 @@ dhd_pktid_map_alloc(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt,
 
 	flags = DHD_PKTID_LOCK(map->pktid_lock);
 
-	nkey = __dhd_pktid_map_reserve(dhd, handle, pkt);
+	nkey = __dhd_pktid_map_reserve(dhd, handle, pkt, pkttype);
 	if (nkey != DHD_PKTID_INVALID) {
 		__dhd_pktid_map_save(dhd, handle, pkt, nkey, pa,
 			len, dir, dmah, secdma, pkttype);
@@ -1813,6 +1832,12 @@ dhd_pktid_map_free(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, uint32 nkey,
 	flags = DHD_PKTID_LOCK(map->pktid_lock);
 
 	ASSERT((nkey != DHD_PKTID_INVALID) && (nkey <= DHD_PKIDMAP_ITEMS(map->items)));
+
+	if ((nkey == DHD_PKTID_INVALID) && (nkey > DHD_PKIDMAP_ITEMS(map->items))) {
+		DHD_ERROR(("%s:%d: Error! Try to free invalid pktid<%u>, pkttype<%d>\n",
+		           __FUNCTION__, __LINE__, nkey, pkttype));
+		return NULL;
+	}
 
 	locker = &map->lockers[nkey];
 
@@ -2048,7 +2073,7 @@ dhd_pktid_to_native(dhd_pktid_map_handle_t *map, uint32 pktid32,
 	return pktptr32;
 }
 
-#define DHD_NATIVE_TO_PKTID_RSV(dhd, map, pkt)  DHD_PKTID32(pkt)
+#define DHD_NATIVE_TO_PKTID_RSV(dhd, map, pkt, pkttype)  DHD_PKTID32(pkt)
 
 #define DHD_NATIVE_TO_PKTID_SAVE(dhd, map, pkt, nkey, pa, len, dma_dir, dmah, secdma, pkttype) \
 	({ BCM_REFERENCE(dhd); BCM_REFERENCE(nkey); BCM_REFERENCE(dma_dir); \
@@ -4105,7 +4130,8 @@ dhd_prot_txdata(dhd_pub_t *dhd, void *PKTBUF, uint8 ifidx)
 	DHD_GENERAL_LOCK(dhd, flags);
 
 	/* Create a unique 32-bit packet id */
-	pktid = DHD_NATIVE_TO_PKTID_RSV(dhd, dhd->prot->pktid_map_handle, PKTBUF);
+	pktid = DHD_NATIVE_TO_PKTID_RSV(dhd, dhd->prot->pktid_map_handle,
+		PKTBUF, PKTTYPE_DATA_TX);
 #if defined(DHD_PCIE_PKTID)
 	if (pktid == DHD_PKTID_INVALID) {
 		DHD_ERROR(("Pktid pool depleted.\n"));

@@ -49,9 +49,11 @@ extern void s2mm005_control_option_command(struct s2mm005_data *usbpd_data, int 
 // external functions in s2mm005_cc.c
 ////////////////////////////////////////////////////////////////////////////////
 extern void process_cc_attach(void * data, u8 *plug_attach_done);
+extern void process_cc_detach(void * data);
 extern void process_cc_get_int_status(void *data, uint32_t *pPRT_MSG, MSG_IRQ_STATUS_Type *MSG_IRQ_State);
 extern void process_cc_rid(void * data);
-extern void ccic_event_work(void *data, int dest, int id, int attach, int event);
+extern void ccic_event_work(void *data, int dest, int id, int attach, int event,
+			    int sub);
 extern void process_cc_water_det(void * data);
 #if defined(CONFIG_DUAL_ROLE_USB_INTF)
 extern void role_swap_check(struct work_struct *work);
@@ -79,5 +81,6 @@ extern void s2mm005_select_pdo(int num);
 extern void (*fp_select_pdo)(int num);
 extern void vbus_turn_on_ctrl(bool enable);
 extern void process_pd(void *data, u8 plug_attach_done, u8 *pdic_attach, MSG_IRQ_STATUS_Type *MSG_IRQ_State);
+extern void set_enable_alternate_mode(int mode);
 
 #endif /* __S2MM005_EXT_H */

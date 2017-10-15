@@ -7,12 +7,18 @@
 #include <linux/ccic/BOOT_FLASH_FW.h>
 #include <linux/ccic/BOOT_FLASH_FW_BOOT3.h>
 #include <linux/ccic/BOOT_FLASH_FW_BOOT4.h>
-#include <linux/ccic/BOOT_FLASH_FW_BOOT5.h>
 #include <linux/ccic/BOOT_FLASH_FW_BOOT5_NODPDM.h>
+#include <linux/ccic/BOOT_FLASH_FW_BOOT5.h>
 #include <linux/ccic/BOOT_FLASH_FW_BOOT6.h>
 #include <linux/ccic/BOOT_SRAM_FW.h>
 
 #define	S2MM005_FIRMWARE_PATH	"usbpd/s2mm005.bin"
+
+#define FW_CHECK_RETRY 5
+#define VALID_FW_BOOT_VERSION(fw_boot) (fw_boot == 0x7)
+#define VALID_FW_MAIN_VERSION(fw_main) \
+	(!((fw_main[0] == 0xff) && (fw_main[1] == 0xff)) \
+ 	&& !((fw_main[0] == 0x00) && (fw_main[1] == 0x00)))
 
 const char *flashmode_to_string(u32 mode)
 {
@@ -288,6 +294,7 @@ int s2mm005_flash(struct s2mm005_data *usbpd_data, unsigned int input)
 	struct file *fp;
 	mm_segment_t old_fs;
 	long fw_size, nread;
+	int irq_gpio_status;
 
 	switch (input) {
 	case FLASH_MODE_ENTER: { /* enter flash mode */
@@ -304,6 +311,13 @@ int s2mm005_flash(struct s2mm005_data *usbpd_data, unsigned int input)
 			reg = FLASH_MODE_ENTER_0x10;
 			s2mm005_write_byte(i2c, CMD_MODE_0x10, &reg, 1);
 			usleep_range(10 * 1000, 10 * 1000);
+			/* If irq status is not clear, CCIC can not enter flash mode. */
+			irq_gpio_status = gpio_get_value(usbpd_data->irq_gpio);
+			dev_info(&i2c->dev, "%s IRQ0:%02d\n", __func__, irq_gpio_status);
+			if(!irq_gpio_status) {
+				s2mm005_int_clear(usbpd_data);	// interrupt clear
+				usleep_range(10 * 1000, 10 * 1000);	
+			}
 			s2mm005_read_byte_flash(i2c, FLASH_STATUS_0x24, &val, 1);
 			pr_err("flash mode : %s retry %d\n", flashmode_to_string(val), retry);	
 			usleep_range(10 * 1000, 10 * 1000);
@@ -455,13 +469,9 @@ void s2mm005_get_fw_version(struct s2mm005_version *version, u8 boot_version, u3
 			fw_hd = (struct s2mm005_fw*) BOOT_FLASH_FW_BOOT4;
 		break;
 	case 5:
-		if (hw_rev >= 9)
 			fw_hd = (struct s2mm005_fw*) BOOT_FLASH_FW_BOOT5;
-		else
-			fw_hd = (struct s2mm005_fw*) BOOT_FLASH_FW_BOOT5_NODPDM;
 		break;
 	case 6:
-		if (hw_rev >= 9)
 			fw_hd = (struct s2mm005_fw*) BOOT_FLASH_FW_BOOT6;
 		break;
 	default:
@@ -487,9 +497,18 @@ void s2mm005_get_chip_swversion(struct s2mm005_data *usbpd_data,
 			     struct s2mm005_version *version)
 {
 	struct i2c_client *i2c = usbpd_data->i2c;
+	int i;
 
-	s2mm005_read_byte_flash(i2c, 0x8, (u8 *)&version->boot, 1);
-	s2mm005_read_byte_flash(i2c, 0x9, (u8 *)&version->main, 3);
+	for(i=0; i < FW_CHECK_RETRY; i++) {
+		s2mm005_read_byte_flash(i2c, 0x8, (u8 *)&version->boot, 1);
+		if(VALID_FW_BOOT_VERSION(version->boot))
+			break;
+	}
+	for(i=0; i < FW_CHECK_RETRY; i++) {
+		s2mm005_read_byte_flash(i2c, 0x9, (u8 *)&version->main, 3);
+		if(VALID_FW_MAIN_VERSION(version->main))
+			break;
+	}
 }
 
 int s2mm005_check_version(struct s2mm005_version *version1,

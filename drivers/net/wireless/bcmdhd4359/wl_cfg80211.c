@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg80211.c 675612 2016-12-16 10:35:47Z $
+ * $Id: wl_cfg80211.c 685031 2017-02-15 07:20:17Z $
  */
 /* */
 #include <typedefs.h>
@@ -1990,9 +1990,9 @@ wl_cfg80211_del_virtual_iface(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev)
 	s32 ret = 0;
 	s32 index = -1;
 	s32 type = -1;
-#ifdef CUSTOM_SET_CPUCORE
+#if defined(CUSTOM_SET_CPUCORE) || defined(DHD_HANG_SEND_UP_TEST)
 	dhd_pub_t *dhd = (dhd_pub_t *)(cfg->pub);
-#endif /* CUSTOM_SET_CPUCORE */
+#endif /* CUSTOM_SET_CPUCORE || DHD_HANG_SEND_UP_TEST */
 	WL_DBG(("Enter\n"));
 
 #ifdef CUSTOM_SET_CPUCORE
@@ -2086,7 +2086,12 @@ wl_cfg80211_del_virtual_iface(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev)
 
 			/* delete interface after link down */
 			ret = wl_cfgp2p_ifdel(cfg, &p2p_mac);
+#if defined(DHD_HANG_SEND_UP_TEST)
+			if (ret != BCME_OK ||
+				dhd->req_hang_type == HANG_REASON_P2P_IFACE_DEL_FAILURE) {
+#else /* DHD_HANG_SEND_UP_TEST */
 			if (ret != BCME_OK) {
+#endif /* DHD_HANG_SEND_UP_TEST */
 				struct net_device *ndev = bcmcfg_to_prmry_ndev(cfg);
 				dhd_pub_t *dhd = (dhd_pub_t *)(cfg->pub);
 
@@ -2834,9 +2839,13 @@ wl_run_escan(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 						/* allows only supported channel on
 						*  current reguatory
 						*/
-						if (channel == (dtoh32(list->element[j])))
+						if (n_nodfs >= num_chans) {
+							break;
+						}
+						if (channel == (dtoh32(list->element[j]))) {
 							default_chan_list[n_nodfs++] =
 								channel;
+						}
 					}
 
 				}
@@ -3152,7 +3161,7 @@ __wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 		ssids = this_ssid;
 	}
 
-	if (request && cfg->p2p_supported && !p2p_scan(cfg)) {
+	if (request && cfg->p2p_supported) {
 		WL_TRACE_HW4(("START SCAN\n"));
 		DHD_OS_SCAN_WAKE_LOCK_TIMEOUT((dhd_pub_t *)(cfg->pub),
 			SCAN_WAKE_LOCK_TIMEOUT);
@@ -5941,7 +5950,9 @@ wl_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 			}
 		}
 		dhd_assoc_state = wl_get_drv_status(cfg, CONNECTED, dev);
+		DHD_OS_WAKE_LOCK(dhd);
 		fw_assoc_state = dhd_is_associated(dhd, 0, &err);
+		DHD_OS_WAKE_UNLOCK(dhd);
 		if (!dhd_assoc_state || !fw_assoc_state) {
 			WL_ERR(("NOT assoc\n"));
 			if (err == -ERESTARTSYS)
@@ -6060,6 +6071,13 @@ wl_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 get_station_err:
 		if (err && (err != -ERESTARTSYS)) {
 			/* Disconnect due to zero BSSID or error to get RSSI */
+			scb_val_t scbval;
+			scbval.val = htod32(DOT11_RC_DISASSOC_LEAVING);
+			err = wldev_ioctl(dev, WLC_DISASSOC, &scbval, sizeof(scb_val_t), true);
+			if (unlikely(err)) {
+				WL_ERR(("disassoc error (%d)\n", err));
+			}
+
 			WL_ERR(("force cfg80211_disconnected: %d\n", err));
 			wl_clr_drv_status(cfg, CONNECTED, dev);
 			CFG80211_DISCONNECTED(dev, 0, NULL, 0, false, GFP_KERNEL);
@@ -6678,10 +6696,6 @@ wl_cfg80211_af_searching_channel(struct bcm_cfg80211 *cfg, struct net_device *de
 
 struct p2p_config_af_params {
 	s32 max_tx_retry;	/* max tx retry count if tx no ack */
-	/* To make sure to send successfully action frame, we have to turn off mpc
-	 * 0: off, 1: on,  (-1): do nothing
-	 */
-	s32 mpc_onoff;
 #ifdef WL_CFG80211_GON_COLLISION
 	/* drop tx go nego request if go nego collision occurs */
 	bool drop_tx_req;
@@ -6711,7 +6725,6 @@ wl_cfg80211_config_p2p_pub_af_tx(struct wiphy *wiphy,
 #endif
 	config_af_params->search_channel = false;
 	config_af_params->max_tx_retry = WL_AF_TX_MAX_RETRY;
-	config_af_params->mpc_onoff = -1;
 	cfg->next_af_subtype = P2P_PAF_SUBTYPE_INVALID;
 
 	switch (act_frm->subtype) {
@@ -6719,7 +6732,6 @@ wl_cfg80211_config_p2p_pub_af_tx(struct wiphy *wiphy,
 		WL_DBG(("P2P: GO_NEG_PHASE status set \n"));
 		wl_set_p2p_status(cfg, GO_NEG_PHASE);
 
-		config_af_params->mpc_onoff = 0;
 		config_af_params->search_channel = true;
 		cfg->next_af_subtype = act_frm->subtype + 1;
 
@@ -6741,9 +6753,6 @@ wl_cfg80211_config_p2p_pub_af_tx(struct wiphy *wiphy,
 		/* If we reached till GO Neg confirmation reset the filter */
 		WL_DBG(("P2P: GO_NEG_PHASE status cleared \n"));
 		wl_clr_p2p_status(cfg, GO_NEG_PHASE);
-
-		/* turn on mpc again if go nego is done */
-		config_af_params->mpc_onoff = 1;
 
 		/* minimize dwell time */
 		af_params->dwell_time = WL_MIN_DWELL_TIME;
@@ -6797,7 +6806,6 @@ wl_cfg80211_config_p2p_pub_af_tx(struct wiphy *wiphy,
 			config_af_params->search_channel = true;
 		}
 
-		config_af_params->mpc_onoff = 0;
 		cfg->next_af_subtype = act_frm->subtype + 1;
 		/* increase dwell time to wait for RESP frame */
 		af_params->dwell_time = WL_MED_DWELL_TIME;
@@ -6912,7 +6920,6 @@ wl_cfg80211_send_action_frame(struct wiphy *wiphy, struct net_device *dev,
 	tx_retry = 0;
 	cfg->next_af_subtype = P2P_PAF_SUBTYPE_INVALID;
 	config_af_params.max_tx_retry = WL_AF_TX_MAX_RETRY;
-	config_af_params.mpc_onoff = -1;
 	config_af_params.search_channel = false;
 #ifdef WL_CFG80211_GON_COLLISION
 	config_af_params.drop_tx_req = false;
@@ -6984,12 +6991,6 @@ wl_cfg80211_send_action_frame(struct wiphy *wiphy, struct net_device *dev,
 			return false;
 		}
 	}
-
-	/* To make sure to send successfully action frame, we have to turn off mpc */
-	if (config_af_params.mpc_onoff == 0) {
-		wldev_iovar_setint(dev, "mpc", 0);
-	}
-
 	netinfo = wl_get_netinfo_by_bssidx(cfg, bssidx);
 	/* validate channel and p2p ies */
 	if (config_af_params.search_channel && IS_P2P_SOCIAL(af_params->channel) &&
@@ -7185,12 +7186,6 @@ exit:
 		ack = true;
 	}
 #endif /* WL_CFG80211_GON_COLLISION */
-
-	/* if all done, turn mpc on again */
-	if (config_af_params.mpc_onoff == 1) {
-		wldev_iovar_setint(dev, "mpc", 1);
-	}
-
 	return ack;
 }
 
@@ -8981,6 +8976,7 @@ wl_cfg80211_del_station(
 	else
 		num_associated = assoc_maclist->count;
 
+	dhd_wait_pend8021x(dev);
 	memcpy(scb_val.ea.octet, mac_addr, ETHER_ADDR_LEN);
 	scb_val.val = DOT11_RC_DEAUTH_LEAVING;
 	err = wldev_ioctl(dev, WLC_SCB_DEAUTHENTICATE_FOR_REASON, &scb_val,
@@ -9651,7 +9647,6 @@ wl_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *dev,
 fail:
 	if (err) {
 		WL_ERR(("ADD/SET beacon failed\n"));
-		wldev_iovar_setint(dev, "mpc", 1);
 		if (dev_role == NL80211_IFTYPE_AP) {
 			/* clear the AP mode */
 			dhd->op_mode &= ~DHD_FLAG_HOSTAP_MODE;
@@ -9911,15 +9906,6 @@ static int wl_cfg80211_dump_survey(struct wiphy *wiphy, struct net_device *ndev,
 	}
 
 	if (!idx) {
-		/* Disable mpc */
-		val = 0;
-		err = wldev_iovar_setbuf_bsscfg(ndev, "mpc", (void *)&val,
-			sizeof(val), cfg->ioctl_buf, WLC_IOCTL_SMLEN, 0,
-			&cfg->ioctl_buf_sync);
-		if (err < 0) {
-			WL_ERR(("set 'mpc' failed, error = %d\n", err));
-		}
-
 		/* Set interface up, explicitly. */
 		val = 1;
 		err = wldev_ioctl(ndev, WLC_UP, (void *)&val, sizeof(val), true);
@@ -12816,13 +12802,6 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 
 		wl_cfgp2p_print_actframe(false, &mgmt_frame[DOT11_MGMT_HDR_LEN],
 			mgmt_frame_len - DOT11_MGMT_HDR_LEN, channel);
-		/*
-		 * After complete GO Negotiation, roll back to mpc mode
-		 */
-		if (act_frm && ((act_frm->subtype == P2P_PAF_GON_CONF) ||
-			(act_frm->subtype == P2P_PAF_PROVDIS_RSP))) {
-			wldev_iovar_setint(ndev, "mpc", 1);
-		}
 		if (act_frm && (act_frm->subtype == P2P_PAF_GON_CONF)) {
 			WL_DBG(("P2P: GO_NEG_PHASE status cleared \n"));
 			wl_clr_p2p_status(cfg, GO_NEG_PHASE);
@@ -15729,7 +15708,13 @@ int wl_cfg80211_hang(struct net_device *dev, u16 reason)
 
 	cfg = g_bcm_cfg;
 	dhd = (dhd_pub_t *)(cfg->pub);
-
+#if defined(DHD_HANG_SEND_UP_TEST)
+	if (dhd->req_hang_type) {
+		WL_ERR(("%s, Clear HANG test request 0x%x\n",
+			__FUNCTION__, dhd->req_hang_type));
+		dhd->req_hang_type = 0;
+	}
+#endif /* DHD_HANG_SEND_UP_TEST */
 #ifdef DHD_USE_EXTENDED_HANG_REASON
 	if (dhd->hang_reason != 0) {
 		reason = dhd->hang_reason;
@@ -16421,20 +16406,11 @@ wl_cfg80211_set_auto_channel_scan_state(struct net_device *ndev)
 	s32 ret = BCME_ERROR;
 	struct bcm_cfg80211 *cfg = g_bcm_cfg;
 	struct wiphy *wiphy;
-	/* Disable mpc, to avoid automatic interface down. */
-	val = 0;
 
 	wiphy = bcmcfg_to_wiphy(cfg);
 	if (wl_check_dongle_idle(wiphy) != TRUE) {
 		WL_ERR(("FW is busy to add interface"));
 		return ret;
-	}
-	ret = wldev_iovar_setbuf_bsscfg(ndev, "mpc", (void *)&val,
-		sizeof(val), cfg->ioctl_buf, WLC_IOCTL_SMLEN, 0,
-		&cfg->ioctl_buf_sync);
-	if (ret < 0) {
-		WL_ERR(("set 'mpc' failed, error = %d\n", ret));
-		goto done;
 	}
 
 	/* Set interface up, explicitly. */
@@ -16617,24 +16593,12 @@ done:
 static s32
 wl_cfg80211_restore_auto_channel_scan_state(struct net_device *ndev)
 {
-	u32 val = 0;
-	s32 ret = BCME_ERROR;
 	struct bcm_cfg80211 *cfg = g_bcm_cfg;
 
 	/* Clear scan stop driver status. */
 	wl_clr_drv_status(cfg, SCANNING, ndev);
 
-	/* Enable mpc back to 1, irrespective of initial state. */
-	val = 1;
-
-	ret = wldev_iovar_setbuf_bsscfg(ndev, "mpc", (void *)&val,
-		sizeof(val), cfg->ioctl_buf, WLC_IOCTL_SMLEN, 0,
-		&cfg->ioctl_buf_sync);
-	if (ret < 0) {
-		WL_ERR(("set 'mpc' failed, error = %d\n", ret));
-	}
-
-	return ret;
+	return BCME_OK;
 }
 
 s32

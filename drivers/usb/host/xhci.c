@@ -3949,10 +3949,7 @@ static int xhci_setup_device(struct usb_hcd *hcd, struct usb_device *udev,
 		break;
 	}
 	if (ret) {
-#if defined(CONFIG_SEC_FACTORY)
-		if (ret != -ETIME)
-#endif			
-			kfree(command);
+		kfree(command);
 		return ret;
 	}
 	temp_64 = xhci_read_64(xhci, &xhci->op_regs->dcbaa_ptr);

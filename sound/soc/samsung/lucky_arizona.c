@@ -163,8 +163,10 @@ struct arizona_machine_priv {
 	u32 amp_type;
 
 #if defined(CONFIG_SND_SOC_MAXIM_DSM_CAL)
+	bool dual_spk;
 	int dsm_cal_rdc;
 	int dsm_cal_temp;
+	int dsm_cal_rdc_r;
 #endif
 };
 
@@ -633,13 +635,16 @@ static int set_voice_trigger_info(struct snd_kcontrol *kcontrol,
 #if defined(CONFIG_SND_SOC_MAXIM_DSM_CAL)
 #define DSM_RDC_ROOM_TEMP	0x2A005C
 #define DSM_AMBIENT_TEMP	0x2A0182
+#define DSM_4_0_LSI_STEREO_OFFSET	410
 static int lucky_dsm_cal_apply(struct snd_soc_card *card)
 {
 	struct arizona_machine_priv *priv = card->drvdata;
 	static bool is_get_temp;
-	static bool is_get_rdc;
+	static bool is_get_rdc;	
+	static bool is_get_rdc_r;
 	static int get_temp_try_cnt = 3;
 	static int get_rdc_try_cnt = 3;
+	static int get_rdc_r_try_cnt = 3;
 	int ret;
 
 	if (get_temp_try_cnt > 0) {
@@ -682,11 +687,42 @@ static int lucky_dsm_cal_apply(struct snd_soc_card *card)
 		}
 	}
 
-	if (is_get_temp && is_get_rdc) {
+	if (priv->dual_spk) {
+		if (is_get_temp && is_get_rdc && get_rdc_r_try_cnt > 0) {
+			ret = maxdsm_cal_get_rdc_r(&priv->dsm_cal_rdc_r);
+			if (ret == 0 && priv->dsm_cal_rdc_r > 0) {
+				is_get_rdc_r = true;
+				get_rdc_r_try_cnt = 0;
+			} else {
+				if (ret == -ENOENT) {
+					dev_dbg(card->dev,
+						"No such file or directory\n");
+					get_rdc_r_try_cnt = 0;
+					return -1;
+				} else if (ret == -EBUSY) {
+					dev_dbg(card->dev,
+						"Device or resource busy\n");
+				}
+				get_rdc_r_try_cnt--;
+				return -1;
+			}
+		}
+	}
+
+	if (is_get_temp && is_get_rdc &&
+		(((priv->dual_spk) == 0) || ((priv->dual_spk) && is_get_rdc_r))) {
 		regmap_write(priv->regmap_dsp, DSM_AMBIENT_TEMP,
 					(unsigned int)priv->dsm_cal_temp);
 		regmap_write(priv->regmap_dsp, DSM_RDC_ROOM_TEMP,
 					(unsigned int)priv->dsm_cal_rdc);
+		if(priv->dual_spk) {
+			regmap_write(priv->regmap_dsp, (DSM_AMBIENT_TEMP+DSM_4_0_LSI_STEREO_OFFSET),
+						(unsigned int)priv->dsm_cal_temp);
+			regmap_write(priv->regmap_dsp, (DSM_RDC_ROOM_TEMP+DSM_4_0_LSI_STEREO_OFFSET),
+						(unsigned int)priv->dsm_cal_rdc_r);
+			dev_info(card->dev, "set rdc_r = %d\n",
+						priv->dsm_cal_rdc_r);
+		}
 		dev_info(card->dev, "set rdc = %d, temperature = %d\n",
 					priv->dsm_cal_rdc, priv->dsm_cal_temp);
 	} else
@@ -915,8 +951,8 @@ const struct snd_soc_dapm_route lucky_cs47l91_dapm_routes[] = {
 	{ "HiFi Capture", NULL, "VI SENSING" },
 	{ "VI SENSING", NULL, "ASYNC_AMP" },
 
-	{ "IN3L", NULL, "FM In" },
-	{ "IN3R", NULL, "FM In" },
+	{ "IN1BL", NULL, "FM In" },
+	{ "IN1BR", NULL, "FM In" },
 };
 
 static int lucky_aif_startup(struct snd_pcm_substream *substream)
@@ -1342,6 +1378,34 @@ static int lucky_aif3_hw_params(struct snd_pcm_substream *substream,
 		}
 	}
 
+#if defined (CONFIG_SEC_FM_RADIO)
+	lucky_change_mclk(card, params_rate(params));
+	
+	/* Set ASYNCCLK FLL  */
+	ret = snd_soc_codec_set_pll(priv->codec, priv->asyncclk.fll_ref_id,
+				    priv->asyncclk.fll_ref_src,
+				    priv->asyncclk.fll_ref_in,
+				    priv->asyncclk.fll_ref_out);
+	if (ret != 0)
+		dev_err(card->dev,
+			 "Failed to start ASYNCCLK FLL REF: %d\n", ret);
+
+	ret = snd_soc_codec_set_pll(priv->codec, priv->asyncclk.fll_id,
+				    priv->asyncclk.mclk.id,
+				    priv->asyncclk.mclk.rate,
+				    priv->asyncclk.fll_out);
+	if (ret != 0)
+		dev_err(card->dev, "Failed to start ASYNCCLK FLL: %d\n", ret);
+
+	/* Set ASYNCCLK from FLL */
+	ret = snd_soc_codec_set_sysclk(priv->codec, priv->asyncclk.clk_id,
+				       priv->asyncclk.src_id,
+				       priv->asyncclk.rate,
+				       SND_SOC_CLOCK_IN);
+	if (ret < 0)
+		dev_err(card->dev,
+				 "Unable to set ASYNCCLK to FLL: %d\n", ret);
+#endif
 	return 0;
 }
 
@@ -1378,8 +1442,9 @@ static struct snd_soc_dai_driver lucky_ext_dai[] = {
 			.channels_min = 1,
 			.channels_max = 4,
 			.rate_min = 8000,
-			.rate_max = 16000,
-			.rates = (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000),
+			.rate_max = 48000,
+			.rates = (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |
+					SNDRV_PCM_RATE_48000),
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 		},
 		.capture = {
@@ -2260,6 +2325,10 @@ static int lucky_audio_probe(struct platform_device *pdev)
 		goto out;
 	}
 
+#if defined(CONFIG_SND_SOC_MAXIM_DSM_CAL)
+	priv->dual_spk =
+		of_property_read_bool(card->dev->of_node, "dual_spk");
+#endif
 	return ret;
 
 out:

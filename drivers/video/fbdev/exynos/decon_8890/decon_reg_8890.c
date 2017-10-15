@@ -426,7 +426,7 @@ void decon_reg_get_dispif_size(u32 id, int dsi_idx, u32 *p_width, u32 *p_height)
 void decon_reg_set_comp_size(u32 id, enum decon_mic_comp_ratio cr, enum decon_dsi_mode dsi_mode, struct decon_lcd *lcd_info)
 {
 	u32 ratio_type; /* 0 : 12N, 1: 12N4, 2 : 12N8, 3 : ratio2 */
-	u32 mic_width_in_bytes, mic_dummy_in_bytes;
+	u32 mic_width_in_bytes, mic_dummy_in_bytes = 0;
 	u32 width;
 	u32 temp_size, odd_n = 0;
 

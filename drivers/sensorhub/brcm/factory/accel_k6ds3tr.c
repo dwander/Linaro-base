@@ -426,6 +426,13 @@ static ssize_t accel_lowpassfilter_store(struct device *dev,
 exit:
 	return size;
 }
+static ssize_t accel_scale_range_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+    struct ssp_data *data = dev_get_drvdata(dev);
+    
+    return sprintf(buf, "\"FULL_SCALE\":\"%dG\"\n", data->dhrAccelScaleRange);
+}
 
 static DEVICE_ATTR(name, S_IRUGO, accel_name_show, NULL);
 static DEVICE_ATTR(vendor, S_IRUGO, accel_vendor_show, NULL);
@@ -437,6 +444,7 @@ static DEVICE_ATTR(reactive_alert, S_IRUGO | S_IWUSR | S_IWGRP,
 static DEVICE_ATTR(selftest, S_IRUGO, accel_hw_selftest_show, NULL);
 static DEVICE_ATTR(lowpassfilter, S_IWUSR | S_IWGRP,
 	NULL, accel_lowpassfilter_store);
+static DEVICE_ATTR(dhr_sensor_info, S_IRUSR | S_IRGRP,	accel_scale_range_show, NULL);
 
 static struct device_attribute *acc_attrs[] = {
 	&dev_attr_name,
@@ -446,6 +454,7 @@ static struct device_attribute *acc_attrs[] = {
 	&dev_attr_reactive_alert,
 	&dev_attr_selftest,
 	&dev_attr_lowpassfilter,
+    &dev_attr_dhr_sensor_info,
 	NULL,
 };
 

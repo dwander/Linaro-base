@@ -22,7 +22,7 @@ enum SCENARIO {
 	BROWSER_MODE,
 	EBOOK_MODE,
 	EMAIL_MODE,
-#if defined(CONFIG_PANEL_S6E3HA3_DYNAMIC) || defined(CONFIG_PANEL_S6E3HF4_WQHD) || defined(CONFIG_PANEL_S6E3HA5_WQHD)
+#if defined(CONFIG_PANEL_S6E3HA3_DYNAMIC) || defined(CONFIG_PANEL_S6E3HF4_WQHD) || defined(CONFIG_PANEL_S6E3HA5_WQHD) || defined(CONFIG_PANEL_S6E3HF4_WQHD_HAECHI)
 	GAME_LOW_MODE,
 	GAME_MID_MODE,
 	GAME_HIGH_MODE,
@@ -173,6 +173,9 @@ struct mdnie_info {
 	struct mdnie_ops	ops;
 
 	struct notifier_block	fb_notif;
+#ifdef CONFIG_DISPLAY_USE_INFO
+	struct notifier_block	dpui_notif;
+#endif
 
 	unsigned int white_r;
 	unsigned int white_g;
@@ -183,14 +186,21 @@ struct mdnie_info {
 	int white_balance_r;
 	int white_balance_g;
 	int white_balance_b;
-	unsigned int white_rgb_enabled;
+	int white_ldu_r;
+	int white_ldu_g;
+	int white_ldu_b;
 	unsigned int disable_trans_dimming;
 	unsigned int night_mode_level;
+	unsigned int ldu;
 
 	struct mdnie_table table_buffer;
 	mdnie_t sequence_buffer[256];
 	unsigned int coordinate[2];
 };
+
+#ifdef CONFIG_PANEL_CALL_MDNIE
+void mdnie_update_for_panel(void);
+#endif
 
 extern int mdnie_calibration(int *r);
 extern int mdnie_open_file(const char *path, char **fp);

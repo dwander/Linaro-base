@@ -49,15 +49,16 @@ typedef enum {
 	MANAGER_NOTIFY_MUIC_CHARGER,
 	MANAGER_NOTIFY_MUIC_CPUIDLE,
 	MANAGER_NOTIFY_MUIC_CPUFREQ,
+	MANAGER_NOTIFY_MUIC_TIMEOUT_OPEN_DEVICE,
 
 /* CCIC */
 	MANAGER_NOTIFY_CCIC_INITIAL = 20,
 	MANAGER_NOTIFY_CCIC_MUIC,
 	MANAGER_NOTIFY_CCIC_USB,
 	MANAGER_NOTIFY_CCIC_BATTERY,
-	MANAGER_NOTIFY_CCIC_PDIC,
-	MANAGER_NOTIFY_CCIC_CCIC,
-
+	MANAGER_NOTIFY_CCIC_DP,
+	MANAGER_NOTIFY_CCIC_USBDP,
+	MANAGER_NOTIFY_CCIC_SENSORHUB,
 
 /* VBUS */
 	MANAGER_NOTIFY_VBUS_USB = 30,
@@ -99,9 +100,11 @@ typedef struct _manager_data_t
 	struct notifier_block vbus_nb;
 #endif
 
+	struct delayed_work manager_init_work;
 //	struct workqueue_struct *typec_manager_wq;
 	struct delayed_work cable_check_work;
 	struct delayed_work muic_noti_work;
+	struct delayed_work rtctime_update_work;
 
 	int muic_action;
 	int muic_cable_type;
@@ -117,6 +120,7 @@ typedef struct _manager_data_t
 	bool usb_enable_state;
 	int pd_con_state;
 	int water_det;
+	int run_dry_support; /* if the CC IC driver has the run_dry_support variable, it should be added here as well  */
 	int is_UFPS;
 	void *pd;
 
@@ -124,6 +128,10 @@ typedef struct _manager_data_t
 	int dry_count;
 	int usb210_count;
 	int usb310_count;
+	int waterChg_count;
+	unsigned long waterDet_duration;
+	unsigned long waterDet_time;
+	unsigned long dryDet_time;
 }manager_data_t;
 
 

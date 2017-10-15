@@ -18,6 +18,9 @@
 #include <linux/pm_runtime.h>
 
 #include "mdnie.h"
+#ifdef CONFIG_DISPLAY_USE_INFO
+#include "dpui.h"
+#endif
 
 #define MDNIE_SYSFS_PREFIX		"/sdcard/mdnie/"
 
@@ -146,6 +149,24 @@ static void mdnie_update(struct mdnie_info *mdnie)
 	}
 }
 
+#ifdef CONFIG_PANEL_CALL_MDNIE
+static struct mdnie_info *mdnie_for_panel = NULL;
+void mdnie_update_for_panel(void)
+{
+	struct mdnie_info *mdnie = mdnie_for_panel;
+	pr_info("%s\n", __func__);
+	mutex_lock(&mdnie->lock);
+	mdnie->enable = 1;
+	mutex_unlock(&mdnie->lock);
+
+	mdnie_update(mdnie);
+
+	mutex_lock(&mdnie->lock);
+	mdnie->enable = 0;
+	mutex_unlock(&mdnie->lock);
+}
+#endif
+
 static void update_color_position(struct mdnie_info *mdnie, unsigned int idx)
 {
 	u8 mode, scenario;
@@ -165,6 +186,13 @@ static void update_color_position(struct mdnie_info *mdnie, unsigned int idx)
 				wbuf[scr_info->white_r] = mdnie->tune->coordinate_table[mode][idx * 3 + 0];
 				wbuf[scr_info->white_g] = mdnie->tune->coordinate_table[mode][idx * 3 + 1];
 				wbuf[scr_info->white_b] = mdnie->tune->coordinate_table[mode][idx * 3 + 2];
+#ifdef CONFIG_ALWAYS_RELOAD_MTP_FACTORY_BUILD
+				if (mode == AUTO) {
+					wbuf[scr_info->white_r] = mdnie->tune->coordinate_table[mode][idx * 3 + 0] + mdnie->white_balance_r;
+					wbuf[scr_info->white_g] = mdnie->tune->coordinate_table[mode][idx * 3 + 1] + mdnie->white_balance_g;
+					wbuf[scr_info->white_b] = mdnie->tune->coordinate_table[mode][idx * 3 + 2] + mdnie->white_balance_b;
+				}
+#endif
 			}
 			if (mode == AUTO && scenario == UI_MODE) {
 				mdnie->white_default_r = mdnie->tune->coordinate_table[mode][idx * 3 + 0];
@@ -581,6 +609,7 @@ static ssize_t sensorRGB_store(struct device *dev,
 		return ret;
 
 	if (mdnie->enable && (mdnie->accessibility == ACCESSIBILITY_OFF)
+		&& (mdnie->ldu == 0)
 		&& (mdnie->mode == AUTO)
 		&& (mdnie->hdr == HDR_OFF)
 		&& (mdnie->hmt_mode == HMT_MDNIE_OFF)
@@ -644,43 +673,47 @@ static ssize_t whiteRGB_store(struct device *dev,
 	dev_info(dev, "%s, white_r %d, white_g %d, white_b %d\n",
 		__func__, white_red, white_green, white_blue);
 
-	if((white_red <= 0 && white_red >= -30) && (white_green <= 0 && white_green >= -30) && (white_blue <= 0 && white_blue >= -30)) {
+	if((white_red <= 0 && white_red >= -40) && (white_green <= 0 && white_green >= -40) && (white_blue <= 0 && white_blue >= -40)) {
 		mutex_lock(&mdnie->lock);
 
 		if(mdnie->mode == AUTO) {
-			mdnie->white_rgb_enabled = 1;
-			for (scenario = 0; scenario <= SCENARIO_MAX; scenario++) {
+			if(mdnie->ldu == 0) {
+				mdnie->white_ldu_r = mdnie->white_default_r;
+				mdnie->white_ldu_g = mdnie->white_default_g;
+				mdnie->white_ldu_b = mdnie->white_default_b;
+			}
+			for (scenario = 0; scenario < SCENARIO_MAX; scenario++) {
 				wbuf = mdnie->tune->main_table[scenario][AUTO].seq[scr_info->index].cmd;
 				if (IS_ERR_OR_NULL(wbuf))
 					continue;
 				if (scenario != EBOOK_MODE) {
-					wbuf[scr_info->white_r] = (unsigned char)(mdnie->white_default_r + white_red);
-					wbuf[scr_info->white_g] = (unsigned char)(mdnie->white_default_g + white_green);
-					wbuf[scr_info->white_b] = (unsigned char)(mdnie->white_default_b + white_blue);
+					wbuf[scr_info->white_r] = (unsigned char)(mdnie->white_ldu_r + white_red);
+					wbuf[scr_info->white_g] = (unsigned char)(mdnie->white_ldu_g + white_green);
+					wbuf[scr_info->white_b] = (unsigned char)(mdnie->white_ldu_b + white_blue);
 					mdnie->white_balance_r = white_red;
 					mdnie->white_balance_g = white_green;
 					mdnie->white_balance_b = white_blue;
 				}
 			}
 #if defined(CONFIG_TDMB)
-			wbuf = mdnie->tune->dmb_table[AUTO].seq[scr_info->index].cmd;	
+			wbuf = mdnie->tune->dmb_table[AUTO].seq[scr_info->index].cmd;
 			if (!IS_ERR_OR_NULL(wbuf)) {
-				wbuf[scr_info->white_r] = (unsigned char)(mdnie->white_default_r + white_red);
-				wbuf[scr_info->white_g] = (unsigned char)(mdnie->white_default_g + white_green);
-				wbuf[scr_info->white_b] = (unsigned char)(mdnie->white_default_b + white_blue);
+				wbuf[scr_info->white_r] = (unsigned char)(mdnie->white_ldu_r + white_red);
+				wbuf[scr_info->white_g] = (unsigned char)(mdnie->white_ldu_g + white_green);
+				wbuf[scr_info->white_b] = (unsigned char)(mdnie->white_ldu_b + white_blue);
 				mdnie->white_balance_r = white_red;
 				mdnie->white_balance_g = white_green;
 				mdnie->white_balance_b = white_blue;
 			}
-#endif	
+#endif
 		}
-		
-		
+
+
 		mutex_unlock(&mdnie->lock);
 		mdnie_update(mdnie);
 	}
 
-	return count;	
+	return count;
 }
 
 
@@ -789,15 +822,26 @@ static ssize_t mdnie_ldu_store(struct device *dev,
 	if ((mdnie->tune->max_adjust_ldu != 0) && (mdnie->tune->adjust_ldu_table != NULL)) {
 		if ((idx >= 0) && (idx < mdnie->tune->max_adjust_ldu)) {
 			mutex_lock(&mdnie->lock);
+			mdnie->ldu = idx;
 			for (mode = 0; mode < MODE_MAX; mode++) {
 				for (scenario = 0; scenario <= EMAIL_MODE; scenario++) {
 					wbuf = mdnie->tune->main_table[scenario][mode].seq[scr_info->index].cmd;
 					if (IS_ERR_OR_NULL(wbuf))
 						continue;
 					if (scenario != EBOOK_MODE) {
-						wbuf[scr_info->white_r] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 0];
-						wbuf[scr_info->white_g] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 1];
-						wbuf[scr_info->white_b] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 2];
+						if(mode == AUTO) {
+							wbuf[scr_info->white_r] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 0] + mdnie->white_balance_r;
+							wbuf[scr_info->white_g] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 1] + mdnie->white_balance_g;
+							wbuf[scr_info->white_b] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 2] + mdnie->white_balance_b;
+							mdnie->white_ldu_r = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 0];
+							mdnie->white_ldu_g = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 1];
+							mdnie->white_ldu_b = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 2];
+						}
+						else{
+							wbuf[scr_info->white_r] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 0];
+							wbuf[scr_info->white_g] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 1];
+							wbuf[scr_info->white_b] = mdnie->tune->adjust_ldu_table[mode][idx * 3 + 2];
+						}
 					}
 				}
 			}
@@ -930,6 +974,48 @@ static int mdnie_register_fb(struct mdnie_info *mdnie)
 	return fb_register_client(&mdnie->fb_notif);
 }
 
+#ifdef CONFIG_DISPLAY_USE_INFO
+static int dpui_notifier_callback(struct notifier_block *self,
+		unsigned long event, void *data)
+{
+	struct mdnie_info *mdnie;
+	struct dpui_info *dpui = data;
+	char tbuf[MAX_DPUI_VAL_LEN];
+	int size;
+
+	if (dpui == NULL) {
+		pr_err( "%s: dpui is null\n", __func__);
+		return 0;
+	}
+
+	mdnie = container_of(self, struct mdnie_info, dpui_notif);
+	mutex_lock(&mdnie->lock);
+
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", mdnie->coordinate[0]);
+	set_dpui_field(DPUI_KEY_WCRD_X, tbuf, size);
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", mdnie->coordinate[1]);
+	set_dpui_field(DPUI_KEY_WCRD_Y, tbuf, size);
+
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", mdnie->white_balance_r);
+	set_dpui_field(DPUI_KEY_WOFS_R, tbuf, size);
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", mdnie->white_balance_g);
+	set_dpui_field(DPUI_KEY_WOFS_G, tbuf, size);
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", mdnie->white_balance_b);
+	set_dpui_field(DPUI_KEY_WOFS_B, tbuf, size);
+
+	mutex_unlock(&mdnie->lock);
+
+	return 0;
+}
+
+static int mdnie_register_dpui(struct mdnie_info *mdnie)
+{
+	memset(&mdnie->dpui_notif, 0, sizeof(mdnie->dpui_notif));
+	mdnie->dpui_notif.notifier_call = dpui_notifier_callback;
+	return dpui_logging_register(&mdnie->dpui_notif, DPUI_TYPE_PANEL);
+}
+#endif /* CONFIG_DISPLAY_USE_INFO */
+
 #ifdef CONFIG_ALWAYS_RELOAD_MTP_FACTORY_BUILD
 static struct mdnie_info *g_mdnie = NULL;
 void update_mdnie_coordinate( u16 coordinate0, u16 coordinate1 )
@@ -948,11 +1034,9 @@ void update_mdnie_coordinate( u16 coordinate0, u16 coordinate1 )
 	mdnie->coordinate[0] = coordinate0;
 	mdnie->coordinate[1] = coordinate1;
 
-	if(mdnie->white_rgb_enabled == 0) {
-		ret = get_panel_coordinate(mdnie, result);
-		if (ret > 0)
-			update_color_position(mdnie, ret);
-	}
+	ret = get_panel_coordinate(mdnie, result);
+	if (ret > 0)
+		update_color_position(mdnie, ret);
 
 	return;
 }
@@ -985,7 +1069,9 @@ int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned 
 #ifdef CONFIG_ALWAYS_RELOAD_MTP_FACTORY_BUILD
 	g_mdnie = mdnie;
 #endif
-
+#ifdef CONFIG_PANEL_CALL_MDNIE
+	mdnie_for_panel = mdnie;
+#endif
 	mdnie->dev = device_create(mdnie_class, p, 0, &mdnie, !mdnie_no ? "mdnie" : "mdnie%d", mdnie_no);
 	if (IS_ERR_OR_NULL(mdnie->dev)) {
 		pr_err("failed to create mdnie device\n");
@@ -1003,6 +1089,7 @@ int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned 
 	mdnie->disable_trans_dimming = 0;
 	mdnie->night_mode = NIGHT_MODE_OFF;
 	mdnie->night_mode_level = 0;
+	mdnie->ldu = 0;
 	mdnie->hdr = HDR_OFF;
 	mdnie->white_default_r = 255;
 	mdnie->white_default_g = 255;
@@ -1010,7 +1097,9 @@ int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned 
 	mdnie->white_balance_r = 0;
 	mdnie->white_balance_g = 0;
 	mdnie->white_balance_b = 0;
-	mdnie->white_rgb_enabled = 0;
+	mdnie->white_ldu_r = 255;
+	mdnie->white_ldu_g = 255;
+	mdnie->white_ldu_b = 255;
 
 	mdnie->data = data;
 	mdnie->ops.write = w;
@@ -1026,6 +1115,9 @@ int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned 
 	dev_set_drvdata(mdnie->dev, mdnie);
 
 	mdnie_register_fb(mdnie);
+#ifdef CONFIG_DISPLAY_USE_INFO
+	mdnie_register_dpui(mdnie);
+#endif
 
 	mdnie->enable = 1;
 	mdnie_update(mdnie);

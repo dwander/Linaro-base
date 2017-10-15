@@ -188,7 +188,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 	/* Get number of L2 tables needed */
 	mmu_table->l2_tables_nr = (total_pages_nr + L2_ENTRIES_MAX - 1) /
 				  L2_ENTRIES_MAX;
-	mc_dev_devel("total_pages_nr %lu l2_tables_nr %zu",
+	mc_dev_devel("total_pages_nr %lu l2_tables_nr %zu\n",
 		     total_pages_nr, mmu_table->l2_tables_nr);
 
 	/* Get a page to store page pointers */
@@ -452,6 +452,24 @@ struct tee_mmu *tee_mmu_create(struct task_struct *task, const void *addr,
 		     mmu->offset, mmu->l1_table.page ? 1 : 2,
 		     mmu_table_pointer(mmu));
 	return mmu;
+}
+
+bool client_mmu_matches(const struct tee_mmu *left,
+			const struct tee_mmu *right)
+{
+	const void *left_page = left->l2_tables[0].ptes_32;
+	const void *right_page = right->l2_tables[0].ptes_32;
+	bool ret;
+
+	/* L1 not supported */
+	if (left->l1_table.page || right->l1_table.page)
+		return false;
+
+	/* Only need to compare contents of L2 page */
+	ret = !memcmp(left_page, right_page, PAGE_SIZE);
+	mc_dev_devel("MMU tables virt %p and %p %smatch\n", left, right,
+		     ret ? "" : "do not ");
+	return ret;
 }
 
 void tee_mmu_buffer(const struct tee_mmu *mmu, struct mcp_buffer_map *map)

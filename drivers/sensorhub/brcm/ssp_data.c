@@ -25,6 +25,9 @@
 #define MSG2AP_INST_TIME_SYNC			0x06
 #define MSG2AP_INST_RESET			0x07
 #define MSG2AP_INST_GYRO_CAL			0x08
+#ifdef CONFIG_SENSORS_SSP_MAGNETIC_COMMON
+#define MSG2AP_INST_MAG_CAL             0x09
+#endif
 #define MSG2AP_INST_SENSOR_INIT_DONE	0x0a
 
 #ifdef CONFIG_SENSORS_SSP_HIFI_BATCHING // HIFI batch
@@ -60,18 +63,18 @@ u64 get_leveling_timestamp(u64 timestamp, struct ssp_data *data, u64 time_delta,
 	u64 level_threshold = base_time + prev_time + ((base_time / 10) * 19);
 
 	if(data->first_sensor_data[sensor_type] == true){
-		if(time_delta == 1){ 
+		if(time_delta == 1){
 			// check first data for base_time
 			//pr_err("[SSP_DEBUG_TIME] sensor_type: %2d first_timestamp: %lld\n", sensor_type, timestamp);
 			data->first_sensor_data[sensor_type] = false;
 		}
 		goto exit_current;
-	} 
+	}
 
-	if(threshold < timestamp && level_threshold > timestamp){ 		
+	if(threshold < timestamp && level_threshold > timestamp){
 		return timestamp - threshold < 30 * 1000000 ? threshold : timestamp;
-	} 
-	
+	}
+
 exit_current:
 	return ret;
 }
@@ -101,7 +104,7 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 
 	// TODO: Reverse calculation of timestamp when non wake up batching.
 	if (batch_mode == BATCH_MODE_RUN) {
-		// BATCHING MODE 
+		// BATCHING MODE
 		//ssp_dbg("[SSP_TIM] BATCH [%3d] TS %lld %lld\n", sensor_type, data->lastTimestamp[sensor_type],time_delta_ns);
 		data->lastTimestamp[sensor_type] += time_delta_ns;
 	} else {
@@ -124,15 +127,21 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 
 				data->ts_stacked_cnt += offset;
 				update_timestamp = get_leveling_timestamp(current_timestamp, data, time_delta_us, sensor_type);
-		
+
 				ssp_debug_time("[SSP_DEBUG_TIME] sensor_type: %d stacked_cnt: %d idx: %d current_timestamp: %lld replace_timestamp: %lld offset: %d\n", sensor_type, ts_index, idxTimestamp, current_timestamp, update_timestamp, offset);
-				
+
 				// INSERT DUMMY INDEXING & SKIP 1 EVENT.
 				for (i = 1; i <= offset; i++) {
 					data->ts_index_buffer[(ts_index + i) % SIZE_TIMESTAMP_BUFFER] = data->ts_irq_last < update_timestamp ? update_timestamp : current_timestamp;
 				}
 				//data->ts_stacked_cnt += offset;
 				data->skipEventReport = true;// SKIP OVERFLOWED INDEX
+			} else if((sensor_type == GYROSCOPE_SENSOR) && (data->cameraGyroSyncMode == true)) {
+			    //specific case for camera sync(gyro)
+			    if (data->lastTimestamp[sensor_type] > data->ts_index_buffer[idxTimestamp % SIZE_TIMESTAMP_BUFFER])
+			        data->lastTimestamp[sensor_type] = data->lastTimestamp[sensor_type] + time_delta_us;
+			    else
+			        data->lastTimestamp[sensor_type] = data->ts_index_buffer[idxTimestamp % SIZE_TIMESTAMP_BUFFER];
 			} else {
 				u64 received_timestamp = data->ts_index_buffer[idxTimestamp % SIZE_TIMESTAMP_BUFFER];
 				//ToDo: conditional leveling
@@ -140,7 +149,7 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 				ssp_debug_time("[SSP_DEBUG_TIME] sensor_type: %2d received_timestamp: %lld update_timestamp: %lld diff: %lld latency: %lld idx: %d\n", sensor_type, received_timestamp, update_timestamp, update_timestamp - data->lastTimestamp[sensor_type], current_timestamp - update_timestamp, idxTimestamp % SIZE_TIMESTAMP_BUFFER);
 				data->lastTimestamp[sensor_type] = update_timestamp;
 			}
-			
+
 			break;
 
 		// None Indexing
@@ -170,8 +179,15 @@ static void get_uncalib_sensordata(char *pchRcvDataFrame, int *iDataIdx,
 static void get_geomagnetic_uncaldata(char *pchRcvDataFrame, int *iDataIdx,
 	struct sensor_value *sensorsdata)
 {
-	memcpy(sensorsdata, pchRcvDataFrame + *iDataIdx, 12);
-	*iDataIdx += 12;
+	memcpy(sensorsdata, pchRcvDataFrame + *iDataIdx, UNCAL_MAGNETIC_SIZE);
+	*iDataIdx += UNCAL_MAGNETIC_SIZE;
+}
+
+static void get_geomagnetic_caldata(char *pchRcvDataFrame, int *iDataIdx,
+	struct sensor_value *sensorsdata)
+{
+	memcpy(sensorsdata, pchRcvDataFrame + *iDataIdx, MAGNETIC_SIZE);
+	*iDataIdx += MAGNETIC_SIZE;
 }
 
 static void get_geomagnetic_rawdata(char *pchRcvDataFrame, int *iDataIdx,
@@ -179,13 +195,6 @@ static void get_geomagnetic_rawdata(char *pchRcvDataFrame, int *iDataIdx,
 {
 	memcpy(sensorsdata, pchRcvDataFrame + *iDataIdx, 6);
 	*iDataIdx += 6;
-}
-
-static void get_geomagnetic_caldata(char *pchRcvDataFrame, int *iDataIdx,
-	struct sensor_value *sensorsdata)
-{
-	memcpy(sensorsdata, pchRcvDataFrame + *iDataIdx, 7);
-	*iDataIdx += 7;
 }
 
 static void get_rot_sensordata(char *pchRcvDataFrame, int *iDataIdx,
@@ -366,7 +375,11 @@ bool ssp_check_buffer(struct ssp_data *data)
 			idx_data += 14;
 			break;
 		case GEOMAGNETIC_UNCALIB_SENSOR:
-			idx_data += 20;
+#ifdef CONFIG_SSP_SUPPORT_MAGNETIC_OVERFLOW
+            idx_data += 21;
+#else
+            idx_data += 20;
+#endif
 			break;
 		case PRESSURE_SENSOR:
 			idx_data += 14;
@@ -422,7 +435,7 @@ void ssp_batch_resume_check(struct ssp_data *data)
 		//ssp_dbg("[SSP_BAT] LENGTH = %d, start index = %d ts %lld resume %lld\n", data->batch_event.batch_length, idx_data, timestamp, data->resumeTimestamp);
 
 		timestamp = data->resumeTimestamp = data->timestamp;
-		
+
 		while (idx_data < data->batch_event.batch_length)
 		{
 			sensor_type = data->batch_event.batch_data[idx_data++];
@@ -430,7 +443,7 @@ void ssp_batch_resume_check(struct ssp_data *data)
 				sensor_data.meta_data.sensor = data->batch_event.batch_data[idx_data++];
 				continue;
 			}
-			
+
 			if ((sensor_type != ACCELEROMETER_SENSOR) &&
 				(sensor_type != GEOMAGNETIC_UNCALIB_SENSOR) &&
 				(sensor_type != PRESSURE_SENSOR) &&
@@ -474,7 +487,7 @@ void ssp_batch_resume_check(struct ssp_data *data)
 					proxi_offset += delta_time_us;
 					break;
 				default:
-					break;				
+					break;
 			}
 			idx_data += 8;
 		}
@@ -490,7 +503,7 @@ void ssp_batch_resume_check(struct ssp_data *data)
 			data->lastTimestamp[GAME_ROTATION_VECTOR] = timestamp - grv_offset;
 		if(proxi_offset > 0)
 			data->lastTimestamp[PROXIMITY_SENSOR] = timestamp - proxi_offset;
-		
+
 		ssp_dbg("[SSP_BAT] resume calc. acc %lld. uncalmag %lld. pressure %lld. GRV %lld proxi %lld \n",
 			acc_offset, uncal_mag_offset, press_offset, grv_offset, proxi_offset);
 	}
@@ -602,7 +615,7 @@ void ssp_batch_data_read_task(struct work_struct *work)
 
 	// TODO: Do not parse, jut put in to FIFO, and wake_up thread.
 
-	// READ DATA FROM MCU COMPLETED 
+	// READ DATA FROM MCU COMPLETED
 	//Wake up check
 	if(ssp_check_buffer(data)){
 		ssp_batch_resume_check(data);
@@ -687,7 +700,7 @@ int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 			if ((sensor_type < 0) || (sensor_type >= SENSOR_MAX)) {
 				pr_err("[SSP]: %s - Mcu data frame1 error %d\n", __func__,
 						sensor_type);
-				return ERROR;
+				goto error_return;
 			}
 			memcpy(&length, pchRcvDataFrame + iDataIdx, 2);
 			iDataIdx += 2;
@@ -714,16 +727,16 @@ int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 
 				//if(sensor_type == GYROSCOPE_SENSOR) //check packet recieve time
 				//	pr_err("[SSP_PARSE] bbd event time %lld\n", data->timestamp);
-				get_timestamp(data, pchRcvDataFrame, &iDataIdx, &sensorsdata, batch_mode, sensor_type);	
+				get_timestamp(data, pchRcvDataFrame, &iDataIdx, &sensorsdata, batch_mode, sensor_type);
 				if (data->skipEventReport == false){
 					data->report_sensor_data[sensor_type](data, &sensorsdata);
-				} else { 
+				} else {
 					// we've already known index mismatching between AP and sensorhub at get_timestamp().
-					// so, skip to check next sensor data at same pakcet.  
+					// so, skip to check next sensor data at same pakcet.
 					batch_event_count = 0;
 					break;
 				}
-				batch_event_count--;				
+				batch_event_count--;
 				//pr_err("[SSP]: %s batch count (%d)\n", __func__, batch_event_count);
 			} while ((batch_event_count > 0) && (iDataIdx < iLength));
 
@@ -833,14 +846,14 @@ int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 		case MSG2AP_INST_META_DATA:
 			sensorsdata.meta_data.what = pchRcvDataFrame[iDataIdx++];
 			sensorsdata.meta_data.sensor = pchRcvDataFrame[iDataIdx++];
-			
+
 			if(sensorsdata.meta_data.what != 1)
 				goto error_return;
-			
+
 			if ((sensorsdata.meta_data.sensor < 0) || (sensorsdata.meta_data.sensor >= SENSOR_MAX)) {
 				pr_err("[SSP]: %s - Mcu meta_data frame1 error %d\n", __func__,
 						sensorsdata.meta_data.sensor);
-				return ERROR;
+				goto error_return;
 			}
 			report_meta_data(data, &sensorsdata);
 			break;
@@ -858,6 +871,13 @@ int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 		case SH_MSG2AP_GYRO_CALIBRATION_EVENT_OCCUR:
 			data->gyro_lib_state = GYRO_CALIBRATION_STATE_EVENT_OCCUR;
 			break;
+#ifdef CONFIG_SENSORS_SSP_MAGNETIC_COMMON            
+        case MSG2AP_INST_MAG_CAL:
+			wake_lock(&data->ssp_wake_lock);
+			save_magnetic_cal_param_to_nvm(data, pchRcvDataFrame, &iDataIdx);
+			wake_unlock(&data->ssp_wake_lock);
+			break;
+#endif            
         default :
             goto error_return;
 		}
@@ -872,10 +892,10 @@ error_return:
 	{
 		pr_err("[SSP] %s packet is polluted\n", __func__);
 		data->mcuAbnormal = true;
-		data->pktErrCnt = 0; 
+		data->pktErrCnt = 0;
 		data->errorCount++;
 	}
-    return ERROR;    
+    return ERROR;
 }
 
 void initialize_function_pointer(struct ssp_data *data)
@@ -891,7 +911,7 @@ void initialize_function_pointer(struct ssp_data *data)
 	data->get_sensor_data[GESTURE_SENSOR] = get_gesture_sensordata;
 	data->get_sensor_data[PROXIMITY_SENSOR] = get_proximity_sensordata;
 	data->get_sensor_data[PROXIMITY_ALERT_SENSOR] = get_proximity_alert_sensordata;
-	
+
 	data->get_sensor_data[PROXIMITY_RAW] = get_proximity_rawdata;
 #ifdef CONFIG_SENSORS_SSP_SX9306
 	data->get_sensor_data[GRIP_SENSOR] = get_grip_sensordata;
@@ -914,7 +934,7 @@ void initialize_function_pointer(struct ssp_data *data)
 #endif
 	data->get_sensor_data[TILT_DETECTOR] = get_tilt_sensordata;
 	data->get_sensor_data[PICKUP_GESTURE] = get_pickup_sensordata;
-	
+
 	data->get_sensor_data[BULK_SENSOR] = NULL;
 	data->get_sensor_data[GPS_SENSOR] = NULL;
 
@@ -929,7 +949,7 @@ void initialize_function_pointer(struct ssp_data *data)
 	data->report_sensor_data[GESTURE_SENSOR] = report_gesture_data;
 	data->report_sensor_data[PROXIMITY_SENSOR] = report_prox_data;
 	data->report_sensor_data[PROXIMITY_ALERT_SENSOR] = report_prox_alert_data;
-	
+
 	data->report_sensor_data[PROXIMITY_RAW] = report_prox_raw_data;
 #ifdef CONFIG_SENSORS_SSP_SX9306
 	data->report_sensor_data[GRIP_SENSOR] = report_grip_data;

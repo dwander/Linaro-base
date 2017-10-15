@@ -1,4 +1,41 @@
-BCM4359 DHD 1.363.59.209 for Android Zen/Noble/Hero/Grace Project
+BCM4359 DHD 1.363.59.211 for Android Zen/Noble/Hero/Grace Project
+
+DHD 1.363.59.211 - 2017.03.03
+Others
+ - CSP:1112125 Added MSM8998 architecture define to deferred init call
+ - CSP:1123852 Refactoring Blob download feature for coexistence with blob, non blob FW
+ - CSP:1125601 Invalidate PCI configuration saved state in order to reduce PCI resume latency
+ - CSP:1128493 Added wakelock during get BSSID from dongle on wl_cfg80211_get_station() function
+ - Added exception case of CLM Blob file checking logic about MFG mode
+ - Removed unnecessary country code list in translate_custom_table
+
+
+DHD 1.363.59.210 - 2017.02.10
+New Feature
+ - Enabled COUNTRY_SINGLE_REGREV feature
+   (This patch should be sync up with FW 9.75.155.46_Blob or higher version)
+
+Kernel Panic
+ - CSP:1100314 Fixed the calculation of read/write offset for debug ring to avoid the possibility of buffer overflow
+ - CSP:1115833 Fixed kernel freeze issue due to tasklet count mismatch
+ - CSP:1125179 Enabled dongle_isolation for Exynos7420 platform
+
+Others
+ - CSP:1093614 Fixed Prevent warning issues
+ - CSP:1103989 Unnecessary mpc setting code is removed
+ - CSP:1106625 Fixed blob download malloc buffer size calculation code
+ - CSP:1110320 HANG event recovery simulation
+ - CSP:1115484 Fixed build error with GSCAN code
+ - CSP:1115484 Fixed vulnerability issues
+ - CSP:1115750 Added to fix country miss setting
+ - CSP:1118451 Prevent to duplicate connection request without disconnection
+ - CSP:1118705 Link Status HAL API support for 32bit platfom on 64bit kernel
+ - CSP:1124363 Fixed idlecount update missing of RuntimePM
+ - CSP:1125141 Enhance the PKTID error handler
+ - Added error log for chip id mismatch error
+ - Added ICMP dump log
+ - Enabled "SUPPORT_TRIGGER_HANG_EVENT" for hang test
+
 
 DHD 1.363.59.209 - 2016.12.19
 Others

@@ -279,6 +279,7 @@ enum {
 	P9220_VOUT_5V,
 	P9220_VOUT_6V,
 	P9220_VOUT_9V,
+	P9220_VOUT_10V,
 	P9220_VOUT_CC_CV,
 	P9220_VOUT_CV_CALL,
 	P9220_VOUT_CC_CALL,
@@ -439,6 +440,8 @@ struct p9220_charger_platform_data {
 	int is_charging;
 	u32 *fod_data_cv;
 	u32 *fod_data;
+	u32 *fod_hero_5v_data;
+	u32 *fod_hv_stand_data;
 	int fod_data_check;
 	bool ic_on_mode;
 	int hw_rev_changed; /* this is only for noble/zero2 */
@@ -460,6 +463,7 @@ struct p9220_charger_platform_data {
 	u8 tx_data_cmd;
 	u8 tx_data_val;
 	u32 hv_vout_wa; /* this is only for Hero/Poseidon */
+	u32 unsupported_pack;	
 };
 
 #define p9220_charger_platform_data_t \

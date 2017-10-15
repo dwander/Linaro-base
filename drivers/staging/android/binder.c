@@ -3758,21 +3758,33 @@ static int binder_process_transaction_show(struct seq_file *m, void *unused)
 	struct binder_proc *proc;
 	int res, ppid;
 	char * title;
+	int do_lock = !binder_debug_no_lock;
 
 	title = kmalloc(MAX_PROCTITLE_LEN, GFP_KERNEL);
 	if (!title)
 		return -1;
 
+	if (do_lock)
+		binder_lock(__func__);
+
 	hlist_for_each_entry(proc, &binder_procs, proc_node) {
 		// Don't let show any daemon's binder count
 		ppid = proc->tsk->group_leader->parent->pid;
+
+		preempt_enable_no_resched();
 		res = get_cmdline(proc->tsk, title, MAX_PROCTITLE_LEN);
+		preempt_disable();
+
 		if (proc->stats.process_bnd_cnt && ppid != 1 && ppid != 2) {
 			seq_printf(m, "%d_%d_%s\n", proc->pid,
 					proc->stats.process_bnd_cnt,
 					res == 0 ? proc->tsk->comm : title);
 		}
 	}
+
+	if (do_lock)
+		binder_unlock(__func__);
+
 	kfree(title);
 
 	return 0;

@@ -28,7 +28,6 @@
 #include <linux/wakelock.h>
 #include <linux/interrupt.h>
 #include <linux/regulator/consumer.h>
-//#include <linux/sensor/sensors_core.h>
 #include <linux/power_supply.h>
 #include "sx9320_reg.h"
 #if defined(CONFIG_MUIC_NOTIFIER)
@@ -72,8 +71,7 @@
 #define TOUCH_STATE		1
 #define BODY_STATE		2
 
-#define HALLIC1_PATH		"/sys/class/sec/sec_key/certify_hall_detect"
-#define HALLIC2_PATH		"/sys/class/sec/sec_key/hall_detect"
+#define HALLIC1_PATH		"/sys/class/sec/sec_key/hall_detect"
 
 struct sx9320_p {
 	struct i2c_client *client;
@@ -112,7 +110,7 @@ struct sx9320_p {
 	int diff_avg;
 	int diff_cnt;
 	int init_done;
-	
+
 	s32 capmain;
 	s32 useful;
 	s32 useful_avg;
@@ -150,16 +148,15 @@ static int check_hallic_state(char *file_path, unsigned char hall_ic_status[])
 	iRet = filep->f_op->read(filep, hall_sysfs,
 		sizeof(hall_sysfs), &filep->f_pos);
 
-	if (iRet != sizeof(hall_sysfs)) {
+	if (iRet != sizeof(hall_sysfs))
 		iRet = -EIO;
-	} else {
+	else
 		strncpy(hall_ic_status, hall_sysfs, sizeof(hall_sysfs));
-	}
 
 	filp_close(filep, current->files);
 	set_fs(old_fs);
 
-	exit:
+exit:
 	return iRet;
 }
 
@@ -212,31 +209,7 @@ static int sx9320_i2c_read(struct sx9320_p *data, u8 reg_addr, u8 *buf)
 
 	return ret;
 }
-#if 0
-static int sx9320_i2c_read_block(struct sx9320_p *data, u8 reg_addr,
-	u8 *buf, u8 buf_size)
-{
-	int ret;
-	struct i2c_msg msg[2];
 
-	msg[0].addr = data->client->addr;
-	msg[0].flags = I2C_M_WR;
-	msg[0].len = 1;
-	msg[0].buf = &reg_addr;
-
-	msg[1].addr = data->client->addr;
-	msg[1].flags = I2C_M_RD;
-	msg[1].len = buf_size;
-	msg[1].buf = buf;
-
-	ret = i2c_transfer(data->client->adapter, msg, 2);
-	if (ret < 0)
-		pr_err("[SX9320]: %s - i2c read error %d\n",
-			__func__, ret);
-
-	return ret;
-}
-#endif
 static u8 sx9320_read_irqstate(struct sx9320_p *data)
 {
 	u8 val = 0;
@@ -266,7 +239,7 @@ static void sx9320_initialize_register(struct sx9320_p *data)
 		sx9320_i2c_write(data, SX9320_PROXCTRL6_REG, data->normal_th);
 	else
 		sx9320_i2c_write(data, SX9320_PROXCTRL7_REG, data->normal_th);
-		
+
 	data->init_done = ON;
 }
 
@@ -307,7 +280,7 @@ static void send_event(struct sx9320_p *data, int cnt, u8 state)
 		else
 			sx9320_i2c_write(data, SX9320_PROXCTRL7_REG,
 					data->normal_th);
-		
+
 		pr_info("[SX9320]: %s - button touched\n", __func__);
 	} else {
 		data->state[cnt] = IDLE;
@@ -337,7 +310,7 @@ static void sx9320_display_data_reg(struct sx9320_p *data)
 {
 	u8 val = 0;
 	int idx;
-	
+
 	sx9320_i2c_write(data, SX9320_REGSENSORSELECT, (u8)data->phen);
 
 	for (idx = 0; idx < (int)(sizeof(setup_reg) >> 1); idx++) {
@@ -355,6 +328,7 @@ static void sx9320_get_data(struct sx9320_p *data)
 	u16 offset = 0;
 	s32 capMain = 0, useful = 0, range = 0;
 	s32 gain, again_ch;
+
 	mutex_lock(&data->read_mutex);
 
 	sx9320_i2c_write(data, SX9320_REGSENSORSELECT, (u8)data->phen);
@@ -383,14 +357,14 @@ static void sx9320_get_data(struct sx9320_p *data)
 	again_ch = (setup_reg[3].val & 0x03);
 
 	/* range small(00) : 1.325 Large(01) : 2.65 */
-	if(data->range == 1)
+	if (data->range == 1)
 		range = SX9320_LARGE_RANGE_VALUE;
 	else
 		range = SX9320_SMALL_RANGE_VALUE;
 
 	capMain = (((s32)ms_byte * 21234) + ((s32)ls_byte * 496))
 			+ ((useful * range) /
-            		((gain * 65536 * (s32)a_gain_ch[again_ch]) / 1000));
+			((gain * 65536 * (s32)a_gain_ch[again_ch]) / 1000));
 
 	/* avg read */
 	sx9320_i2c_read(data, SX9320_REGAVGMSB, &ms_byte);
@@ -436,11 +410,10 @@ static int sx9320_set_mode(struct sx9320_p *data, unsigned char mode)
 
 static void sx9320_ch_interrupt_read(struct sx9320_p *data, u8 status)
 {
-	if (status & (PHX_STATUS_REG << data->phen)) {
+	if (status & (PHX_STATUS_REG << data->phen))
 		data->ch1_state = TOUCH_STATE;
-	} else {
+	else
 		data->ch1_state = IDLE_STATE;
-	}
 
 	pr_info("[SX9320]: %s - ch1:%d, ch2:%d\n",
 		__func__, data->ch1_state, data->ch2_state);
@@ -473,7 +446,8 @@ static void sx9320_set_enable(struct sx9320_p *data, int enable)
 
 	if (enable == ON) {
 
-		pr_info("[SX9320]: %s - enable(status : 0x%x)\n", __func__, status);
+		pr_info("[SX9320]: %s - enable(status : 0x%x)\n",
+			__func__, status);
 
 		data->diff_avg = 0;
 		data->diff_cnt = 0;
@@ -482,11 +456,14 @@ static void sx9320_set_enable(struct sx9320_p *data, int enable)
 		sx9320_check_status(data, enable);
 
 		msleep(20);
-		/* make sure no interrupts are pending since enabling irq
-		 * will only work on next falling edge */
+		/*
+		 * make sure no interrupts are pending since enabling irq
+		 * will only work on next falling edge
+		 */
 		sx9320_read_irqstate(data);
-
-		/* enable interrupt */
+		/*
+		 * enable interrupt
+		 */
 		sx9320_i2c_write(data, SX9320_IRQ_ENABLE_REG, 0x70);
 
 		enable_irq(data->irq);
@@ -494,8 +471,10 @@ static void sx9320_set_enable(struct sx9320_p *data, int enable)
 	} else {
 		pr_info("[SX9320]: %s - disable\n", __func__);
 
-		/* disable interrupt */
- 		sx9320_i2c_write(data, SX9320_IRQ_ENABLE_REG, 0x00);
+		/*
+		 * disable interrupt
+		 */
+		sx9320_i2c_write(data, SX9320_IRQ_ENABLE_REG, 0x00);
 
 		disable_irq(data->irq);
 		disable_irq_wake(data->irq);
@@ -548,29 +527,36 @@ static ssize_t sx9320_register_write_store(struct device *dev,
 	int regist = 0, val = 0;
 	struct sx9320_p *data = dev_get_drvdata(dev);
 
-	if (sscanf(buf, "%d,%d", &regist, &val) != 2) {
+	if (sscanf(buf, "%2d,%2d", &regist, &val) != 2) {
 		pr_err("[SX9320]: %s - The number of data are wrong\n",
 			__func__);
 		return -EINVAL;
 	}
-		sx9320_i2c_write(data, (unsigned char)regist, (unsigned char)val);
-		pr_info("[SX9320]: %s - Register(0x%2x) data(0x%2x)\n",
-			__func__, regist, val);
+
+	sx9320_i2c_write(data, (unsigned char)regist, (unsigned char)val);
+	pr_info("[SX9320]: %s - Register(0x%2x) data(0x%2x)\n",
+		__func__, regist, val);
 	return count;
 }
 
 static ssize_t sx9320_register_read_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	u8 val[100] = {0,};
+	u8 val = 0;
+	int offset = 0, idx = 0;
 	struct sx9320_p *data = dev_get_drvdata(dev);
 
-	sx9320_display_data_reg(data);
+	for (idx = 0; idx < (int)(sizeof(setup_reg) >> 1); idx++) {
+		sx9320_i2c_read(data, setup_reg[idx].reg, &val);
 
-	return snprintf(buf, PAGE_SIZE,
-		"0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
-		val[0], val[1], val[2], val[3], val[4],
-		val[5], val[6], val[7], val[8], val[9]);
+		pr_info("[SX9320]: %s - Read Reg: 0x%x Value: 0x%x\n\n",
+			__func__, setup_reg[idx].reg, val);
+
+		offset += snprintf(buf + offset, PAGE_SIZE - offset,
+			"Reg: 0x%x Value: 0x%x\n", setup_reg[idx].reg, val);
+	}
+
+	return offset;
 }
 
 static ssize_t sx9320_read_data_show(struct device *dev,
@@ -647,17 +633,14 @@ static ssize_t sx9320_touch_mode_show(struct device *dev,
 static ssize_t sx9320_raw_data_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	static int sum_diff, sum_useful;
+	static int sum_diff;
 	struct sx9320_p *data = dev_get_drvdata(dev);
 
 	sx9320_get_data(data);
-	if (data->diff_cnt == 0) {
+	if (data->diff_cnt == 0)
 		sum_diff = data->diff;
-		sum_useful = data->useful;
-	} else {
+	else
 		sum_diff += data->diff;
-		sum_useful += data->useful;
-	}
 
 	if (++data->diff_cnt >= DIFF_READ_NUM) {
 		data->diff_avg = sum_diff / DIFF_READ_NUM;
@@ -824,7 +807,7 @@ static ssize_t sx9320_range_show(struct device *dev,
 	case 0x01:
 		ret = snprintf(buf, PAGE_SIZE, "Large\n");
 		break;
- 	default:
+	default:
 		ret = snprintf(buf, PAGE_SIZE, "Small\n");
 		break;
 	}
@@ -962,24 +945,24 @@ static ssize_t sx9320_avgposfilt_show(struct device *dev,
 	struct sx9320_p *data = dev_get_drvdata(dev);
 
 	switch (data->avgposfilt) {
-		case 0x00:
-			return snprintf(buf, PAGE_SIZE, "0\n");
-		case 0x01:
-			return snprintf(buf, PAGE_SIZE, "1-1/16\n");
-		case 0x02:
-			return snprintf(buf, PAGE_SIZE, "1-1/64\n");
-		case 0x03:
-			return snprintf(buf, PAGE_SIZE, "1-1/128\n");
-		case 0x04:
-			return snprintf(buf, PAGE_SIZE, "1-1/256\n");
-		case 0x05:
-			return snprintf(buf, PAGE_SIZE, "1-1/512\n");
-		case 0x06:
-			return snprintf(buf, PAGE_SIZE, "1-1/1024\n");
-		case 0x07:
-			return snprintf(buf, PAGE_SIZE, "1\n");
-		default:
-			break;
+	case 0x00:
+		return snprintf(buf, PAGE_SIZE, "0\n");
+	case 0x01:
+		return snprintf(buf, PAGE_SIZE, "1-1/16\n");
+	case 0x02:
+		return snprintf(buf, PAGE_SIZE, "1-1/64\n");
+	case 0x03:
+		return snprintf(buf, PAGE_SIZE, "1-1/128\n");
+	case 0x04:
+		return snprintf(buf, PAGE_SIZE, "1-1/256\n");
+	case 0x05:
+		return snprintf(buf, PAGE_SIZE, "1-1/512\n");
+	case 0x06:
+		return snprintf(buf, PAGE_SIZE, "1-1/1024\n");
+	case 0x07:
+		return snprintf(buf, PAGE_SIZE, "1\n");
+	default:
+		break;
 	}
 	return snprintf(buf, PAGE_SIZE, "not set\n");
 }
@@ -998,9 +981,9 @@ static ssize_t sx9320_rawfilt_show(struct device *dev,
 	struct sx9320_p *data = dev_get_drvdata(dev);
 	int rawfilt = data->rawfilt;
 
-	if (rawfilt > 0 && rawfilt < 8) {
+	if (rawfilt > 0 && rawfilt < 8)
 		return snprintf(buf, PAGE_SIZE, "1-1/%d\n", 1 << rawfilt);
-	} else if (rawfilt == 0)
+	else if (rawfilt == 0)
 		return snprintf(buf, PAGE_SIZE, "0\n");
 
 	return snprintf(buf, PAGE_SIZE, "not set\n");
@@ -1015,7 +998,7 @@ static ssize_t sx9320_sampling_freq_show(struct device *dev,
 	const char *table[32] = {
 		"250", "200", "166.67", "142.86", "125", "111.11", "100",
 		"90.91", "83.33", "76.92", "71.43", "66.67", "62.50", "58.82",
-		"55.56"	, "52.63", "50", "45.45", "41.67", "38.46", "35.71",
+		"55.56", "52.63", "50", "45.45", "41.67", "38.46", "35.71",
 		"31.25", "27.78", "25", "20.83", "17.86", "13.89", "11.36",
 		"8.33", "6.58", "5.43", "4.63"};
 
@@ -1120,7 +1103,8 @@ static DEVICE_ATTR(analog_gain, S_IRUGO, sx9320_again_show, NULL);
 static DEVICE_ATTR(phase, S_IRUGO, sx9320_phase_show, NULL);
 static DEVICE_ATTR(hysteresis, S_IRUGO, sx9320_hysteresis_show, NULL);
 
-static DEVICE_ATTR(grip_flush, S_IWUSR | S_IWGRP, NULL, sx9320_grip_flush_store);
+static DEVICE_ATTR(grip_flush, S_IWUSR | S_IWGRP, NULL,
+	sx9320_grip_flush_store);
 
 static struct device_attribute *sensor_attrs[] = {
 	&dev_attr_menual_calibrate,
@@ -1274,15 +1258,17 @@ static void sx9320_init_work_func(struct work_struct *work)
 
 	sx9320_initialize_chip(data);
 
-	/* set the threshold at init. register depends on phase*/
-	if(data->phen < 2)
+	/* set the threshold at init. register depends on phase */
+	if (data->phen < 2)
 		sx9320_i2c_write(data, SX9320_PROXCTRL6_REG, data->normal_th);
 	else
 		sx9320_i2c_write(data, SX9320_PROXCTRL7_REG, data->normal_th);
-	
+
 	sx9320_set_mode(data, SX9320_MODE_NORMAL);
-	/* make sure no interrupts are pending since enabling irq
-	 * will only work on next falling edge */
+	/*
+	 * make sure no interrupts are pending since enabling irq
+	 * will only work on next falling edge
+	 */
 	sx9320_read_irqstate(data);
 }
 
@@ -1302,7 +1288,21 @@ static void sx9320_debug_work_func(struct work_struct *work)
 {
 	struct sx9320_p *data = container_of((struct delayed_work *)work,
 		struct sx9320_p, debug_work);
+
 	static int hall_flag = 1;
+
+	check_hallic_state(HALLIC1_PATH, data->hall_ic1);
+
+	/* Hall IC closed : offset cal (once) */
+	if (strcmp(data->hall_ic1, "CLOSE") == 0) {
+		if (hall_flag) {
+			pr_info("[SX9320]: %s - hall IC1 is closed\n",
+				__func__);
+			sx9320_set_offset_calibration(data);
+			hall_flag = 0;
+		}
+	} else
+		hall_flag = 1;
 
 	if (atomic_read(&data->enable) == ON) {
 		if (data->debug_count >= GRIP_LOG_TIME) {
@@ -1312,21 +1312,6 @@ static void sx9320_debug_work_func(struct work_struct *work)
 			data->debug_count++;
 		}
 	}
-
-	check_hallic_state(HALLIC1_PATH, data->hall_ic1);
-	check_hallic_state(HALLIC2_PATH, data->hall_ic2);
-	
-	/* Hall IC closed : offset cal (once)*/
-	if (strcmp(data->hall_ic1, "CLOSE") == 0 &&
-		strcmp(data->hall_ic2, "CLOSE") == 0) {
-		if (hall_flag) {
-			pr_info("[SX9320]: %s - hall IC1&2 is closed\n",
-				__func__);
-			sx9320_set_offset_calibration(data);
-			hall_flag = 0;
-		}
-	} else
-		hall_flag = 1;
 
 	schedule_delayed_work(&data->debug_work, msecs_to_jiffies(1000));
 }
@@ -1430,7 +1415,7 @@ static void sx9320_initialize_variable(struct sx9320_p *data)
 
 	for (cnt = 0; cnt < TOTAL_BOTTON_COUNT; cnt++)
 		data->state[cnt] = IDLE;
-	
+
 	data->skip_data = false;
 	data->check_usb = false;
 	data->debug_count = 0;
@@ -1457,7 +1442,7 @@ static void sx9320_initialize_variable(struct sx9320_p *data)
 	sx9320_specific_register_set(16, 2, 0, data->avgposfilt);
 	sx9320_specific_register_set(16, 5, 3, data->avgnegfilt);
 	sx9320_specific_register_set(17, 5, 4, data->hyst);
- }
+}
 
 static void sx9320_read_setupreg(struct device_node *dnode, char *str, u8 *val)
 {
@@ -1468,10 +1453,9 @@ static void sx9320_read_setupreg(struct device_node *dnode, char *str, u8 *val)
 
 	if (!ret)
 		*val = (u8)temp_val;
-	else 
+	else
 		pr_err("[SX9320]: %s - %s: property read err 0x%2x (%d)\n",
 			__func__, str, temp_val, ret);
-	return;
 }
 
 static int sx9320_parse_dt(struct sx9320_p *data, struct device *dev)
@@ -1501,7 +1485,7 @@ static int sx9320_parse_dt(struct sx9320_p *data, struct device *dev)
 	sx9320_read_setupreg(node, SX9320_AVGNEGFILT, &data->avgnegfilt);
 	sx9320_read_setupreg(node, SX9320_AVGTHRESH, &data->avgthresh);
 	sx9320_read_setupreg(node, SX9320_NORMALTHD, &data->normal_th);
-	
+
 	return 0;
 }
 
@@ -1511,12 +1495,8 @@ static int sx9320_cpuidle_muic_notifier(struct notifier_block *nb,
 {
 	struct sx9320_p *grip_data;
 
-#ifdef CONFIG_CCIC_NOTIFIER
-	CC_NOTI_ATTACH_TYPEDEF *pnoti = (CC_NOTI_ATTACH_TYPEDEF *)data;
-	muic_attached_dev_t attached_dev = pnoti->cable_type;
-#else
 	muic_attached_dev_t attached_dev = *(muic_attached_dev_t *)data;
-#endif
+
 	grip_data = container_of(nb, struct sx9320_p, cpuidle_muic_nb);
 	switch (attached_dev) {
 	case ATTACHED_DEV_OTG_MUIC:
@@ -1524,10 +1504,10 @@ static int sx9320_cpuidle_muic_notifier(struct notifier_block *nb,
 	case ATTACHED_DEV_TA_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_PREPARE_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_9V_MUIC:
-		if (action == MUIC_NOTIFY_CMD_ATTACH) 
-			pr_info("[SX9320]: %s - TA/USB is inserted\n", __func__);
-		else if (action == MUIC_NOTIFY_CMD_DETACH) 
-			pr_info("[SX9320]: %s - TA/USB is removed\n", __func__);
+		if (action == MUIC_NOTIFY_CMD_ATTACH)
+			pr_info("[SX9320]: %s - TA/USB insert\n", __func__);
+		else if (action == MUIC_NOTIFY_CMD_DETACH)
+			pr_info("[SX9320]: %s - TA/USB remove\n", __func__);
 
 		if (grip_data->init_done == ON)
 			sx9320_set_offset_calibration(grip_data);
@@ -1560,11 +1540,6 @@ static int sx9320_probe(struct i2c_client *client,
 
 	/* create memory for main struct */
 	data = kzalloc(sizeof(struct sx9320_p), GFP_KERNEL);
-	if (data == NULL) {
-		pr_err("[SX9320]: %s - kzalloc error\n", __func__);
-		ret = -ENOMEM;
-		goto exit_kzalloc;
-	}
 
 	i2c_set_clientdata(client, data);
 	data->client = client;
@@ -1597,7 +1572,7 @@ static int sx9320_probe(struct i2c_client *client,
 		pr_err("[SX9320]: %s - reset failed %d\n", __func__, ret);
 		goto exit_chip_reset;
 	}
-// check 
+
 	sx9320_initialize_variable(data);
 	INIT_DELAYED_WORK(&data->init_work, sx9320_init_work_func);
 	INIT_DELAYED_WORK(&data->irq_work, sx9320_irq_work_func);
@@ -1647,7 +1622,6 @@ exit_of_node:
 	input_unregister_device(data->input);
 exit_input_init:
 	kfree(data);
-exit_kzalloc:
 exit:
 	pr_err("[SX9320]: %s - Probe fail!\n", __func__);
 	return ret;
@@ -1689,7 +1663,7 @@ static int sx9320_suspend(struct device *dev)
 	/* before go to sleep, make the interrupt pin as high*/
 	while ((sx9320_get_nirq_state(data) == 0) && (cnt++ < 3)) {
 		sx9320_read_irqstate(data);
-		msleep(10);
+		msleep(20);
 	}
 	if (cnt >= 3)
 		pr_err("[SX9320]: %s - s/w reset fail(%d)\n", __func__, cnt);
@@ -1720,7 +1694,7 @@ static void sx9320_shutdown(struct i2c_client *client)
 	sx9320_set_mode(data, SX9320_MODE_SLEEP);
 }
 
-static struct of_device_id sx9320_match_table[] = {
+static const struct of_device_id sx9320_match_table[] = {
 	{ .compatible = "sx9320",},
 	{},
 };

@@ -1495,7 +1495,7 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	b = strim(buf);
 
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
-	store_usblog_notify(NOTIFY_USBMODE_FUNC, (void *)b, NULL);
+	store_usblog_notify(NOTIFY_USBMODE, (void *)b, NULL);
 #endif
 
 	while (b) {

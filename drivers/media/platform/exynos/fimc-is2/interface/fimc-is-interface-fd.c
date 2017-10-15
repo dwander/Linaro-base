@@ -147,6 +147,7 @@ int fimc_is_lib_fd_map_load(FDD_DATA *data)
 		if (fimc_is_lib_fd_map_copy(fd_map[m_cnt], data, m_cnt)) {
 			err("filp_open fail. status: (%d)\n", ret);
 			ret = -EINVAL;
+			set_fs(old_fs);
 			goto p_err;
 		}
 	}

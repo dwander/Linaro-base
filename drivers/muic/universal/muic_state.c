@@ -235,6 +235,15 @@ static void muic_handle_attach(muic_data_t *pmuic,
 	case ATTACHED_DEV_UNDEFINED_CHARGING_MUIC:
 	case ATTACHED_DEV_UNDEFINED_RANGE_MUIC:
 		break;
+#if defined(CONFIG_MUIC_HV_SUPPORT_POGO_DOCK)
+	case ATTACHED_DEV_POGO_DOCK_MUIC:
+	case ATTACHED_DEV_POGO_DOCK_5V_MUIC:
+	case ATTACHED_DEV_POGO_DOCK_9V_MUIC:
+		hv_do_detach(pmuic->phv);
+		pmuic->attached_dev = ATTACHED_DEV_NONE_MUIC;
+		detach_ta(pmuic);
+		break;
+#endif
 
 	default:
 		noti_f = false;
@@ -270,6 +279,9 @@ static void muic_handle_attach(muic_data_t *pmuic,
 		else if (pmuic->afc_water_disable)
                         pr_info("%s:%s AFC Disable(%d) by WATER!\n", MUIC_DEV_NAME,
                                 __func__, pmuic->afc_water_disable);
+		else if (!pmuic->is_ccic_afc_enable)
+                        pr_info("%s:%s AFC Disable(%d), not Rp 56k!\n", MUIC_DEV_NAME,
+                                __func__, pmuic->is_ccic_afc_enable);
 #endif
                 else {
                         if ((pmuic->phv->is_afc_muic_ready == false) &&
@@ -330,6 +342,14 @@ static void muic_handle_attach(muic_data_t *pmuic,
 	case ATTACHED_DEV_GAMEPAD_MUIC:
 		ret = attach_gamepad(pmuic, new_dev);
 		break;
+#if defined(CONFIG_MUIC_HV_SUPPORT_POGO_DOCK)
+	case ATTACHED_DEV_POGO_DOCK_MUIC:
+		max77854_muic_prepare_afc_pogo_dock(pmuic->phv);
+		attach_ta(pmuic);
+		mdelay(150);
+		pmuic->attached_dev = new_dev;
+		break;
+#endif
 	default:
 		pr_warn("%s:%s unsupported dev=%d, adc=0x%x, vbus=%c\n",
 				MUIC_DEV_NAME, __func__, new_dev, adc,
@@ -434,6 +454,14 @@ static void muic_handle_detach(muic_data_t *pmuic)
 	case ATTACHED_DEV_GAMEPAD_MUIC:
 		ret = detach_gamepad(pmuic);
 		break;
+#if defined(CONFIG_MUIC_HV_SUPPORT_POGO_DOCK)
+	case ATTACHED_DEV_POGO_DOCK_MUIC:
+	case ATTACHED_DEV_POGO_DOCK_5V_MUIC:
+	case ATTACHED_DEV_POGO_DOCK_9V_MUIC:
+		pmuic->attached_dev = ATTACHED_DEV_NONE_MUIC;
+		detach_ta(pmuic);
+		break;
+#endif
 	default:
 		pr_info("%s:%s invalid attached_dev type(%d)\n", MUIC_DEV_NAME,
 			__func__, pmuic->attached_dev);
@@ -485,6 +513,12 @@ void muic_detect_dev(muic_data_t *pmuic, int irq)
 					MUIC_DEV_NAME, __func__, pmuic->vps.t.adc);
 			pmuic->vps.t.adc = ADC_JIG_UART_OFF;
 		}
+#endif
+
+#if defined(CONFIG_MUIC_HV_SUPPORT_POGO_DOCK)
+		if (gpio_is_valid(pmuic->dock_int_ap))
+			pr_info("%s:%s dock_int_ap(%c)\n", MUIC_DEV_NAME, __func__,
+				gpio_get_value(pmuic->dock_int_ap) ? 'x' : 'o');
 #endif
 
 		adc = pmuic->vps.t.adc;

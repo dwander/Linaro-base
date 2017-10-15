@@ -208,6 +208,7 @@ void receive_unstructured_vdm_message(void * data, SSM_MSG_IRQ_STATUS_Type *SSM_
 void send_role_swap_message(void * data, int cmd);
 void send_attention_message(void * data, int cmd);
 void do_alternate_mode_step_by_step(void * data, int cmd);
+void set_enable_alternate_mode(int mode);
 #else
 inline void send_alternate_message(void * data, int cmd) {}
 inline void receive_alternate_message(void * data, VDM_MSG_IRQ_STATUS_Type *VDM_MSG_IRQ_State) {}
@@ -218,5 +219,6 @@ inline void receive_unstructured_vdm_message(void * data, SSM_MSG_IRQ_STATUS_Typ
 inline void send_role_swap_message(void * data, int cmd) {}
 inline void send_attention_message(void * data, int cmd) {}
 inline void do_alternate_mode_step_by_step(void * data, int cmd) {}
+inline void set_enable_alternate_mode(int mode) {}
 #endif
 #endif

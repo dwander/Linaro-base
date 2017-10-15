@@ -50,7 +50,7 @@
 #define REG_TX_REQUEST_MSG	0x0240
 #define REG_RX_SRC_CAPA_MSG	0x0260
 
-#define CCIC_VERSION_INVALID -1
+#define CCIC_FW_VERSION_INVALID -1
 
 /******************************************************************************/
 /* definitions & structures                                                   */
@@ -119,14 +119,47 @@ typedef union
 
 typedef union
 {
-	uint32_t        DATA;
+	uint32_t	DATA;
+	uint8_t	BYTE[4];
+	struct {
+        uint32_t    PD_State:8,
+                    RSP_BYTE1:8,
+                    PD_Next_State:8,
+                    RSP_BYTE2:8;
+	}BYTES;
     struct {
         uint32_t    PD_State:8,
-                    RSP_BYTE2:8,
+                    CC1_PLUG_STATE:3,
+                    RSP_BYTE1:1,
+                    CC2_PLUG_STATE:3,
+                    RSP_BYTE2:1,
                     PD_Next_State:8,
-                    RSP_BYTE4:8;
+                    ATTACH_DONE:1,
+                    IS_SOURCE:1,
+                    IS_DFP:1,
+                    RP_CurrentLvl:2,
+                    VBUS_CC_Short:1,
+                    RSP_BYTE3:1,
+                    RESET:1;
 	}BITS;
 } FUNC_STATE_Type;
+
+typedef union
+{
+	uint32_t	DATA;
+	uint8_t	BYTE[4];
+	struct {
+        uint32_t    AUTO_LP_ENABLE_BIT:1,
+                    LOW_POWER_BIT:1,
+                    Force_LP_BIT:1,
+                    WATER_DET:1,
+                    SW_JIGON:1,
+                    RUN_DRY:1,
+                    RSP_BYTE1:1,
+                    BOOTING_RUN_DRY:1,
+                    RSP_BYTE2:24;
+	} BITS;
+} LP_STATE_Type;
 
 typedef union
 {
@@ -681,11 +714,12 @@ typedef enum
 
 typedef enum
 {
-	RP_CURRENT_LEVEL_NONE = 0,
-	RP_CURRENT_LEVEL_DEFAULT,
-	RP_CURRENT_LEVEL2,
-	RP_CURRENT_LEVEL3,
-} CCIC_RP_CURRENT_LEVEL;
+	Rp_None = 0,
+	Rp_56K = 1,	/* 80uA */
+	Rp_22K = 2,	/* 180uA */
+	Rp_10K = 3,	/* 330uA */
+	Rp_Abnormal = 4,
+} CCIC_RP_CurrentLvl;
 
 #define S2MM005_REG_MASK(reg, mask)	((reg & mask##_MASK) >> mask##_SHIFT)
 
@@ -696,6 +730,7 @@ struct ccic_state_work {
 	int id;
 	int attach;
 	int event;
+	int sub;
 };
 #endif
 
@@ -722,6 +757,13 @@ struct s2mm005_data {
 	int prev_rid;
 	int cur_rid;
 	int water_det;
+	int run_dry;
+	int run_dry_support;
+	int booting_run_dry;
+	int booting_dry_support;
+#if defined(CONFIG_SEC_FACTORY)
+	int fac_booting_dry_check;
+#endif
 
 	u8 firm_ver[4];
 
@@ -753,6 +795,13 @@ struct s2mm005_data {
 	int try_state_change;
 	struct delayed_work role_swap_work;
 #endif
+
+#if defined(CONFIG_SEC_FACTORY)
+	int fac_water_enable;
+#endif
+	struct delayed_work ccic_init_work;
+	int ccic_check_at_booting;
+	int vconn_en;
 
 };
 #endif /* __S2MM005_H */

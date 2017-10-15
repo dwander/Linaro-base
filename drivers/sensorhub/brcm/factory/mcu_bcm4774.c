@@ -35,37 +35,13 @@ ssize_t mcu_model_name_show(struct device *dev,
 	return sprintf(buf, "%s\n", MODEL_NAME);
 }
 
-ssize_t mcu_update_kernel_bin_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	ssp_dbg("[SSPBBD]: %s:%d: Ignored some code section.\n",
-		__func__, __LINE__);
-	return sprintf(buf, "NG\n");
-}
-
-ssize_t mcu_update_kernel_crashed_bin_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	ssp_dbg("[SSPBBD]: %s:%d: Ignored some code section.\n",
-		__func__, __LINE__);
-	return sprintf(buf, "NG\n");
-}
-
-ssize_t mcu_update_ums_bin_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	ssp_dbg("[SSPBBD]: %s:%d: Ignored some code section.\n",
-		__func__, __LINE__);
-	return sprintf(buf, "NG\n");
-}
-
 ssize_t mcu_reset_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct ssp_data *data = dev_get_drvdata(dev);
-	
+
 	data->intendedMcuReset = true;
-	
+
 	reset_mcu(data);
 
 	return sprintf(buf, "OK\n");

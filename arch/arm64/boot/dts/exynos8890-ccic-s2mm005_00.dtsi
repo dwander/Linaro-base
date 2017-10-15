@@ -65,6 +65,8 @@
 			usbpd,s2mm005_om = <&gpe3 1 0>;
 			usbpd,s2mm005_sda = <&gpe6 2 1>;
 			usbpd,s2mm005_scl = <&gpe6 3 1>;
+			usbpd,run_dry_support = <1>;
+			usbpd,booting_dry_support = <0>;
 		};
 	};
 

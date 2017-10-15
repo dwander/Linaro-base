@@ -1,7 +1,7 @@
 /*
  * Common function shared by Linux WEXT, cfg80211 and p2p drivers
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wldev_common.c 662082 2016-09-28 07:30:22Z $
+ * $Id: wldev_common.c 676258 2016-12-21 05:52:22Z $
  */
 
 #include <osl.h>
@@ -411,7 +411,7 @@ int wldev_set_country(
 {
 	int error = -1;
 	wl_country_t cspec = {{0}, 0, {0}};
-	wl_country_t get_cspec = {{0}, 0, {0}};
+	wl_country_t cur_cspec = {{0}, 0, {0}};	/* current ccode */
 	scb_val_t scbval;
 	char smbuf[WLC_IOCTL_SMLEN];
 	struct wireless_dev *wdev = ndev_to_wdev(dev);
@@ -422,7 +422,7 @@ int wldev_set_country(
 		return error;
 
 	bzero(&scbval, sizeof(scb_val_t));
-	error = wldev_iovar_getbuf(dev, "country", NULL, 0, &get_cspec, sizeof(cspec), NULL);
+	error = wldev_iovar_getbuf(dev, "country", NULL, 0, &cur_cspec, sizeof(wl_country_t), NULL);
 	if (error < 0) {
 		WLDEV_ERROR(("%s: get country failed = %d\n", __FUNCTION__, error));
 		return error;
@@ -433,14 +433,12 @@ int wldev_set_country(
 	memcpy(cspec.ccode, country_code, WLC_CNTRY_BUF_SZ);
 	dhd_get_customized_country_code(dev, (char *)&cspec.country_abbrev, &cspec);
 
-	WLDEV_INFO(("%s: get country %s rev %d\n",
-		__FUNCTION__, get_cspec.ccode, get_cspec.rev));
-	WLDEV_INFO(("%s: table country for %s as %s rev %d\n",
-		__FUNCTION__, country_code, cspec.ccode, cspec.rev));
+	WLDEV_INFO(("%s: Current country %s rev %d\n",
+		__FUNCTION__, cur_cspec.ccode, cur_cspec.rev));
 
 	if ((error < 0) ||
-			dhd_force_country_change(dev) ||
-	    (strncmp(cspec.ccode, get_cspec.ccode, WLC_CNTRY_BUF_SZ) != 0)) {
+		dhd_force_country_change(dev) ||
+	    (strncmp(cspec.ccode, cur_cspec.ccode, WLC_CNTRY_BUF_SZ) != 0)) {
 
 		if ((user_enforced) && (wl_get_drv_status(cfg, CONNECTED, dev))) {
 			bzero(&scbval, sizeof(scb_val_t));

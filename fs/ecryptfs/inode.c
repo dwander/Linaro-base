@@ -336,8 +336,12 @@ int ecryptfs_initialize_file(struct dentry *ecryptfs_dentry,
 			struct timespec ts;
 			crypt_stat->flags |= ECRYPTFS_DLP_ENABLED;
 			getnstimeofday(&ts);
-			crypt_stat->expiry.expiry_time.tv_sec = (int64_t)ts.tv_sec + 20;
-			crypt_stat->expiry.expiry_time.tv_nsec = (int64_t)ts.tv_nsec;
+			if(in_egroup_p(AID_KNOX_DLP_MEDIA)) {
+				printk(KERN_ERR "DLP %s: media process creating file  : %s\n", __func__, ecryptfs_dentry->d_iname);
+			} else {
+				crypt_stat->expiry.expiry_time.tv_sec = (int64_t)ts.tv_sec + 20;
+				crypt_stat->expiry.expiry_time.tv_nsec = (int64_t)ts.tv_nsec;
+			}
 #if DLP_DEBUG
 			printk(KERN_ERR "DLP %s: current->pid : %d\n", __func__, current->tgid);
 			printk(KERN_ERR "DLP %s: crypt_stat->mount_crypt_stat->userid : %d\n", __func__, crypt_stat->mount_crypt_stat->userid);
@@ -348,7 +352,7 @@ int ecryptfs_initialize_file(struct dentry *ecryptfs_dentry,
                 current->tgid, crypt_stat->mount_crypt_stat->userid, crypt_stat->mount_crypt_stat->partition_id,
                 ecryptfs_inode->i_ino, GFP_KERNEL);
 			}
-			else if(in_egroup_p(AID_KNOX_DLP_RESTRICTED) || in_egroup_p(AID_KNOX_DLP_MEDIA)) {
+			else if(in_egroup_p(AID_KNOX_DLP_RESTRICTED)) {
 				cmd = sdp_fs_command_alloc(FSOP_DLP_FILE_INIT_RESTRICTED,
                 current->tgid, crypt_stat->mount_crypt_stat->userid, crypt_stat->mount_crypt_stat->partition_id,
                 ecryptfs_inode->i_ino, GFP_KERNEL);
@@ -1526,19 +1530,11 @@ ecryptfs_getxattr(struct dentry *dentry, const char *name, void *value,
 				return -ERANGE;
 			}
 			if (crypt_stat->expiry.expiry_time.tv_sec <= 0) {
-				struct timespec ts;
-				getnstimeofday(&ts);
-				crypt_stat->expiry.expiry_time.tv_sec = (int64_t)ts.tv_sec + 20;
-				crypt_stat->expiry.expiry_time.tv_nsec = (int64_t)ts.tv_nsec;
 #if DLP_DEBUG
-				printk(KERN_ERR "DLP %s: use temp expiry\n", __func__);
+				printk(KERN_ERR "DLP %s: expiry time=[%ld], fileName [%s]\n", __func__, (long)crypt_stat->expiry.expiry_time.tv_sec, dentry->d_name.name);
 #endif
 			}
 			memcpy(value, &crypt_stat->expiry, sizeof(struct knox_dlp_data));
-#if DLP_DEBUG
-			printk(KERN_ERR "DLP %s: returning expiry from cryp_stat [%ld]\n",
-					__func__, (long)crypt_stat->expiry.expiry_time.tv_sec);
-#endif
 			rc = sizeof(struct knox_dlp_data);
 		}
 	}

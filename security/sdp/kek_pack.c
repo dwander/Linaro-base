@@ -192,7 +192,8 @@ int add_kek(int engine_id, kek_t *kek) {
 	} else {
 		spin_lock(&pack->kek_list_lock);
 		if(find_kek_item(pack, kek->type)) {
-			spin_unlock(&pack->kek_list_lock);		
+			spin_unlock(&pack->kek_list_lock);
+			kzfree(item);		
 			return -EEXIST;
 		}
 		rc = __add_kek(pack, kek, item);

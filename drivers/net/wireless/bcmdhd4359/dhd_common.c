@@ -1,7 +1,7 @@
 /*
  * Broadcom Dongle Host Driver (DHD), common DHD core.
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_common.c 668603 2016-11-04 04:11:58Z $
+ * $Id: dhd_common.c 684403 2017-02-13 07:59:14Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -133,6 +133,8 @@ bool ap_fw_loaded = FALSE;
 #endif
 #define DHD_COMPILED "\nCompiled in " SRCBASE
 #endif /* DHD_DEBUG */
+
+#define CHIPID_MISMATCH	8
 
 #if defined(DHD_DEBUG)
 const char dhd_version[] = "Dongle Host Driver, version " EPI_VERSION_STR
@@ -3882,7 +3884,7 @@ dhd_download_2_dongle(dhd_pub_t	*dhd, char *iovar, uint16 flag, uint16 dload_typ
 	dload_ptr->dload_type = dload_type;
 	dload_ptr->len = htod32(len - dload_data_offset);
 	dload_ptr->crc = 0;
-	len = len + 8 - (len%8);
+	len = ROUNDUP(len, 8);
 
 	iovar_len = bcm_mkiovar(iovar, dload_buf,
 		(uint)len, iovar_buf, sizeof(iovar_buf));
@@ -3909,6 +3911,7 @@ dhd_download_clm_blob(dhd_pub_t *dhd, unsigned char *image, uint32 len)
 
 	data_offset = OFFSETOF(wl_dload_data_t, data);
 	size2alloc = data_offset + MAX_CHUNK_LEN;
+	size2alloc = ROUNDUP(size2alloc, 8);
 
 	if ((new_buf = (unsigned char *)MALLOCZ(dhd->osh, size2alloc)) != NULL) {
 		do {
@@ -3942,6 +3945,31 @@ exit:
 }
 
 int
+dhd_check_current_clm_data(dhd_pub_t *dhd)
+{
+	char iovbuf[WLC_IOCTL_SMLEN];
+	wl_country_t *cspec;
+	int err = BCME_OK;
+
+	bcm_mkiovar("country", NULL, 0, iovbuf, sizeof(iovbuf));
+	err = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
+	if (err) {
+		DHD_ERROR(("%s: country code get failed\n", __FUNCTION__));
+		return err;
+	}
+
+	cspec = (wl_country_t *)iovbuf;
+	if ((strncmp(cspec->ccode, WL_CCODE_NULL_COUNTRY, WLC_CNTRY_BUF_SZ)) == 0) {
+		DHD_ERROR(("%s: ----- This FW is not included CLM data -----\n",
+			__FUNCTION__));
+		return FALSE;
+	}
+	DHD_ERROR(("%s: ----- This FW is included CLM data -----\n",
+		__FUNCTION__));
+	return TRUE;
+}
+
+int
 dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
 {
 	char *clm_blob_path;
@@ -3949,7 +3977,7 @@ dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
 	unsigned char *imgbuf = NULL;
 	int err = BCME_OK;
 	char iovbuf[WLC_IOCTL_SMLEN];
-	wl_country_t *cspec;
+	int status = FALSE;
 
 	if (clm_path[0] != '\0') {
 		if (strlen(clm_path) > MOD_PARAM_PATHLEN) {
@@ -3970,24 +3998,38 @@ dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
 
 	imgbuf = dhd_os_open_image((char *)clm_blob_path);
 	if (imgbuf == NULL) {
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+		if (dhd->is_blob) {
+			err = BCME_ERROR;
+		} else {
+			status = dhd_check_current_clm_data(dhd);
+			if (status == TRUE) {
+				err = BCME_OK;
+			} else {
+				err = BCME_ERROR;
+			}
+		}
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
 		goto exit;
 	}
 
 	len = dhd_os_get_image_size(imgbuf);
 
 	if ((len > 0) && (len < MAX_CLM_BUF_SIZE) && imgbuf) {
-		bcm_mkiovar("country", NULL, 0, iovbuf, sizeof(iovbuf));
-		err = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
-		if (err) {
-			DHD_ERROR(("%s: country code get failed\n", __FUNCTION__));
-			goto exit;
-		}
-
-		cspec = (wl_country_t *)iovbuf;
-		if ((strncmp(cspec->ccode, WL_CCODE_NULL_COUNTRY, WLC_CNTRY_BUF_SZ)) != 0) {
+		status = dhd_check_current_clm_data(dhd);
+		if (status == TRUE) {
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+			if (dhd->op_mode != DHD_FLAG_MFG_MODE) {
+				if (dhd->is_blob) {
+					err = BCME_ERROR;
+				}
+				goto exit;
+			}
+#else
 			DHD_ERROR(("%s: CLM already exist in F/W, "
 				"new CLM data will be added to the end of existing CLM data!\n",
 				__FUNCTION__));
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
 		}
 
 		/* Found blob file. Download the file */
@@ -4004,6 +4046,9 @@ dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
 			} else {
 				DHD_ERROR(("%s: clmload_status: %d \n",
 					__FUNCTION__, *((int *)iovbuf)));
+				if (*((int *)iovbuf) == CHIPID_MISMATCH) {
+					DHD_ERROR(("Chip ID mismatch error \n"));
+				}
 			}
 			err = BCME_ERROR;
 			goto exit;
@@ -4012,22 +4057,12 @@ dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
 		}
 	} else {
 		DHD_INFO(("Skipping the clm download. len:%d memblk:%p \n", len, imgbuf));
-#ifdef DHD_USE_CLMINFO_PARSER
-		err = BCME_ERROR;
-		goto exit;
-#endif /* DHD_USE_CLMINFO_PARSER */
 	}
 
 	/* Verify country code */
-	bcm_mkiovar("country", NULL, 0, iovbuf, sizeof(iovbuf));
-	err = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
-	if (err) {
-		DHD_ERROR(("%s: country code get failed\n", __FUNCTION__));
-		goto exit;
-	}
+	status = dhd_check_current_clm_data(dhd);
 
-	cspec = (wl_country_t *)iovbuf;
-	if ((strncmp(cspec->ccode, WL_CCODE_NULL_COUNTRY, WLC_CNTRY_BUF_SZ)) == 0) {
+	if (status != TRUE) {
 		/* Country code not initialized or CLM download not proper */
 		DHD_ERROR(("country code not initialized\n"));
 		err = BCME_ERROR;
@@ -4041,199 +4076,6 @@ exit:
 
 	return err;
 }
-#ifdef DHD_USE_CLMINFO_PARSER
-#ifdef CUSTOMER_HW4
-#ifdef PLATFORM_SLP
-#define CLMINFO_PATH "/opt/etc/.clminfo"
-#else
-#define CLMINFO_PATH "/system/etc/wifi/.clminfo"
-#endif /* PLATFORM_SLP */
-#else
-#define CLMINFO_PATH "/installmedia/.clminfo"
-#endif /* CUSTOMER_HW4 */
-
-extern struct cntry_locales_custom translate_custom_table[NUM_OF_COUNTRYS];
-
-unsigned int
-process_clarification_vars(char *varbuf, unsigned int varbuf_size)
-{
-	char *dp;
-	bool findNewline;
-	int column;
-	unsigned int buf_len, len;
-
-	dp = varbuf;
-
-	findNewline = FALSE;
-	column = 0;
-
-	for (len = 0; len < varbuf_size; len++) {
-		if ((varbuf[len] == '\r') || (varbuf[len] == ' ')) {
-			continue;
-		}
-		if (findNewline && varbuf[len] != '\n') {
-			continue;
-		}
-		findNewline = FALSE;
-		if (varbuf[len] == '#') {
-			findNewline = TRUE;
-			continue;
-		}
-		if (varbuf[len] == '\n') {
-			if (column == 0)
-				continue;
-			column = 0;
-			continue;
-		}
-		*dp++ = varbuf[len];
-		column++;
-	}
-	buf_len = (unsigned int)(dp - varbuf);
-
-	while (dp < varbuf + len)
-		*dp++ = 0;
-
-	return buf_len;
-}
-
-int
-dhd_get_clminfo(dhd_pub_t *dhd, char *clm_path)
-{
-	int bcmerror = BCME_OK;
-	char *clminfo_path = CLMINFO_PATH;
-
-	char *memblock = NULL;
-	char *bufp;
-	uint len = MAX_CLMINFO_BUF_SIZE;
-	char *tokenp = NULL;
-	int cnt = 0;
-
-	char tokdelim;
-	int parse_step = 0;
-	/*
-	 * Read clm info from the .clminfo file
-	 * 1st line : CLM blob file path
-	 * 2nd ~ end of line: Country locales table
-	 */
-	memset(translate_custom_table, 0, sizeof(translate_custom_table));
-
-	if (dhd_get_download_buffer(dhd, clminfo_path, CLMINFO, &memblock, &len) != 0) {
-		DHD_ERROR(("%s: Cannot open .clminfo file\n", __FUNCTION__));
-		bcmerror = BCME_ERROR;
-		goto out;
-	}
-
-	if ((len > 0) && (len < MAX_CLMINFO_BUF_SIZE) && memblock) {
-		/* Found clminfo file. Parsing the file */
-		DHD_INFO(("clminfo file parsing from %s \n", clminfo_path));
-
-		bufp = (char *) memblock;
-		bufp[len] = 0;
-
-		/* clean up the file */
-		len = process_clarification_vars(bufp, len);
-
-		tokenp = bcmstrtok(&bufp, "=", &tokdelim);
-		/* reduce the len of bufp by token byte(1) and ptr length */
-		len -= (strlen(tokenp) + 1);
-
-		if (strncmp(tokenp, "clm_path", 8) != 0) {
-			DHD_ERROR(("%s: Cannot found clm_path\n", __FUNCTION__));
-			bcmerror = BCME_ERROR;
-			goto out;
-		}
-
-		/* read clm_path */
-		strcpy(clm_path, bcmstrtok(&bufp, ";", &tokdelim));
-		len -= (strlen(clm_path) + 1);
-
-		DHD_INFO(("%s: Found clm_path %s\n", __FUNCTION__, clm_path));
-
-		if (len <= 0) {
-			DHD_ERROR(("%s: Length is invalid\n", __FUNCTION__));
-			bcmerror = BCME_ERROR;
-			goto out;
-		}
-
-		/* reserved relocale map[0] to XZ/11 */
-		memcpy(translate_custom_table[cnt].custom_locale, "XZ", strlen("XZ"));
-		translate_custom_table[cnt].custom_locale_rev = 11;
-		DHD_INFO(("%s: Relocale map - iso_aabrev %s custom locale %s "
-			"custom locale rev %d\n",
-			__FUNCTION__,
-			translate_custom_table[cnt].iso_abbrev,
-			translate_custom_table[cnt].custom_locale,
-			translate_custom_table[cnt].custom_locale_rev));
-
-		cnt++;
-
-		/* start parsing relocale map */
-		do {
-
-			if ((bufp[0] == 0) && (len > 0)) {
-				DHD_ERROR(("%s: First byte is NULL character\n", __FUNCTION__));
-				bcmerror = BCME_ERROR;
-				goto out;
-			}
-			if ((bufp[0] == '=') || (bufp[0] == '/') || (bufp[0] == ';')) {
-				DHD_ERROR(("%s: Data is invalid\n", __FUNCTION__));
-				bcmerror = BCME_ERROR;
-				goto out;
-			}
-
-			/* parsing relocale data */
-			tokenp = bcmstrtok(&bufp, "=/;", &tokdelim);
-			len -= (strlen(tokenp) + 1);
-
-			if ((parse_step == 0) && (tokdelim == '=')) {
-				memcpy(translate_custom_table[cnt].iso_abbrev,
-					tokenp, strlen(tokenp));
-				parse_step++;
-			} else if ((parse_step == 1) && (tokdelim == '/')) {
-				memcpy(translate_custom_table[cnt].custom_locale,
-					tokenp, strlen(tokenp));
-				parse_step++;
-			} else if ((parse_step == 2) && (tokdelim == ';')) {
-				char *str, *endptr = NULL;
-				int locale_rev;
-
-				str = tokenp;
-				locale_rev = (int)strtoul(str, &endptr, 0);
-				if (*endptr != 0) {
-					bcmerror = BCME_ERROR;
-					goto out;
-				}
-
-				translate_custom_table[cnt].custom_locale_rev = locale_rev;
-
-				DHD_INFO(("%s: Relocale map - iso_aabrev %s"
-					" custom locale %s custom locale rev %d\n",
-					__FUNCTION__,
-					translate_custom_table[cnt].iso_abbrev,
-					translate_custom_table[cnt].custom_locale,
-					translate_custom_table[cnt].custom_locale_rev));
-
-				parse_step = 0;
-				cnt++;
-			} else {
-				DHD_ERROR(("%s: CLM info data format is invalid\n", __FUNCTION__));
-				bcmerror = BCME_ERROR;
-				goto out;
-			}
-
-		} while (len > 0);
-	}
-out:
-	if (memblock) {
-		dhd_free_download_buffer(dhd, memblock, MAX_CLMINFO_BUF_SIZE);
-	}
-	if (bcmerror != BCME_OK) {
-		DHD_ERROR(("%s: .clminfo parsing fail!!\n", __FUNCTION__));
-	}
-
-	return bcmerror;
-}
-#endif /* DHD_USE_CLMINFO_PARSER */
 
 void dhd_free_download_buffer(dhd_pub_t	*dhd, void *buffer, int length)
 {

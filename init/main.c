@@ -84,7 +84,7 @@
 #endif
 
 #if defined(CONFIG_SEC_INITCALL_DEBUG)
-#include <linux/sec_debug.h>
+#include <linux/sec_ext.h>
 #endif
 
 #include <asm/io.h>

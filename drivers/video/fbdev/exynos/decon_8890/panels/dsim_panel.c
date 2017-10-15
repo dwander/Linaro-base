@@ -1,4 +1,3 @@
-
 /* linux/drivers/video/exynos_decon/panel/dsim_panel.c
  *
  * Header file for Samsung MIPI-DSI LCD Panel driver.
@@ -24,13 +23,19 @@
 #include "mdnie_lite_table_hero1.h"
 #elif defined(CONFIG_PANEL_S6E3HF4_WQHD)
 #include "mdnie_lite_table_hero2.h"
+#elif defined(CONFIG_PANEL_S6E3HF4_WQHD_HAECHI)
+#include "mdnie_lite_table_haechi.h"
 #elif defined(CONFIG_PANEL_S6E3HA5_WQHD)
 #include "mdnie_lite_table_grace.h"
 #endif
 #endif
 
 #ifdef CONFIG_FB_DSU
-#include <linux/sec_debug.h>
+#include <linux/sec_ext.h>
+#endif
+
+#if defined(CONFIG_DISPLAY_USE_INFO)
+#include "dpui.h"
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
@@ -177,8 +182,61 @@ static int dsim_panel_init(struct dsim_device *dsim)
 		ret = panel->ops->init(dsim);
 	return ret;
 }
-#endif 
+#endif
 
+#ifdef CONFIG_DISPLAY_USE_INFO
+
+static int dpui_notifier_callback(struct notifier_block * self, unsigned long event, void * data)
+{
+	struct panel_private *priv;
+	struct dpui_info *dpui = data;
+	char tbuf[MAX_DPUI_VAL_LEN];
+	int year, mon, day, hour, min, sec;
+	int size;
+
+	if (dpui == NULL) {
+		pr_err( "%s: dpui is null\n", __func__);
+		return 0;
+	}
+
+	priv = container_of(self, struct panel_private, dpui_notif);
+
+	if(priv == NULL) {
+		pr_err( "%s: panel info is null\n", __func__);
+		return 0;
+	}
+
+	/* maunfacture date and time */
+	year = ((priv->date[0] >> 4) & 0x0F) + 2011;
+	mon = priv->date[0] & 0x0F;
+	day = priv->date[1] & 0x1F;
+	hour = priv->date[2] & 0x1F;
+	min = priv->date[3] & 0x3F;
+	sec = priv->date[4] & 0x3F;
+
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%04d%02d%02d %02d%02d%02d",
+		year, mon, day, hour, min, sec);
+	set_dpui_field(DPUI_KEY_MAID_DATE, tbuf, size);
+
+	/* lcd id */
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", priv->id[0]);
+	set_dpui_field(DPUI_KEY_LCDID1, tbuf, size);
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", priv->id[1]);
+	set_dpui_field(DPUI_KEY_LCDID2, tbuf, size);
+	size = snprintf(tbuf, MAX_DPUI_VAL_LEN, "%d", priv->id[2]);
+	set_dpui_field(DPUI_KEY_LCDID3, tbuf, size);
+
+	return 0;
+}
+
+static int panel_register_dpui(struct panel_private *priv)
+{
+	memset(&priv->dpui_notif, 0, sizeof(priv->dpui_notif));
+	priv->dpui_notif.notifier_call = dpui_notifier_callback;
+	return dpui_logging_register(&priv->dpui_notif, DPUI_TYPE_PANEL);
+}
+
+#endif
 static int dsim_panel_probe(struct dsim_device *dsim)
 {
 	int ret = 0;
@@ -216,6 +274,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	panel->mcd_on = 0;
 #endif
 
+#ifdef CONFIG_PANEL_GRAY_SPOT
+	panel->gray_spot = 0;
+#endif
+
 	if (panel->ops->probe) {
 		ret = panel->ops->probe(dsim);
 		if (ret) {
@@ -243,6 +305,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 		flush_workqueue( dsim->dsu_sysfs_wq );
 	}
 	else dsim_err( "%s : dsu_sysfs_wq init fail.\n", __func__ );
+#endif
+
+#ifdef CONFIG_DISPLAY_USE_INFO
+	panel_register_dpui(panel);
 #endif
 
 probe_err:

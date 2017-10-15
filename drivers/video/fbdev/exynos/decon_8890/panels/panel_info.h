@@ -7,6 +7,9 @@
 #elif defined(CONFIG_PANEL_S6E3HF4_WQHD)
 #include "s6e3ha3_s6e3ha2_wqhd_param.h"
 
+#elif defined(CONFIG_PANEL_S6E3HF4_WQHD_HAECHI)
+#include "s6e3hf4_wqhd_haechi_param.h"
+
 #elif defined(CONFIG_PANEL_S6E3HA5_WQHD)
 #include "s6e3hf4_s6e3ha5_wqhd_param.h"
 

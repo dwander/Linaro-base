@@ -285,10 +285,10 @@ static ssize_t store_pcie(struct device *dev,
 		BUG_ON(1);
 	} else if (enable == 5) {
 		exynos_pcie_l1ss_ctrl(1, PCIE_L1SS_CTRL_SYSFS);
-		dev_info(dev, "VR requests pcie l1ss enable\n");
+		dev_info(dev, "SYSFS requests pcie l1ss enable\n");
 	} else if (enable == 6) {
 		exynos_pcie_l1ss_ctrl(0, PCIE_L1SS_CTRL_SYSFS);
-		dev_info(dev, "VR requests pcie l1ss disable\n");
+		dev_info(dev, "SYSFS requests pcie l1ss disable\n");
 	} else if (enable == 7) {
 		dev_info(dev, "%s: l1ss_ctrl_id_state = 0x%x\n",
 				__func__, exynos_pcie->l1ss_ctrl_id_state);

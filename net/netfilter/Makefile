@@ -181,3 +181,5 @@ obj-$(CONFIG_VPNCLIENT_SECURITY) += interceptor/
 
 obj-$(CONFIG_ONESHOT_UID) += oneshot_uid.o
 
+# netfilter prio
+obj-y += xt_PRIO.o

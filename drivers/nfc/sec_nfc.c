@@ -182,7 +182,7 @@ static ssize_t sec_nfc_read(struct file *file, char __user *buf,
 	} else if (ret != count) {
 		dev_err(info->dev, "read failed: return: %d count: %d\n",
 			ret, (u32)count);
-		//ret = -EREMOTEIO;
+		/*ret = -EREMOTEIO;*/
 		goto read_error;
 	}
 
@@ -375,8 +375,8 @@ int sec_nfc_i2c_probe(struct i2c_client *client)
 	gpio_direction_input(pdata->irq);
 
 	ret = request_threaded_irq(client->irq, NULL, sec_nfc_irq_thread_fn,
-			IRQF_TRIGGER_RISING | IRQF_ONESHOT, SEC_NFC_DRIVER_NAME,
-			info);
+			IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND | IRQF_ONESHOT,
+			SEC_NFC_DRIVER_NAME, info);
 	if (ret < 0) {
 		dev_err(dev, "failed to register IRQ handler\n");
 		kfree(info->i2c_info.buf);
@@ -654,19 +654,22 @@ static const struct file_operations sec_nfc_fops = {
 	.unlocked_ioctl	= sec_nfc_ioctl,
 };
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_NFC_CLKREQ_SUSPEND
 static int sec_nfc_suspend(struct device *dev)
 {
 	struct sec_nfc_info *info = SEC_NFC_GET_INFO(dev);
-	int ret = 0;
+	int req, ret = 0;
 
-	mutex_lock(&info->mutex);
-
-	if (info->mode == SEC_NFC_MODE_BOOTLOADER)
-		ret = -EPERM;
-
-	mutex_unlock(&info->mutex);
-
+	if (info->pdata->clk_req > 0) { /* if clk_req exist! */
+		req = gpio_get_value(info->pdata->clk_req);
+		pr_info("%s: clk_req:%d wake_lock[%d] read_irq[%d]\n", __func__, req,
+				wake_lock_active(&info->nfc_wake_lock), info->i2c_info.read_irq);
+		/* If CLK REQ HIGH, AP not allowed to go suspend for HAECHI model */
+		if (req) {
+			pr_info("%s: kick it out of sleep\n", __func__);
+			ret = -EPERM;
+		}
+	}
 	return ret;
 }
 
@@ -916,7 +919,7 @@ static int __devinit __sec_nfc_probe(struct device *dev)
 
 		ret = request_threaded_irq(pdata->clk_irq, NULL, sec_nfc_clk_irq_thread,
 				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				SEC_NFC_DRIVER_NAME, info);
+				"nfc_clk_req", info);
 		if (ret < 0) {
 			dev_err(info->dev, "failed to register CLK REQ IRQ handler\n");
 		}
@@ -1037,7 +1040,7 @@ static sec_nfc_driver_type sec_nfc_driver = {
 	.remove = sec_nfc_remove,
 	.driver = {
 		.name = SEC_NFC_DRIVER_NAME,
-#ifdef CONFIG_PM
+#ifdef CONFIG_NFC_CLKREQ_SUSPEND
 		.pm = &sec_nfc_pm_ops,
 #endif
 		.of_match_table = nfc_match_table,
