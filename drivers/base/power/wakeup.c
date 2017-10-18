@@ -23,10 +23,8 @@
 
 #include "power.h"
 
-static bool enable_sensorhub_ws = true;
-module_param(enable_sensorhub_ws, bool, 0644);
-static bool enable_ssp_ws = true;
-module_param(enable_ssp_ws, bool, 0644);
+static bool enable_ssp_wake_lock_ws = true;
+module_param(enable_ssp_wake_lock_ws, bool, 0644);
 static bool enable_wlan_rx_wake_ws = true;
 module_param(enable_wlan_rx_wake_ws, bool, 0644);
 static bool enable_wlan_ctrl_wake_ws = true;
@@ -564,17 +562,12 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 {
 	unsigned int cec;
 
-	if (!enable_sensorhub_ws && !strcmp(ws->name, "ssp_sensorhub_wake_lock"))
-		return;
-
-	if (!enable_ssp_ws && !strcmp(ws->name, "ssp_wake_lock"))
-		return;
-
 	if ((!enable_wlan_rx_wake_ws && !strcmp(ws->name, "wlan_rx_wake")) ||
 		(!enable_wlan_ctrl_wake_ws && !strcmp(ws->name, "wlan_ctrl_wake")) ||
 		(!enable_mmc0_detect_ws && !strcmp(ws->name, "mmc0_detect")) ||
 		(!enable_bbd_wake_lock_ws && !strcmp(ws->name, "bbd_wake_lock")) ||
 		(!enable_GPSD_ws && !strcmp(ws->name, "GPSD")) ||
+		(!enable_ssp_wake_lock_ws && !strcmp(ws->name, "ssp_wake_lock")) ||
 		(!enable_wlan_wake_ws && !strcmp(ws->name, "wlan_wake"))) {
 		/*
 		 * let's try and deactivate this wakeup source since the user
