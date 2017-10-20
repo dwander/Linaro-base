@@ -30,11 +30,6 @@
 #include <asm/cacheflush.h>
 
 #include <soc/samsung/exynos-pmu.h>
-#include <soc/samsung/exynos-powermode.h>
-#include <linux/soc/samsung/exynos-soc.h>
-#include <linux/exynos-ss.h>
-#include <asm/stacktrace.h>
-#include <linux/io.h>
 
 #ifdef CONFIG_SEC_DEBUG
 

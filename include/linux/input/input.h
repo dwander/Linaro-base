@@ -55,7 +55,6 @@
 #endif
 
 #if defined(CONFIG_ARCH_EXYNOS) //______________________________________________________________________________
-struct t_input_booster	boost_req;
 #define SET_BOOSTER  { \
 	int value = INPUT_BOOSTER_NULL; \
 	_this->level++; \
@@ -64,14 +63,10 @@ struct t_input_booster	boost_req;
 		value = 0; \
 	} \
 	set_hmp(value); \
-	MAX_T_INPUT_BOOSTER(value, cpu_freq); \
-	set_qos(&(boost_req.cpu_qos), PM_QOS_CLUSTER1_FREQ_MIN/*PM_QOS_CPU_FREQ_MIN*/, value); \
-	MAX_T_INPUT_BOOSTER(value, kfc_freq); \
-	set_qos(&(boost_req.kfc_qos), PM_QOS_CLUSTER0_FREQ_MIN/*PM_QOS_KFC_FREQ_MIN*/, value); \
-	MAX_T_INPUT_BOOSTER(value, mif_freq); \
-	set_qos(&(boost_req.mif_qos), PM_QOS_BUS_THROUGHPUT, value); \
-	MAX_T_INPUT_BOOSTER(value, int_freq); \
-	set_qos(&(boost_req.int_qos), PM_QOS_DEVICE_THROUGHPUT, value); \
+	set_qos(&_this->cpu_qos, PM_QOS_CLUSTER1_FREQ_MIN/*PM_QOS_CPU_FREQ_MIN*/, _this->param[_this->index].cpu_freq);  \
+	set_qos(&_this->kfc_qos, PM_QOS_CLUSTER0_FREQ_MIN/*PM_QOS_KFC_FREQ_MIN*/, _this->param[_this->index].kfc_freq);  \
+	set_qos(&_this->mif_qos, PM_QOS_BUS_THROUGHPUT, _this->param[_this->index].mif_freq);  \
+	set_qos(&_this->int_qos, PM_QOS_DEVICE_THROUGHPUT, _this->param[_this->index].int_freq);  \
 }
 #define REMOVE_BOOSTER  { \
 	int value = INPUT_BOOSTER_NULL; \
@@ -81,14 +76,10 @@ struct t_input_booster	boost_req;
 		value = 0; \
 	} \
 	set_hmp(value); \
-	MAX_T_INPUT_BOOSTER(value, cpu_freq); \
-	set_qos(&(boost_req.cpu_qos), PM_QOS_CLUSTER1_FREQ_MIN/*PM_QOS_CPU_FREQ_MIN*/, value); \
-	MAX_T_INPUT_BOOSTER(value, kfc_freq); \
-	set_qos(&(boost_req.kfc_qos), PM_QOS_CLUSTER0_FREQ_MIN/*PM_QOS_KFC_FREQ_MIN*/, value); \
-	MAX_T_INPUT_BOOSTER(value, mif_freq); \
-	set_qos(&(boost_req.mif_qos), PM_QOS_BUS_THROUGHPUT, value); \
-	MAX_T_INPUT_BOOSTER(value, int_freq); \
-	set_qos(&(boost_req.int_qos), PM_QOS_DEVICE_THROUGHPUT, value); \
+	remove_qos(&_this->cpu_qos);  \
+	remove_qos(&_this->kfc_qos);  \
+	remove_qos(&_this->mif_qos);  \
+	remove_qos(&_this->int_qos);  \
 }
 #define PROPERTY_BOOSTER(_device_param_, _dt_param_, _time_)  { \
 	_device_param_.cpu_freq = _dt_param_.cpu_freq; \

@@ -10,8 +10,6 @@
  * published by the Free Software Foundation.
  */
 #include <linux/battery/sec_battery.h>
-#include <linux/sec_ext.h>
-#include <linux/sec_debug.h>
 #ifdef CONFIG_CCIC_NOTIFIER
 #include <linux/ccic/ccic_notifier.h>
 #endif /* CONFIG_CCIC_NOTIFIER */
