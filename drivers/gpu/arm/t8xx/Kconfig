@@ -24,7 +24,6 @@ choice
 	prompt "version Configuration"
 	depends on MALI_T8XX
 	default MALI_R12P0
-	default MALI_R15P0
 	help
 	  Select the gpu support version.
 
