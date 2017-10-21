@@ -29,6 +29,11 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/cpu.h>
+#include <soc/samsung/exynos-powermode.h>
+#include <linux/soc/samsung/exynos-soc.h>
+#include <linux/exynos-ss.h>
+#include <asm/stacktrace.h>
+#include <linux/io.h>
 
 #include <soc/samsung/exynos-pmu.h>
 
