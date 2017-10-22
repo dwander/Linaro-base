@@ -1,5 +1,7 @@
 #include <linux/pm_qos.h>
 
+extern void print_active_wakeup_sources(void);
+
 static inline void device_pm_init_common(struct device *dev)
 {
 	if (!dev->power.early_init) {
