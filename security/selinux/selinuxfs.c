@@ -30,6 +30,7 @@
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include <linux/ctype.h>
+#include <linux/moduleparam.h>
 
 /* selinuxfs pseudo filesystem for exporting the security policy API.
    Based on the proc code and the fs/nfsd/nfsctl.c code. */
@@ -130,13 +131,16 @@ static unsigned long sel_last_ino = SEL_INO_NEXT - 1;
 #define SEL_INO_MASK			0x00ffffff
 
 #define TMPBUFLEN	12
+static int user_selinux_enforcing = 0;
+module_param(user_selinux_enforcing, int, 0644);
+
 static ssize_t sel_read_enforce(struct file *filp, char __user *buf,
 				size_t count, loff_t *ppos)
 {
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
 
-	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", selinux_enforcing);
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", user_selinux_enforcing);
 	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
 }
 
@@ -170,6 +174,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	length = -EINVAL;
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
+
 #ifdef CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE
 	// If build is user build and enforce option is set, selinux is always enforcing
 	new_value = 1;
@@ -212,7 +217,10 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		selinux_status_update_setenforce(selinux_enforcing);
 	}
 #endif
+
+//	user_selinux_enforcing = new_value;
 	length = count;
+	goto out;
 
 #if defined(CONFIG_TZ_ICCC)
 	if (selinux_enabled && selinux_enforcing) {
