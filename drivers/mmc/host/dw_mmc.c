@@ -2259,6 +2259,9 @@ static void dw_mci_tasklet_func(unsigned long priv)
 
 	spin_lock(&host->lock);
 
+	if(host->sw_timeout_chk == true)
+		goto unlock;
+
 	state = host->state;
 	data = host->data;
 	mrq = host->mrq;
@@ -2300,7 +2303,8 @@ static void dw_mci_tasklet_func(unsigned long priv)
 			}
 
 			if (!cmd->data || err) {
-				dw_mci_request_end(host, mrq);
+				if(host->sw_timeout_chk != true)
+					dw_mci_request_end(host, mrq);
 				goto unlock;
 			}
 
@@ -2381,7 +2385,9 @@ static void dw_mci_tasklet_func(unsigned long priv)
 				if (!data->stop || mrq->sbc) {
 					if (mrq->sbc && data->stop)
 						data->stop->error = 0;
-					dw_mci_request_end(host, mrq);
+
+					if(host->sw_timeout_chk != true)
+						dw_mci_request_end(host, mrq);
 					goto unlock;
 				}
 
@@ -2401,7 +2407,9 @@ static void dw_mci_tasklet_func(unsigned long priv)
 				if (!test_bit(EVENT_CMD_COMPLETE,
 					      &host->pending_events)) {
 					host->cmd = NULL;
-					dw_mci_request_end(host, mrq);
+
+					if(host->sw_timeout_chk != true)
+						dw_mci_request_end(host, mrq);
 					goto unlock;
 				}
 			}
@@ -2437,7 +2445,8 @@ static void dw_mci_tasklet_func(unsigned long priv)
 			else
 				host->cmd_status = 0;
 
-			dw_mci_request_end(host, mrq);
+			if(host->sw_timeout_chk != true)
+				dw_mci_request_end(host, mrq);
 			dw_mci_debug_req_log(host, host->mrq,
 					STATE_REQ_DATA_PROCESS, state);
 			goto unlock;
@@ -3021,6 +3030,7 @@ static void dw_mci_timeout_timer(unsigned long data)
 	struct mmc_request *mrq;
 
 	if (host && host->mrq) {
+		host->sw_timeout_chk = true;
 		mrq = host->mrq;
 
 		if (!(mrq->cmd->opcode == MMC_SEND_TUNING_BLOCK ||
@@ -3068,6 +3078,7 @@ static void dw_mci_timeout_timer(unsigned long data)
 		dw_mci_request_end(host, mrq);
 		host->state = STATE_IDLE;
 		spin_unlock(&host->lock);
+		host->sw_timeout_chk = false;
 	}
 }
 
@@ -3892,6 +3903,7 @@ int dw_mci_probe(struct dw_mci *host)
 			       host->irq_flags, "dw-mci", host);
 
 	setup_timer(&host->timer, dw_mci_timeout_timer, (unsigned long)host);
+	host->sw_timeout_chk = false;
 
 	if (ret)
 		goto err_workqueue;

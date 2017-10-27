@@ -16,11 +16,11 @@ Kernel Panic
 Security Patch
  - CVE-2017-0705 Added boundary check in wl_cfgvendor_significant_change_cfg()
  - CVE-2017-0706 Added boundary check in wl_cfg80211_mgmt_tx()
- - V2017052302 Added event length check in wl_notify_rx_mgmt_frame()
- - V2017053101 Added boundary check in dhd_process_full_gscan_result()
- - V2017053102 Fixed Heap overflow in dhd_handle_swc_evt()
- - V2017053103 Added boundary check in dhd_handle_hotlist_scan_evt()
- - V2017060101 Added boundary check in wl_escan_handler()
+ - CVE-2017-0786 V2017060101 Added boundary check in wl_escan_handler()
+ - CVE-2017-0788 V2017053103 Added boundary check in dhd_handle_hotlist_scan_evt()
+ - CVE-2017-0789 V2017053102 Fixed Heap overflow in dhd_handle_swc_evt()
+ - CVE-2017-0790 V2017053101 Added boundary check in dhd_process_full_gscan_result()
+ - CVE-2017-0791 V2017052302 Added event length check in wl_notify_rx_mgmt_frame()
  - V2017063001 Removed not required IOVAR for SDIO
  - Enhanced event length check in is_wlc_event_frame()
  - Fixed overflow issue in wl_android_set_ibss_beacon_ouidata()
@@ -46,17 +46,20 @@ Kernel Panic
  - CS2477559 Implement exception handling routines if DMA mapping error for TX data packet is happened
  - CS2716890 Fixed Scan timeout issue with blocking suspend during P2P scan
 
+Security Patch
+ - CVE-2017-0568 V2017051814 Fixed buffer overrun in wl_run_escan()
+ - CVE-2017-0570 V2017051815 Removed unused file (wl_iw.c/wl_iw.h)
+ - CVE-2017-0633 V2017022301 Enhanced wrong buffer usage in IOCTL path
+ - CVE-2017-0740 V2017030901 Fixed length overflow issue in dhd_wl_ioctl() function
+
 Others
  - CS2454876 Fixed the reassociation failure during MU-MIMO switching if the AP enabled MFP(802.11w) feature
  - CS2471300 Fixed Buffer overflow issue
  - CS2555123 Fixed page fault issue in dhd_wl_ioctl()
  - CS2642368 Fixed type casting issue in wl_android_send_action_frame()
  - CS2675989 Fixed reverse-order of EAP-Failure and deauth packet
- - CVE-2017-0568 Fixed buffer overrun in wl_run_escan()
- - CVE-2017-0570 Removed unused file (wl_iw.c/wl_iw.h)
  - CVE-2017-0633 Enhanced wrong buffer usage in IOCTL path
  - Enabled Random MAC address scan by default for all WIFI chip
- - Fixed length overflow issue in dhd_wl_ioctl() function
 
 
 DHD 1.363.59.212 - 2017.03.24
@@ -315,10 +318,12 @@ DHD 1.363.59.181 - 2016.05.31
 Kernel Panic
  - CSP:1056983 Fix un-synchronized WiFi off & event processing
 
+Security Patch
+ - CVE-2017-0573 V2017051816 Fixed size overflow issue in wl_android_set_roampref()
+
 Others
  - CSP:1009440 Fixed extra vulnerability issues
  - CSP:1042751 Changed event handler using workqueue
- - CSP:1044652 Security patch to prevent stack overflow
  - CSP:1045659 Fixed prevent issue for wl_cfgvendor_start_mkeep_alive()
  - CSP:1049317 Fixed the private command for roam trigger to support wbtext
  - CSP:1051331 Fixed validation for SSID length and privileges issue
@@ -536,7 +541,7 @@ Others
 DHD 1.363.59.115 - 2015. 11.28
 Kernel Panic
  - CSP:995972 Fixed the Kernel panic problem when PCIe linkdown event is triggered from PCIe host
- - CSP:996436 Fix can’t handle TX retrying during Runtime Resume
+ - CSP:996436 Fix can?\99t handle TX retrying during Runtime Resume
 
 Others
  - CSP:994862 Fixed LIVELOCK issue : Adding 64bit cache alignment
@@ -731,7 +736,7 @@ Others
 DHD 1.363.59.44 - 2015. 07. 10
 Others
  - CSP:943472 - DHDTCPACK_SUPPRESS control by interface type
-   (Add ‘DHDTCPACK_SUPPRESS_STAP2P_ONLY’ in Makefile to disable it for SoftAP)
+   (Add ?\98DHDTCPACK_SUPPRESS_STAP2P_ONLY??in Makefile to disable it for SoftAP)
 
 
 DHD 1.363.59.43 - 2015. 07. 07
@@ -776,7 +781,7 @@ Kernel Panic
 
 DHD 1.363.59.35 - 2015. 06. 26
 Others
- - CSP:937081 – Fixed never disconnected issue
+ - CSP:937081 ??Fixed never disconnected issue
  - Added debug logs for DHCP packets
  - Added debug logs for flowring Delete sequence
  - Enabled PS mode for Oxygen
@@ -784,7 +789,7 @@ Others
 
 DHD 1.363.59.34 - 2015. 06. 26
 Kernel Panic
- - CSP:936767 – Fixed spinlock initialization
+ - CSP:936767 ??Fixed spinlock initialization
 
 Others
  - Deleted roam timeout timer immediatly when roaming fail event is received
@@ -792,7 +797,7 @@ Others
 
 DHD 1.363.59.33 - 2015. 06. 24
 Kernel Panic
- - CSP:936767 – Fixed spinlock initialization
+ - CSP:936767 ??Fixed spinlock initialization
 
 Others
  - Changed WLC_E_TRACE enable/disable method (using /data/.logtrace.info)
@@ -801,8 +806,8 @@ Others
 
 DHD 1.363.59.31 - 2015. 06. 22
 Others
- - CSP: 935340 – Prevent calling disassociation when it’s already in disconnected state
- - CSP: 936698 – Prevent deleting p2p discovery interface when going into suspend mode with ‘Keep Wi-Fi on during sleep - Never’ setting.
+ - CSP: 935340 ??Prevent calling disassociation when it?\99s already in disconnected state
+ - CSP: 936698 ??Prevent deleting p2p discovery interface when going into suspend mode with ?\98Keep Wi-Fi on during sleep - Never??setting.
  - Disable WLC_E_TRACE by default
  - Disabled PS mode for Oxygen
  - Optimized SCAN wakelock
@@ -930,5 +935,4 @@ DHD 1.363.55 - 2015. 05. 21
 DHD 1.363.33.2 - 2015. 04. 30
 
 - Initial Release for BCM4359 Zen/Noble Project
-
 
