@@ -4811,12 +4811,14 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 
 		DHD_ERROR(("%s: country_code %s \n", __FUNCTION__, country_code));
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
 		if((strncmp(country_code, "SY", 3) == 0) || (strncmp(country_code, "KP", 3) == 0)) {
 			strncpy(country_code, "XZ", 3);
 			if (!dhdp->is_blob)
 				revinfo = 11;
 			DHD_ERROR(("%s: change to %s \n", __FUNCTION__, country_code));
 		}
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
 
 		if (wl_check_dongle_idle(wiphy) != TRUE) {
 			DHD_ERROR(("FW is busy to check dongle idle\n"));
