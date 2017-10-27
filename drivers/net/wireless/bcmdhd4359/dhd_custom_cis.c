@@ -25,7 +25,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_custom_cis.c 665983 2016-10-19 13:13:32Z $
+ * $Id: dhd_custom_cis.c 697414 2017-05-03 14:48:20Z $
  */
 
 #include <typedefs.h>
@@ -339,6 +339,7 @@ dhd_set_default_macaddr(dhd_pub_t *dhdp)
 {
 	char iovbuf[WLC_IOCTL_SMLEN];
 	struct ether_addr *mac;
+	int ret;
 
 	if (!dhdp) {
 		DHD_ERROR(("%s: dhdp is NULL\n", __FUNCTION__));
@@ -348,10 +349,9 @@ dhd_set_default_macaddr(dhd_pub_t *dhdp)
 	mac = &dhdp->mac;
 
 	/* Read the default MAC address */
-	memset(iovbuf, 0, sizeof(iovbuf));
-	bcm_mkiovar("cur_etheraddr", 0, 0, iovbuf, sizeof(iovbuf));
-	if (dhd_wl_ioctl_cmd(dhdp, WLC_GET_VAR, iovbuf,
-		sizeof(iovbuf), FALSE, 0) < 0) {
+	ret = dhd_iovar(dhdp, 0, "cur_etheraddr", NULL, 0, iovbuf, sizeof(iovbuf),
+			FALSE);
+	if (ret < 0) {
 		DHD_ERROR(("%s: Can't get the default MAC address\n", __FUNCTION__));
 		return BCME_NOTUP;
 	}

@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd.h 684026 2017-02-10 05:45:31Z $
+ * $Id: dhd.h 708917 2017-07-05 08:33:11Z $
  */
 
 /****************
@@ -249,7 +249,11 @@ enum dhd_dongledump_type {
 	DUMP_TYPE_BY_SYSDUMP,
 	DUMP_TYPE_BY_LIVELOCK,
 	DUMP_TYPE_AP_LINKUP_FAILURE,
-	DUMP_TYPE_AP_ABNORMAL_ACCESS
+	DUMP_TYPE_AP_ABNORMAL_ACCESS,
+	DUMP_TYPE_RESUMED_ON_INVALID_RING_RDWR,
+#ifdef SUPPORT_LINKDOWN_RECOVERY
+	DUMP_TYPE_READ_SHM_FAIL
+#endif /* SUPPORT_LINKDOWN_RECOVERY */
 };
 
 enum dhd_hang_reason {
@@ -1316,7 +1320,8 @@ extern int dhd_os_busbusy_wait_negation(dhd_pub_t * pub, uint * condition);
 extern int dhd_os_busbusy_wake(dhd_pub_t * pub);
 
 extern bool dhd_is_concurrent_mode(dhd_pub_t *dhd);
-extern int dhd_iovar(dhd_pub_t *pub, int ifidx, char *name, char *cmd_buf, uint cmd_len, int set);
+int dhd_iovar(dhd_pub_t *pub, int ifidx, char *name, char *param_buf, uint param_len,
+		char *res_buf, uint res_len, int set);
 typedef enum cust_gpio_modes {
 	WLAN_RESET_ON,
 	WLAN_RESET_OFF,
@@ -1462,6 +1467,15 @@ extern uint dhd_force_tx_queueing;
 #define CUSTOM_ASSOC_RETRY_MAX			DEFAULT_ASSOC_RETRY_MAX
 #endif /* DEFAULT_ASSOC_RETRY_MAX */
 
+#if defined(BCMSDIO) || defined(DISABLE_FRAMEBURST)
+#define DEFAULT_FRAMEBURST_SET			0
+#else
+#define DEFAULT_FRAMEBURST_SET			1
+#endif /* BCMSDIO */
+
+#ifndef CUSTOM_FRAMEBURST_SET
+#define CUSTOM_FRAMEBURST_SET			DEFAULT_FRAMEBURST_SET
+#endif /* CUSTOM_FRAMEBURST_SET */
 
 #ifdef WLTDLS
 #ifndef CUSTOM_TDLS_IDLE_MODE_SETTING

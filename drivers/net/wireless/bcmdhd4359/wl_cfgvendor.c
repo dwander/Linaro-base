@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfgvendor.c 681269 2017-01-25 10:59:55Z $
+ * $Id: wl_cfgvendor.c 707371 2017-06-27 12:02:18Z $
  */
 
 /*
@@ -97,11 +97,13 @@ int wl_cfgvendor_send_async_event(struct wiphy *wiphy,
 	kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
 
 	/* Alloc the SKB for vendor_event */
-#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC)
+#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) || \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
 	skb = cfg80211_vendor_event_alloc(wiphy, NULL, len, event_id, kflags);
 #else
 	skb = cfg80211_vendor_event_alloc(wiphy, len, event_id, kflags);
-#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC */
+#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC || */
+	/* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0) */
 	if (!skb) {
 		WL_ERR(("skb alloc failed"));
 		return -ENOMEM;
@@ -297,11 +299,13 @@ wl_cfgvendor_send_hotlist_event(struct wiphy *wiphy,
 		kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
 
 		/* Alloc the SKB for vendor_event */
-#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC)
+#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) || \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
 		skb = cfg80211_vendor_event_alloc(wiphy, NULL, malloc_len, event, kflags);
 #else
 		skb = cfg80211_vendor_event_alloc(wiphy, malloc_len, event, kflags);
-#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC */
+#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC || */
+		/* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0) */
 		if (!skb) {
 			WL_ERR(("skb alloc failed"));
 			return -ENOMEM;
@@ -894,86 +898,6 @@ wl_cfgvendor_set_batch_scan_cfg(struct wiphy *wiphy,
 
 	return err;
 }
-
-static int
-wl_cfgvendor_significant_change_cfg(struct wiphy *wiphy,
-	struct wireless_dev *wdev, const void  *data, int len)
-{
-	int err = 0;
-	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
-	gscan_swc_params_t *significant_params;
-	int tmp, tmp1, tmp2, type, j = 0;
-	const struct nlattr *outer, *inner, *iter;
-	uint8 flush = 0;
-	wl_pfn_significant_bssid_t *bssid;
-
-	significant_params = (gscan_swc_params_t *) kzalloc(len, GFP_KERNEL);
-	if (!significant_params) {
-		WL_ERR(("Cannot Malloc mem to parse config commands size - %d bytes \n", len));
-		return -ENOMEM;
-	}
-
-	nla_for_each_attr(iter, data, len, tmp2) {
-		type = nla_type(iter);
-
-		switch (type) {
-			case GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_FLUSH:
-			flush = nla_get_u8(iter);
-			break;
-			case GSCAN_ATTRIBUTE_RSSI_SAMPLE_SIZE:
-				significant_params->rssi_window = nla_get_u16(iter);
-				break;
-			case GSCAN_ATTRIBUTE_LOST_AP_SAMPLE_SIZE:
-				significant_params->lost_ap_window = nla_get_u16(iter);
-				break;
-			case GSCAN_ATTRIBUTE_MIN_BREACHING:
-				significant_params->swc_threshold = nla_get_u16(iter);
-				break;
-			case GSCAN_ATTRIBUTE_SIGNIFICANT_CHANGE_BSSIDS:
-				bssid = significant_params->bssid_elem_list;
-				nla_for_each_nested(outer, iter, tmp) {
-					nla_for_each_nested(inner, outer, tmp1) {
-							switch (nla_type(inner)) {
-								case GSCAN_ATTRIBUTE_BSSID:
-									memcpy(&(bssid[j].macaddr),
-									       nla_data(inner),
-									       ETHER_ADDR_LEN);
-									break;
-								case GSCAN_ATTRIBUTE_RSSI_HIGH:
-									bssid[j].rssi_high_threshold
-									 = (int8) nla_get_u8(inner);
-									break;
-								case GSCAN_ATTRIBUTE_RSSI_LOW:
-									bssid[j].rssi_low_threshold
-									 = (int8) nla_get_u8(inner);
-									break;
-								default:
-									WL_ERR(("ATTR unknown %d\n",
-									          type));
-									break;
-							}
-						}
-					j++;
-				}
-				break;
-			default:
-				WL_ERR(("Unknown type %d\n", type));
-				break;
-		}
-	}
-	significant_params->nbssid = j;
-
-	if (dhd_dev_pno_set_cfg_gscan(bcmcfg_to_prmry_ndev(cfg),
-	              DHD_PNO_SIGNIFICANT_SCAN_CFG_ID,
-	              significant_params, flush) < 0) {
-		WL_ERR(("Could not set GSCAN significant cfg\n"));
-		err = -EINVAL;
-		goto exit;
-	}
-exit:
-	kfree(significant_params);
-	return err;
-}
 #endif /* GSCAN_SUPPORT */
 
 #ifdef RTT_SUPPORT
@@ -999,11 +923,13 @@ wl_cfgvendor_rtt_evt(void *ctx, void *rtt_data)
 	rtt_list = (struct list_head *)rtt_data;
 	kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
 	/* Alloc the SKB for vendor_event */
-#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC)
+#if defined(CONFIG_ARCH_MSM) && defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) || \
+	LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
 	skb = cfg80211_vendor_event_alloc(wiphy, NULL, tot_len, GOOGLE_RTT_COMPLETE_EVENT, kflags);
 #else
 	skb = cfg80211_vendor_event_alloc(wiphy, tot_len, GOOGLE_RTT_COMPLETE_EVENT, kflags);
-#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC */
+#endif /* CONFIG_ARCH_MSM && SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC || */
+	/* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0) */
 	if (!skb) {
 		WL_ERR(("skb alloc failed"));
 		goto exit;
@@ -1624,6 +1550,7 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	wifi_rate_stat *p_wifi_rate_stat = NULL;
 	uint total_len = 0;
 	wifi_iface_stat iface;
+	wlc_rev_info_t revinfo;
 #ifdef CONFIG_COMPAT
 	compat_wifi_iface_stat compat_iface;
 	int compat_task_state = is_compat_task();
@@ -1631,6 +1558,14 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 
 	WL_INFORM(("%s: Enter \n", __func__));
 	RETURN_EIO_IF_NOT_UP(cfg);
+
+	/* Get the device rev info */
+	memset(&revinfo, 0, sizeof(revinfo));
+	err = wldev_ioctl_get(bcmcfg_to_prmry_ndev(cfg), WLC_GET_REVINFO, &revinfo,
+			sizeof(revinfo));
+	if (err != BCME_OK) {
+		goto exit;
+	}
 
 	outdata = (void *)kzalloc(WLC_IOCTL_MAXLEN, GFP_KERNEL);
 	if (outdata == NULL) {
@@ -1640,7 +1575,6 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 
 	memset(&scbval, 0, sizeof(scb_val_t));
 	memset(outdata, 0, WLC_IOCTL_MAXLEN);
-	memset(iovar_buf, 0, WLC_IOCTL_MAXLEN);
 	output = outdata;
 
 	err = wldev_iovar_getbuf(bcmcfg_to_prmry_ndev(cfg), "radiostat", NULL, 0,
@@ -1711,7 +1645,7 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 
 	CHK_CNTBUF_DATALEN(iovar_buf, WLC_IOCTL_MAXLEN);
 	/* Translate traditional (ver <= 10) counters struct to new xtlv type struct */
-	err = wl_cntbuf_to_xtlv_format(NULL, iovar_buf, WLC_IOCTL_MAXLEN, 0);
+	err = wl_cntbuf_to_xtlv_format(NULL, iovar_buf, WLC_IOCTL_MAXLEN, revinfo.corerev);
 	if (err != BCME_OK) {
 		WL_ERR(("%s wl_cntbuf_to_xtlv_format ERR %d\n",
 			__FUNCTION__, err));
@@ -1896,14 +1830,6 @@ static const struct wiphy_vendor_command wl_vendor_cmds [] = {
 	{
 		{
 			.vendor_id = OUI_GOOGLE,
-			.subcmd = GSCAN_SUBCMD_SET_SIGNIFICANT_CHANGE_CONFIG
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wl_cfgvendor_significant_change_cfg
-	},
-	{
-		{
-			.vendor_id = OUI_GOOGLE,
 			.subcmd = GSCAN_SUBCMD_GET_SCAN_RESULTS
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
@@ -2040,7 +1966,6 @@ static const struct  nl80211_vendor_cmd_info wl_vendor_events [] = {
 		{ OUI_BRCM, BRCM_VENDOR_EVENT_UNSPEC },
 		{ OUI_BRCM, BRCM_VENDOR_EVENT_PRIV_STR },
 #ifdef GSCAN_SUPPORT
-		{ OUI_GOOGLE, GOOGLE_GSCAN_SIGNIFICANT_EVENT },
 		{ OUI_GOOGLE, GOOGLE_GSCAN_GEOFENCE_FOUND_EVENT },
 		{ OUI_GOOGLE, GOOGLE_GSCAN_BATCH_SCAN_EVENT },
 		{ OUI_GOOGLE, GOOGLE_SCAN_FULL_RESULTS_EVENT },

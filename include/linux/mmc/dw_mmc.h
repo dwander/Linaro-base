@@ -231,6 +231,9 @@ struct dw_mci {
 
 	/* Card Clock In */
 	u32			cclk_in;
+
+	/* S/W Timeout check */
+	bool sw_timeout_chk;
 };
 
 /* DMA ops for Internal/External DMAC interface */

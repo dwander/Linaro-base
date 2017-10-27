@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_custom_msm.c 683858 2017-02-09 09:21:45Z $
+ * $Id: dhd_custom_msm.c 699795 2017-05-16 11:24:51Z $
  *
  */
 
@@ -38,9 +38,9 @@
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/of_gpio.h>
-#ifdef CONFIG_ARCH_MSM8996
+#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998)
 #include <linux/msm_pcie.h>
-#endif /* CONFIG_ARCH_MSM8996 */
+#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 */
 
 #ifdef CONFIG_BROADCOM_WIFI_RESERVED_MEM
 extern int dhd_init_wlan_mem(void);

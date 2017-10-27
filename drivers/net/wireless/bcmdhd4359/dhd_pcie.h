@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.h 683104 2017-02-06 06:46:17Z $
+ * $Id: dhd_pcie.h 688650 2017-03-07 09:54:17Z $
  */
 
 
@@ -225,6 +225,7 @@ typedef struct dhd_bus {
 #endif /* CONFIG_ARCH_MSM */
 	struct_pcie_register_event pcie_event;
 #endif /* CONFIG_ARCH_MSM || (EXYNOS_PCIE_LINKDOWN_RECOVERY && CONFIG_SOC_EXYNOS8890) */
+	bool read_shm_fail;
 #endif /* SUPPORT_LINKDOWN_RECOVERY */
 #ifdef DHD_PCIE_RUNTIMEPM
 	int32 idlecount;                /* Activity timeout counter */

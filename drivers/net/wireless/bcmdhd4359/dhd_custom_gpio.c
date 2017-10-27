@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_custom_gpio.c 591129 2015-10-07 05:22:14Z $
+ * $Id: dhd_custom_gpio.c 692237 2017-03-27 08:14:12Z $
  */
 
 #include <typedefs.h>
@@ -36,9 +36,6 @@
 #include <dhd_linux.h>
 
 #include <wlioctl.h>
-#if defined(WL_WIRELESS_EXT)
-#include <wl_iw.h>
-#endif
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)

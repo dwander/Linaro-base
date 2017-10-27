@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.c 684026 2017-02-10 05:45:31Z $
+ * $Id: dhd_pcie.c 709874 2017-07-11 02:20:54Z $
  */
 
 
@@ -444,7 +444,7 @@ dhdpcie_bus_intstatus(dhd_bus_t *bus)
 
 		/* Is device removed. intstatus & intmask read 0xffffffff */
 		if (intstatus == (uint32)-1) {
-			DHD_ERROR(("%s: !!!!!!Device Removed or dead chip.\n", __FUNCTION__));
+			DHD_ERROR(("%s: Device is removed or Link is down.\n", __FUNCTION__));
 			intstatus = 0;
 #ifdef CUSTOMER_HW4_DEBUG
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
@@ -2025,9 +2025,6 @@ printbuf:
 	if (bus->pcie_sh->flags & (PCIE_SHARED_ASSERT | PCIE_SHARED_TRAP)) {
 		printf("%s: %s\n", __FUNCTION__, strbuf.origbuf);
 
-		/* wake up IOCTL wait event */
-		dhd_wakeup_ioctl_event(bus->dhd, IOCTL_RETURN_ON_TRAP);
-
 #if defined(DHD_FW_COREDUMP)
 		/* save core dump or write to a file */
 		if (bus->dhd->memdump_enabled) {
@@ -2036,6 +2033,9 @@ printbuf:
 		}
 #endif /* DHD_FW_COREDUMP */
 
+
+		/* wake up IOCTL wait event */
+		dhd_wakeup_ioctl_event(bus->dhd, IOCTL_RETURN_ON_TRAP);
 
 	}
 
@@ -3224,6 +3224,9 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 				}
 #endif /* CONFIG_ARCH_MSM */
 				bus->is_linkdown = 0;
+#ifdef SUPPORT_LINKDOWN_RECOVERY
+				bus->read_shm_fail = false;
+#endif /* SUPPORT_LINKDOWN_RECOVERY */
 				bus->pci_d3hot_done = 0;
 				bcmerror = dhdpcie_bus_enable_device(bus);
 				if (bcmerror) {
@@ -3817,6 +3820,15 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			dhdpcie_oob_intr_set(bus, TRUE);
 #endif /* BCMPCIE_OOB_HOST_WAKE */
 		} else if (timeleft == 0) {
+			uint32 intstatus = 0;
+
+			/* Check if PCIe bus status is valid */
+			intstatus = si_corereg(bus->sih,
+				bus->sih->buscoreidx, PCIMailBoxInt, 0, 0);
+			if (intstatus == (uint32)-1) {
+				/* Invalidate PCIe bus status */
+				bus->is_linkdown = 1;
+			}
 			bus->dhd->d3ack_timeout_occured = TRUE;
 			bus->dhd->d3ackcnt_timeout++;
 			DHD_ERROR(("%s: resumed on timeout for D3 ACK d3_inform_cnt %d \n",
@@ -3835,8 +3847,8 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			/* resume all interface network queue. */
 			dhd_bus_start_queue(bus);
 			DHD_GENERAL_UNLOCK(bus->dhd, flags);
-			DHD_ERROR(("%s: Event HANG send up "
-						"due to PCIe linkdown\n", __FUNCTION__));
+			DHD_ERROR(("%s: Event HANG send up due to D3_ACK timeout\n",
+				__FUNCTION__));
 #ifdef SUPPORT_LINKDOWN_RECOVERY
 #ifdef CONFIG_ARCH_MSM
 			bus->no_cfg_restore = 1;
@@ -4812,6 +4824,31 @@ dhdpci_bus_read_frames(dhd_bus_t *bus)
 	}
 	DHD_PERIM_UNLOCK_ALL((bus->dhd->fwder_unit % FWDER_MAX_UNIT));
 
+#ifdef SUPPORT_LINKDOWN_RECOVERY
+	if (bus->read_shm_fail) {
+		/* Read interrupt state once again to confirm linkdown */
+		int intstatus = si_corereg(bus->sih, bus->sih->buscoreidx, PCIMailBoxInt, 0, 0);
+		if (intstatus != (uint32)-1) {
+			DHD_ERROR(("%s: read SHM failed but intstatus is valid\n", __FUNCTION__));
+			if (bus->dhd->memdump_enabled) {
+				DHD_OS_WAKE_LOCK(bus->dhd);
+				bus->dhd->memdump_type = DUMP_TYPE_READ_SHM_FAIL;
+				dhd_bus_mem_dump(bus->dhd);
+				DHD_OS_WAKE_UNLOCK(bus->dhd);
+			}
+			bus->dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
+			dhd_os_send_hang_message(bus->dhd);
+		} else {
+			DHD_ERROR(("%s: Link is Down.\n", __FUNCTION__));
+#ifdef CONFIG_ARCH_MSM
+			bus->no_cfg_restore = 1;
+#endif /* CONFIG_ARCH_MSM */
+			bus->is_linkdown = 1;
+			bus->dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
+			dhd_os_send_hang_message(bus->dhd);
+		}
+	}
+#endif /* SUPPORT_LINKDOWN_RECOVERY */
 	return more;
 }
 
