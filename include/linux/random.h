@@ -17,6 +17,7 @@ struct random_ready_callback {
 	struct module *owner;
 };
 
+static inline void add_latent_entropy(void) {}
 extern void add_device_randomness(const void *, unsigned int);
 extern void add_input_randomness(unsigned int type, unsigned int code,
 				 unsigned int value);
