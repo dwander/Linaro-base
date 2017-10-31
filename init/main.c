@@ -555,6 +555,7 @@ asmlinkage __visible void __init start_kernel(void)
 	/*
 	 * Set up the the initial canary ASAP:
 	 */
+	add_latent_entropy();
 	boot_init_stack_canary();
 
 	cgroup_init_early();
@@ -943,7 +944,6 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
-	random_int_secret_init();
 }
 
 static void __init do_pre_smp_initcalls(void)
