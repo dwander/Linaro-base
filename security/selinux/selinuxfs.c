@@ -218,7 +218,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	}
 #endif
 
-//	user_selinux_enforcing = new_value;
+	user_selinux_enforcing = new_value;
 	length = count;
 	goto out;
 
