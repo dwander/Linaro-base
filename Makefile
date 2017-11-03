@@ -195,7 +195,7 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
 export KBUILD_BUILDHOST := $(SUBARCH)
 ARCH			= arm
-CROSS_COMPILE	= $(CCACHE) ../dev/arm-eabi-7.2.1/bin/arm-eabi-
+CROSS_COMPILE	= $(CCACHE) ../dev/arm-eabi-5.4.1/bin/arm-eabi-
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -385,10 +385,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -std=gnu89
 
 KBUILD_CFLAGS	+= -fno-pic -pipe -march=armv8-a+crc -mfpu=neon-vfpv4
-KBUILD_CFLAGS	+= -Wno-unused-variable -Wno-maybe-uninitialized
-KBUILD_CFLAGS	+= -Wno-bool-operation -Wno-overflow -Wno-pointer-compare \
-			-Wno-format-truncation -Wno-format-overflow \
-			-Wno-misleading-indentation
+KBUILD_CFLAGS	+= -Wno-unused-variable -Wno-unused-function -Wno-maybe-uninitialized
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=

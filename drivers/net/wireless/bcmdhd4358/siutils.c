@@ -456,11 +456,6 @@ si_chipid_fixup(si_t *sih)
 	}
 }
 
-static inline bool cmp_bustype(uint bustype1, uint bustype2)
-{
-	return (bustype1 != bustype2);
-}
-
 /**
  * Allocate an si handle. This function may be called multiple times.
  *
@@ -529,7 +524,7 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 	}
 
 	sih->bustype = bustype;
-	if (cmp_bustype(bustype, BUSTYPE(bustype))) {
+	if (bustype != BUSTYPE(bustype)) {
 		SI_ERROR(("si_doattach: bus type %d does not match configured bus type %d\n",
 			bustype, BUSTYPE(bustype)));
 		return NULL;

@@ -1298,7 +1298,7 @@ int fb_edid_add_monspecs(unsigned char *edid, struct fb_monspecs *specs)
 
 	for (i = 0; i < (128 - edid[2]) / DETAILED_TIMING_DESCRIPTION_SIZE;
 	     i++, block += DETAILED_TIMING_DESCRIPTION_SIZE)
-		if (PIXEL_CLOCK != 0)
+		if (PIXEL_CLOCK)
 			edt[num++] = block - edid;
 
 	/* No video descriptors, so nothing more to do */

@@ -142,8 +142,8 @@ static int samsung_kbd_input_mapping(struct hid_device *hdev,
 		usage->hid & HID_USAGE);
 
 	if (HID_UP_KEYBOARD == (usage->hid & HID_USAGE_PAGE)) {
-		set_bit(EV_REP, hi->input->evbit);
 		switch (usage->hid & HID_USAGE) {
+		set_bit(EV_REP, hi->input->evbit);
 		/* Only for UK keyboard */
 		/* key found */
 		case 0x32: samsung_kbd_mouse_map_key_clear(KEY_BACKSLASH); break;
@@ -270,8 +270,8 @@ static int samsung_universal_kbd_input_mapping(struct hid_device *hdev,
 		usage->hid & HID_USAGE);
 
 	if (HID_UP_KEYBOARD == (usage->hid & HID_USAGE_PAGE)) {
-		set_bit(EV_REP, hi->input->evbit);
 		switch (usage->hid & HID_USAGE) {
+		set_bit(EV_REP, hi->input->evbit);
 		/* Only for UK keyboard */
 		/* key found */
 		case 0x32: samsung_kbd_mouse_map_key_clear(KEY_BACKSLASH); break;
