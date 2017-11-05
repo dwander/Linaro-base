@@ -23,6 +23,7 @@
 #include <linux/jhash.h>
 #include <linux/moduleparam.h>
 #include <linux/export.h>
+#include <linux/once.h>
 #include <net/net_namespace.h>
 
 #include <net/netfilter/nf_conntrack.h>
