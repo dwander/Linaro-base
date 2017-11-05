@@ -250,6 +250,10 @@ do {								\
 
 #define net_random()		prandom_u32()
 #define net_srandom(seed)	prandom_seed((__force u32)(seed))
+#define net_get_random_once(buf, nbytes)			\
+	get_random_once((buf), (nbytes))
+#define net_get_random_once_wait(buf, nbytes)			\
+	get_random_once_wait((buf), (nbytes))
 
 extern int   	     kernel_sendmsg(struct socket *sock, struct msghdr *msg,
 				    struct kvec *vec, size_t num, size_t len);
