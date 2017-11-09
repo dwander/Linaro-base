@@ -642,8 +642,8 @@ void services_compute_xperms_drivers(
 }
 
 /*
-+ * Compute access vectors and extended permissions based on a context
-+ * structure pair for the permissions in a particular class.
+ * Compute access vectors and extended permissions based on a context
+ * structure pair for the permissions in a particular class.
  */
 static void context_struct_compute_av(struct context *scontext,
 					struct context *tcontext,
@@ -1533,7 +1533,6 @@ out:
 	kfree(s);
 	kfree(t);
 	kfree(n);
-
 	if (!selinux_enforcing)
 		return 0;
 	return -EACCES;
@@ -2546,7 +2545,6 @@ int security_fs_use(struct super_block *sb)
 	struct ocontext *c;
 	struct superblock_security_struct *sbsec = sb->s_security;
 	const char *fstype = sb->s_type->name;
-	u32 tmpsid;
 
 	read_lock(&policy_rwlock);
 
@@ -2561,8 +2559,7 @@ int security_fs_use(struct super_block *sb)
 		sbsec->behavior = c->v.behavior;
 		if (!c->sid[0]) {
 			rc = sidtab_context_to_sid(&sidtab, &c->context[0],
-						   &tmpsid);
-			c->sid[0] = tmpsid;
+						   &c->sid[0]);
 			if (rc)
 				goto out;
 		}
@@ -3019,13 +3016,6 @@ struct selinux_audit_rule {
 void selinux_audit_rule_free(void *vrule)
 {
 	struct selinux_audit_rule *rule = vrule;
-#ifdef CONFIG_RKP_KDP
-	int rc;
-
-	if ((rc = security_integrity_current()))
-		return;
-#endif  /* CONFIG_RKP_KDP */
-
 
 	if (rule) {
 		context_destroy(&rule->au_ctxt);
@@ -3042,10 +3032,6 @@ int selinux_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule)
 	struct selinux_audit_rule **rule = (struct selinux_audit_rule **)vrule;
 	int rc = 0;
 
-#ifdef CONFIG_RKP_KDP
-	if ((rc = security_integrity_current()))
-		return rc;
-#endif
 	*rule = NULL;
 
 	if (!ss_initialized)
@@ -3137,12 +3123,6 @@ out:
 int selinux_audit_rule_known(struct audit_krule *rule)
 {
 	int i;
-#ifdef CONFIG_RKP_KDP
-	int rc;
-
-	if ((rc = security_integrity_current()))
-		return rc;
-#endif
 
 	for (i = 0; i < rule->field_count; i++) {
 		struct audit_field *f = &rule->fields[i];
@@ -3171,12 +3151,6 @@ int selinux_audit_rule_match(u32 sid, u32 field, u32 op, void *vrule,
 	struct mls_level *level;
 	struct selinux_audit_rule *rule = vrule;
 	int match = 0;
-#ifdef CONFIG_RKP_KDP
-	int rc;
-
-	if ((rc = security_integrity_current()))
-		return rc;
-#endif
 
 	if (unlikely(!rule)) {
 		WARN_ONCE(1, "selinux_audit_rule_match: missing rule\n");
