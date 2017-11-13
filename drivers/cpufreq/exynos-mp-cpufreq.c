@@ -49,6 +49,7 @@
 #include <soc/samsung/cpufreq.h>
 #include <soc/samsung/exynos-powermode.h>
 #include <soc/samsung/asv-exynos.h>
+#include <soc/samsung/asv-cal.h>
 #include <soc/samsung/tmu.h>
 #include <soc/samsung/ect_parser.h>
 #include <soc/samsung/exynos-pmu.h>
@@ -72,6 +73,10 @@
 #define CLUSTER_ID(cl)		(cl ? ID_CL1 : ID_CL0)
 
 #define LIMIT_FREQ_DIVIDER	4
+
+
+/* 1 = Adapted to asv level, 2 = Max freq, 3 = Stock freq */
+static int autoasv = 1;
 
 #ifdef CONFIG_SMP
 struct lpj_info {
@@ -2611,6 +2616,8 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 	char *cluster_name;
 	int ret;
 	int not_using_ect = true;
+	unsigned int asv_big = asv_get_information(cal_asv_dvfs_big, dvfs_group, 0);
+	unsigned int asv_little = asv_get_information(cal_asv_dvfs_little, dvfs_group, 0);
 
 	if (!np) {
 		pr_info("%s: cpufreq_dt is not existed. \n", __func__);
@@ -2621,13 +2628,55 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 				&ptr->max_idx_num))
 		return -ENODEV;
 
-	if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "cl0_max_support_idx"),
-				&ptr->max_support_idx))
-		return -ENODEV;
+	if (autoasv == 1) {
+		if (asv_little < 4) {
+			if (of_property_read_u32(np, "stock_cl0_max_support_idx",
+						&ptr->max_support_idx))
+				return -ENODEV;
+		} else if (asv_little < 7) {
+			if (of_property_read_u32(np, "low_cl0_max_support_idx",
+						&ptr->max_support_idx))
+				return -ENODEV;
+		} else if (asv_little < 10) {
+				if (of_property_read_u32(np, "mid_cl0_max_support_idx",
+						&ptr->max_support_idx))
+				return -ENODEV;
+		} else if (asv_little < 13) {
+				if (of_property_read_u32(np, "high_cl0_max_support_idx",
+						&ptr->max_support_idx))
+				return -ENODEV;
+		} else {
+			if (of_property_read_u32(np, "ext_cl0_max_support_idx",
+							&ptr->max_support_idx))
+				return -ENODEV;
+		}
+	} else if (autoasv == 2) {
+		if (of_property_read_u32(np, "ext_cl0_max_support_idx",
+					&ptr->max_support_idx))
+			return -ENODEV;
+	} else if (autoasv == 3) {
+		if (of_property_read_u32(np, "stock_cl0_max_support_idx",
+					&ptr->max_support_idx))
+			return -ENODEV;
+	} else {
+		pr_err("%s: autoasv has failed to register little core freqs\n", __func__);
+	}
 
-	if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
+	if (autoasv == 1) {
+		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
 				&ptr->min_support_idx))
-		return -ENODEV;
+			return -ENODEV;
+	} else if (autoasv == 2) {
+		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
+				&ptr->min_support_idx))
+			return -ENODEV;
+	} else if (autoasv == 3) {
+		if (of_property_read_u32(np, (cl ? "stock_cl1_min_support_idx" : "stock_cl0_min_support_idx"),
+				&ptr->min_support_idx))
+			return -ENODEV;
+	} else {
+		pr_err("%s: autoasv has failed to register min freqs\n", __func__);
+	}
 
 	if (of_property_read_u32(np, (cl ? "cl1_boot_max_qos" : "cl0_boot_max_qos"),
 				&ptr->boot_cpu_max_qos))
@@ -2659,8 +2708,34 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 #if defined(CONFIG_EXYNOS_BIG_FREQ_BOOST)
 		ptr->max_support_idx_table = kzalloc(sizeof(unsigned int)
 				* (NR_CLUST1_CPUS + 1), GFP_KERNEL);
-		ret = of_property_read_u32_array(np, "cl1_max_support_idx_table",
-				(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+
+		if (autoasv == 1) {
+			if (asv_big < 3) {
+				ret = of_property_read_u32_array(np, "stock_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else if (asv_big < 7) {
+				ret = of_property_read_u32_array(np, "low_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else if (asv_big < 10) {
+				ret = of_property_read_u32_array(np, "mid_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else if (asv_big < 12) {
+				ret = of_property_read_u32_array(np, "high_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else {
+			ret = of_property_read_u32_array(np, "ext_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			}
+		} else if (autoasv == 2) {
+			ret = of_property_read_u32_array(np, "high_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+		} else if (autoasv == 3) {
+			ret = of_property_read_u32_array(np, "stock_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+		} else {
+			pr_err("%s: autoasv has failed to register big core freqs\n", __func__);
+		}
+
 		if (ret < 0)
 			return -ENODEV;
 
