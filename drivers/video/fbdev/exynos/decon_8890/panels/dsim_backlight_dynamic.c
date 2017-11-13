@@ -246,7 +246,7 @@ static void dsim_panel_aid_ctrl(struct dsim_device *dsim)
 		dsim_err("%s : failed to write aid \n", __func__);
 }
 
-static void dsim_panel_set_elvss(struct dsim_device *dsim)
+void dsim_panel_set_elvss(struct dsim_device *dsim)
 {
 	u8 *elvss = NULL;
 	unsigned char SEQ_ELVSS[ELVSS_LEN_MAX + 1] = {0, };
