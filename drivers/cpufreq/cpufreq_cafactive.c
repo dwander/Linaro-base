@@ -19,6 +19,7 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/cpufreq.h>
+#include <linux/ipa.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/rwsem.h>
@@ -32,6 +33,10 @@
 #include <linux/slab.h>
 #include <linux/kernel_stat.h>
 #include <asm/cputime.h>
+
+#ifdef CONFIG_CPU_THERMAL_IPA
+#include "cpu_load_metric.h"
+#endif
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/cpufreq_cafactive.h>
@@ -399,6 +404,10 @@ static u64 update_load(int cpu)
 
 	pcpu->cputime_speedadj += active_time * pcpu->policy->cur;
 
+#ifdef CONFIG_CPU_THERMAL_IPA
+	update_cpu_metric(cpu, now, delta_idle, delta_time, pcpu->policy);
+#endif
+
 	pcpu->time_in_idle = now_idle;
 	pcpu->time_in_idle_timestamp = now;
 	return now;
@@ -651,6 +660,10 @@ static int cpufreq_cafactive_speedchange_task(void *data)
 					pjcpu->hispeed_validate_time = hvt;
 				}
 			}
+
+#if defined(CONFIG_CPU_THERMAL_IPA)
+			ipa_cpufreq_requested(pcpu->policy, max_freq);
+#endif
 			trace_cpufreq_cafactive_setspeed(cpu,
 						     pcpu->target_freq,
 						     pcpu->policy->cur);
