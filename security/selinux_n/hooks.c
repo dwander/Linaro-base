@@ -415,10 +415,10 @@ static int selinux_is_sblabel_mnt(struct super_block *sb)
 	if (strncmp(sb->s_type->name, "debugfs", sizeof("debugfs")) == 0)
 		return 1;
 
-	if (strncmp(sb->s_type->name, "f2fs", sizeof("debugfs")) == 0)
+	if (strncmp(sb->s_type->name, "f2fs", sizeof("f2fs")) == 0)
 		return 1;
 
-	if (strncmp(sb->s_type->name, "sdcardfs", sizeof("debugfs")) == 0)
+	if (strncmp(sb->s_type->name, "sdcardfs", sizeof("sdcardfs")) == 0)
 		return 1;
 
 	/* Special handling for sysfs. Is genfs but also has setxattr handler*/
