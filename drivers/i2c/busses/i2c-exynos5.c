@@ -1417,6 +1417,7 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 		return -EIO;
 	}
 
+<<<<<<< HEAD
 #ifdef CONFIG_PM_RUNTIME
 	clk_ret = pm_runtime_get_sync(i2c->dev);
 	if (clk_ret < 0) {
@@ -1451,6 +1452,11 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	for (retry = 0; retry < adap->retries; retry++) {
 		for (i = 0; i < num; i++) {
 			stop = (i == num - 1);
+=======
+	ret = clk_enable(i2c->clk);
+	if (ret)
+		return ret;
+>>>>>>> linux-stable/linux-3.18.y
 
 			if (i2c->transfer_delay)
 				udelay(i2c->transfer_delay);
@@ -1486,6 +1492,7 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	}
 
  out:
+<<<<<<< HEAD
 #ifdef CONFIG_PM_RUNTIME
 	if (clk_ret < 0) {
 		clk_disable_unprepare(i2c->clk);
@@ -1499,6 +1506,9 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	exynos_update_ip_idle_status(i2c->idle_ip_index, 1);
 #endif
 
+=======
+	clk_disable(i2c->clk);
+>>>>>>> linux-stable/linux-3.18.y
 	return ret;
 }
 
@@ -1627,6 +1637,7 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 		return -ENOENT;
 	}
 
+<<<<<<< HEAD
 	i2c->rate_clk = devm_clk_get(&pdev->dev, "rate_hsi2c");
 	if (IS_ERR(i2c->rate_clk)) {
 		dev_err(&pdev->dev, "cannot get rate clock\n");
@@ -1639,6 +1650,11 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 					EXYNOS5_HSI2C_RUNTIME_PM_DELAY);
 	pm_runtime_enable(&pdev->dev);
 #endif
+=======
+	ret = clk_prepare_enable(i2c->clk);
+	if (ret)
+		return ret;
+>>>>>>> linux-stable/linux-3.18.y
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	i2c->regs = devm_ioremap_resource(&pdev->dev, mem);
@@ -1783,6 +1799,10 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 #endif
 	return 0;
 
+	clk_disable(i2c->clk);
+
+	return 0;
+
  err_clk:
 	clk_disable_unprepare(i2c->clk);
 	exynos_update_ip_idle_status(i2c->idle_ip_index, 1);
@@ -1794,6 +1814,8 @@ static int exynos5_i2c_remove(struct platform_device *pdev)
 	struct exynos5_i2c *i2c = platform_get_drvdata(pdev);
 
 	i2c_del_adapter(&i2c->adap);
+
+	clk_unprepare(i2c->clk);
 
 	return 0;
 }
@@ -1808,6 +1830,8 @@ static int exynos5_i2c_suspend_noirq(struct device *dev)
 	i2c->suspended = 1;
 	i2c_unlock_adapter(&i2c->adap);
 
+	clk_unprepare(i2c->clk);
+
 	return 0;
 }
 
@@ -1816,6 +1840,7 @@ static int exynos5_i2c_resume_noirq(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct exynos5_i2c *i2c = platform_get_drvdata(pdev);
 
+<<<<<<< HEAD
 	i2c_lock_adapter(&i2c->adap);
 	exynos_update_ip_idle_status(i2c->idle_ip_index, 0);
 	clk_prepare_enable(i2c->clk);
@@ -1824,6 +1849,20 @@ static int exynos5_i2c_resume_noirq(struct device *dev)
 		exynos5_i2c_reset(i2c);
 	clk_disable_unprepare(i2c->clk);
 	exynos_update_ip_idle_status(i2c->idle_ip_index, 1);
+=======
+	ret = clk_prepare_enable(i2c->clk);
+	if (ret)
+		return ret;
+
+	ret = exynos5_hsi2c_clock_setup(i2c);
+	if (ret) {
+		clk_disable_unprepare(i2c->clk);
+		return ret;
+	}
+
+	exynos5_i2c_init(i2c);
+	clk_disable(i2c->clk);
+>>>>>>> linux-stable/linux-3.18.y
 	i2c->suspended = 0;
 	i2c_unlock_adapter(&i2c->adap);
 

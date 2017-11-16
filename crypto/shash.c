@@ -309,17 +309,23 @@ static int shash_async_finup(struct ahash_request *req)
 
 int shash_ahash_digest(struct ahash_request *req, struct shash_desc *desc)
 {
-	struct scatterlist *sg = req->src;
-	unsigned int offset = sg->offset;
 	unsigned int nbytes = req->nbytes;
+	struct scatterlist *sg;
+	unsigned int offset;
 	int err;
 
+<<<<<<< HEAD
 #ifdef CONFIG_CRYPTO_FIPS
 	if (unlikely(in_fips_err()))
 		return -EACCES;
 #endif
 
 	if (nbytes < min(sg->length, ((unsigned int)(PAGE_SIZE)) - offset)) {
+=======
+	if (nbytes &&
+	    (sg = req->src, offset = sg->offset,
+	     nbytes < min(sg->length, ((unsigned int)(PAGE_SIZE)) - offset))) {
+>>>>>>> linux-stable/linux-3.18.y
 		void *data;
 
 		data = kmap_atomic(sg_page(sg));
@@ -399,9 +405,10 @@ int crypto_init_shash_ops_async(struct crypto_tfm *tfm)
 	crt->final = shash_async_final;
 	crt->finup = shash_async_finup;
 	crt->digest = shash_async_digest;
+	crt->setkey = shash_async_setkey;
 
-	if (alg->setkey)
-		crt->setkey = shash_async_setkey;
+	crt->has_setkey = alg->setkey != shash_no_setkey;
+
 	if (alg->export)
 		crt->export = shash_async_export;
 	if (alg->import)

@@ -93,7 +93,7 @@ static int xhci_plat_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
-		return -ENODEV;
+		return irq;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
@@ -140,6 +140,9 @@ static int xhci_plat_probe(struct platform_device *pdev)
 		ret = clk_prepare_enable(clk);
 		if (ret)
 			goto put_hcd;
+	} else if (PTR_ERR(clk) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto put_hcd;
 	}
 
 	if (of_device_is_compatible(pdev->dev.of_node,
@@ -209,6 +212,7 @@ static int xhci_plat_remove(struct platform_device *dev)
 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
 	struct clk *clk = xhci->clk;
 
+<<<<<<< HEAD
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	pr_info("%s \n", __func__);
 	/* In order to prevent kernel panic */
@@ -222,6 +226,10 @@ static int xhci_plat_remove(struct platform_device *dev)
 	}
 #endif
 	xhci->xhc_state |= XHCI_STATE_REMOVING;
+=======
+	xhci->xhc_state |= XHCI_STATE_REMOVING;
+
+>>>>>>> linux-stable/linux-3.18.y
 	usb_remove_hcd(xhci->shared_hcd);
 	usb_put_hcd(xhci->shared_hcd);
 
