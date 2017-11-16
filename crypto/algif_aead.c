@@ -368,7 +368,7 @@ static int aead_recvmsg(struct kiocb *unused, struct socket *sock,
 	unsigned int cnt = 0;
 
 	/* Limit number of IOV blocks to be accessed below */
-	if (msg->msg_iter.nr_segs > RSGL_MAX_ENTRIES)
+	if (msg->msg_iovlen > RSGL_MAX_ENTRIES)
 		return -ENOMSG;
 
 	lock_sock(sk);
@@ -427,13 +427,13 @@ static int aead_recvmsg(struct kiocb *unused, struct socket *sock,
 	}
 
 	/* convert iovecs of output buffers into scatterlists */
-	while (iov_iter_count(&msg->msg_iter)) {
-		size_t seglen = min_t(size_t, iov_iter_count(&msg->msg_iter),
+	while (iov_iter_count(&msg->msg_iov)) {
+		size_t seglen = min_t(size_t, iov_iter_count(&msg->msg_iov),
 				      (outlen - usedpages));
 
 		/* make one iovec available as scatterlist */
-		err = af_alg_make_sg(&ctx->rsgl[cnt], &msg->msg_iter,
-				     seglen);
+		err = af_alg_make_sg(&ctx->rsgl[cnt], &msg->msg_iov,
+				     seglen, 1);
 		if (err < 0)
 			goto unlock;
 		usedpages += err;
@@ -445,7 +445,7 @@ static int aead_recvmsg(struct kiocb *unused, struct socket *sock,
 		/* we do not need more iovecs as we have sufficient memory */
 		if (outlen <= usedpages)
 			break;
-		iov_iter_advance(&msg->msg_iter, err);
+		iov_iter_advance(&msg->msg_iov, err);
 		cnt++;
 	}
 
