@@ -1892,10 +1892,7 @@ int sanity_check_ckpt(struct f2fs_sb_info *sbi)
 	unsigned int total, fsmeta;
 	struct f2fs_super_block *raw_super = F2FS_RAW_SUPER(sbi);
 	struct f2fs_checkpoint *ckpt = F2FS_CKPT(sbi);
-<<<<<<< HEAD
-=======
 	unsigned int ovp_segments, reserved_segments;
->>>>>>> f2fs-stable/linux-3.18.y
 	unsigned int main_segs, blocks_per_seg;
 	int i;
 
@@ -1909,8 +1906,6 @@ int sanity_check_ckpt(struct f2fs_sb_info *sbi)
 	if (unlikely(fsmeta >= total))
 		return 1;
 
-<<<<<<< HEAD
-=======
 	ovp_segments = le32_to_cpu(ckpt->overprov_segment_count);
 	reserved_segments = le32_to_cpu(ckpt->rsvd_segment_count);
 
@@ -1921,7 +1916,6 @@ int sanity_check_ckpt(struct f2fs_sb_info *sbi)
 		return 1;
 	}
 
->>>>>>> f2fs-stable/linux-3.18.y
 	main_segs = le32_to_cpu(raw_super->segment_count_main);
 	blocks_per_seg = sbi->blocks_per_seg;
 
