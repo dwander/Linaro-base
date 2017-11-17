@@ -47,7 +47,7 @@ static inline void reset_ipc_map(struct mem_link_device *mld)
 {
 	int i;
 
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 
 		set_txq_head(dev, 0);
@@ -69,7 +69,7 @@ static int shmem_reset_ipc_link(struct mem_link_device *mld)
 
 	reset_ipc_map(mld);
 
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 
 		skb_queue_purge(dev->skb_txq);
@@ -134,7 +134,7 @@ static inline void purge_txq(struct mem_link_device *mld)
 	struct link_device *ld = &mld->link_dev;
 	int i;
 
-	/* Purge the skb_txq in every rb */
+	/* Purge the skb_txq in every IPC device (IPC_FMT, IPC_RAW, etc.) */
 	if (ld->sbd_ipc) {
 		struct sbd_link_device *sl = &mld->sbd_link_dev;
 
@@ -144,8 +144,7 @@ static inline void purge_txq(struct mem_link_device *mld)
 		}
 	}
 
-	/* Purge the skb_txq in every IPC device (IPC_MAP_FMT, IPC_MAP_HPRIO_RAW, etc.) */
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 		skb_queue_purge(dev->skb_txq);
 	}
@@ -558,7 +557,7 @@ static enum hrtimer_restart tx_timer_func(struct hrtimer *timer)
 	}
 #endif
 
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 		int ret;
 
@@ -601,7 +600,7 @@ static enum hrtimer_restart tx_timer_func(struct hrtimer *timer)
 	}
 
 	if (!need_schedule) {
-		for (i = 0; i < MAX_SIPC_MAP; i++) {
+		for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 			if (!txq_empty(mld->dev[i])) {
 				need_schedule = true;
 				break;
@@ -832,7 +831,7 @@ static int xmit_ipc_to_dev(struct mem_link_device *mld, enum sipc_ch_id ch,
 	struct link_device *ld = &mld->link_dev;
 	struct io_device *iod = skbpriv(skb)->iod;
 	struct modem_ctl *mc = ld->mc;
-	struct mem_ipc_device *dev = mld->dev[get_mmap_idx(ch, skb)];
+	struct mem_ipc_device *dev = mld->dev[dev_id(ch)];
 	struct sk_buff_head *skb_txq;
 
 	if (!dev) {
@@ -941,7 +940,7 @@ static int xmit_udl(struct mem_link_device *mld, struct io_device *iod,
 		    enum sipc_ch_id ch, struct sk_buff *skb)
 {
 	int ret;
-	struct mem_ipc_device *dev = mld->dev[IPC_MAP_NORM_RAW];
+	struct mem_ipc_device *dev = mld->dev[IPC_RAW];
 	int count = skb->len;
 	int tried = 0;
 
@@ -1008,7 +1007,7 @@ static inline void link_to_demux(struct mem_link_device  *mld)
 {
 	int i;
 
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 		struct sk_buff_head *skb_rxq = dev->skb_rxq;
 
@@ -1173,7 +1172,7 @@ static int recv_ipc_frames(struct mem_link_device *mld,
 	int i;
 	u16 intr = mst->int2ap;
 
-	for (i = 0; i < MAX_SIPC_MAP; i++) {
+	for (i = 0; i < MAX_SIPC5_DEVICES; i++) {
 		struct mem_ipc_device *dev = mld->dev[i];
 		int rcvd;
 
@@ -1612,7 +1611,7 @@ static int shmem_xmit_boot(struct link_device *ld, struct io_device *iod,
 	int err;
 	struct modem_firmware mf;
 	void __iomem *v_base;
-	size_t valid_space;
+	unsigned valid_space;
 
 	/**
 	 * Get the information about the boot image
@@ -1768,7 +1767,7 @@ static int shmem_full_dump(struct link_device *ld, struct io_device *iod,
 	struct mem_link_device *mld = to_mem_link_device(ld);
 	unsigned long copied = 0;
 	struct sk_buff *skb;
-	unsigned long alloc_size = 0xE00;
+	unsigned int alloc_size = 0xE00;
 	int ret;
 
 	ret = copy_to_user((void __user *)arg, &mld->size, sizeof(mld->size));
@@ -2193,10 +2192,10 @@ static void remap_4mb_map_to_ipc_dev(struct mem_link_device *mld)
 	mld->magic = (u32 __iomem *)&map->magic;
 	mld->access = (u32 __iomem *)&map->access;
 
-	/* IPC_MAP_FMT */
-	dev = &mld->ipc_dev[IPC_MAP_FMT];
+	/* IPC_FMT */
+	dev = &mld->ipc_dev[IPC_FMT];
 
-	dev->id = IPC_MAP_FMT;
+	dev->id = IPC_FMT;
 	strcpy(dev->name, "FMT");
 
 	spin_lock_init(&dev->txq.lock);
@@ -2217,57 +2216,19 @@ static void remap_4mb_map_to_ipc_dev(struct mem_link_device *mld)
 	dev->req_ack_mask = MASK_REQ_ACK_FMT;
 	dev->res_ack_mask = MASK_RES_ACK_FMT;
 
-	dev->skb_txq = &ld->skb_txq[IPC_MAP_FMT];
-	dev->skb_rxq = &ld->skb_rxq[IPC_MAP_FMT];
-	skb_queue_head_init(dev->skb_txq);
-	skb_queue_head_init(dev->skb_rxq);
+	dev->skb_txq = &ld->sk_fmt_tx_q;
+	dev->skb_rxq = &ld->sk_fmt_rx_q;
 
 	dev->req_ack_cnt[TX] = 0;
 	dev->req_ack_cnt[RX] = 0;
 
-	mld->dev[IPC_MAP_FMT] = dev;
+	mld->dev[IPC_FMT] = dev;
 
-#ifdef CONFIG_MODEM_IF_LEGACY_QOS
-	/* IPC_MAP_HPRIO_RAW */
-	dev = &mld->ipc_dev[IPC_MAP_HPRIO_RAW];
+	/* IPC_RAW */
+	dev = &mld->ipc_dev[IPC_RAW];
 
-	dev->id = IPC_MAP_HPRIO_RAW;
-	strcpy(dev->name, "HPRIO_RAW");
-
-	spin_lock_init(&dev->txq.lock);
-	atomic_set(&dev->txq.busy, 0);
-	dev->txq.head = &map->raw_hprio_tx_head;
-	dev->txq.tail = &map->raw_hprio_tx_tail;
-	dev->txq.buff = &map->raw_hprio_tx_buff[0];
-	dev->txq.size = SHM_4M_RAW_HPRIO_TX_BUFF_SZ;
-
-	spin_lock_init(&dev->rxq.lock);
-	atomic_set(&dev->rxq.busy, 0);
-	dev->rxq.head = &map->raw_hprio_rx_head;
-	dev->rxq.tail = &map->raw_hprio_rx_tail;
-	dev->rxq.buff = &map->raw_hprio_rx_buff[0];
-	dev->rxq.size = SHM_4M_RAW_HPRIO_RX_BUFF_SZ;
-
-	dev->msg_mask = MASK_SEND_RAW;
-	dev->req_ack_mask = MASK_REQ_ACK_RAW;
-	dev->res_ack_mask = MASK_RES_ACK_RAW;
-
-	dev->skb_txq = &ld->skb_txq[IPC_MAP_HPRIO_RAW];
-	dev->skb_rxq = &ld->skb_rxq[IPC_MAP_HPRIO_RAW];
-	skb_queue_head_init(dev->skb_txq);
-	skb_queue_head_init(dev->skb_rxq);
-
-	dev->req_ack_cnt[TX] = 0;
-	dev->req_ack_cnt[RX] = 0;
-
-	mld->dev[IPC_MAP_HPRIO_RAW] = dev;
-#endif
-
-	/* IPC_MAP_NORM_RAW */
-	dev = &mld->ipc_dev[IPC_MAP_NORM_RAW];
-
-	dev->id = IPC_MAP_NORM_RAW;
-	strcpy(dev->name, "NORM_RAW");
+	dev->id = IPC_RAW;
+	strcpy(dev->name, "RAW");
 
 	spin_lock_init(&dev->txq.lock);
 	atomic_set(&dev->txq.busy, 0);
@@ -2287,15 +2248,13 @@ static void remap_4mb_map_to_ipc_dev(struct mem_link_device *mld)
 	dev->req_ack_mask = MASK_REQ_ACK_RAW;
 	dev->res_ack_mask = MASK_RES_ACK_RAW;
 
-	dev->skb_txq = &ld->skb_txq[IPC_MAP_NORM_RAW];
-	dev->skb_rxq = &ld->skb_rxq[IPC_MAP_NORM_RAW];
-	skb_queue_head_init(dev->skb_txq);
-	skb_queue_head_init(dev->skb_rxq);
+	dev->skb_txq = &ld->sk_raw_tx_q;
+	dev->skb_rxq = &ld->sk_raw_rx_q;
 
 	dev->req_ack_cnt[TX] = 0;
 	dev->req_ack_cnt[RX] = 0;
 
-	mld->dev[IPC_MAP_NORM_RAW] = dev;
+	mld->dev[IPC_RAW] = dev;
 }
 
 static int shmem_rx_setup(struct link_device *ld)
@@ -2416,6 +2375,12 @@ struct link_device *shmem_create_link_device(struct platform_device *pdev)
 	ld->close_tx = shmem_close_tx;
 
 	INIT_LIST_HEAD(&ld->list);
+
+	skb_queue_head_init(&ld->sk_fmt_tx_q);
+	skb_queue_head_init(&ld->sk_raw_tx_q);
+
+	skb_queue_head_init(&ld->sk_fmt_rx_q);
+	skb_queue_head_init(&ld->sk_raw_rx_q);
 
 	spin_lock_init(&ld->netif_lock);
 	atomic_set(&ld->netif_stopped, 0);
