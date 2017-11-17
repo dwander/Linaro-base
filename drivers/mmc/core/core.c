@@ -1790,9 +1790,8 @@ static void _mmc_detect_change(struct mmc_host *host, unsigned long delay,
 		pm_wakeup_event(mmc_dev(host), 5000);
 
 	host->detect_change = 1;
-	/* wake lock: 500ms */
-	if (!(host->caps & MMC_CAP_NONREMOVABLE))
-		wake_lock_timeout(&host->detect_wake_lock, wl_detect_timeout);
+
+	wake_lock_timeout(&host->detect_wake_lock, wl_detect_timeout);
 	mmc_schedule_delayed_work(&host->detect, delay);
 }
 

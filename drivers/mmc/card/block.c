@@ -791,24 +791,8 @@ static void mmc_error_count_log(struct mmc_card *card, int index, int error, u32
 
 static void mmc_card_error_logging(struct mmc_card *card, struct mmc_blk_request *brq, u32 status)
 {
-	struct mmc_card_error_log *err_log;
 	int index = 0;
 	int error = 0;
-	err_log = card->err_log;
-
-	if (status & STATUS_MASK || brq->stop.resp[0] & STATUS_MASK)
-	{
-		if(status & R1_ERROR || brq->stop.resp[0] & R1_ERROR)
-			err_log[index].ge_cnt++;
-		if(status & R1_CC_ERROR || brq->stop.resp[0] & R1_CC_ERROR)
-			err_log[index].cc_cnt++;
-		if(status & R1_CARD_ECC_FAILED || brq->stop.resp[0] & R1_CARD_ECC_FAILED)
-			err_log[index].ecc_cnt++;
-		if(status & R1_WP_VIOLATION || brq->stop.resp[0] & R1_WP_VIOLATION)
-			err_log[index].wp_cnt++;
-		if(status & R1_OUT_OF_RANGE || brq->stop.resp[0] & R1_OUT_OF_RANGE)
-			err_log[index].oor_cnt++;	
-	}
 
 	if(!brq)
 		return;
@@ -1519,8 +1503,6 @@ static int mmc_blk_err_check(struct mmc_card *card,
 		if (rq_data_dir(req) == READ) {
 			if (ecc_err)
 				return MMC_BLK_ABORT;
-			if (mmc_card_sd(card)) 
-				return MMC_BLK_ABORT; /* no retry for sd read data error */ 
 			return MMC_BLK_DATA_ERR;
 		} else {
 			return MMC_BLK_CMD_ERR;

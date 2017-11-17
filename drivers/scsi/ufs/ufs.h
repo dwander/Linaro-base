@@ -264,15 +264,6 @@ enum {
 	UFSHCD_AMP		= 3,
 };
 
-/* reset type*/
-enum {
-	UFS_RESET_DEFAULT		= 0x00,
-	UFS_RESET_PROBE			= 0x01,
-	UFS_RESET_UIC_ERR		= 0x02,
-	UFS_RESET_HOST_RESET		= 0x03,
-	UFS_RESET_HIBERN8		= 0x04,
-};
-
 #define POWER_DESC_MAX_SIZE			0x62
 #define POWER_DESC_MAX_ACTV_ICC_LVLS		16
 
