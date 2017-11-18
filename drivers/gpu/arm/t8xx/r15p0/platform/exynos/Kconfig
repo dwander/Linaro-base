@@ -24,7 +24,6 @@
 config EXYNOS_SOC_NAME
     depends on MALI_T8XX
     string "Third party soc name"
-    default "8890"
     help
       soc name.
 

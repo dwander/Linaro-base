@@ -26,7 +26,6 @@
 #include "gpu_control.h"
 #ifdef CONFIG_CPU_THERMAL_IPA
 #include "gpu_ipa.h"
-#include <linux/ipa.h>
 #endif /* CONFIG_CPU_THERMAL_IPA */
 #include "gpu_custom_interface.h"
 
@@ -294,7 +293,6 @@ static ssize_t set_volt_table(struct device *dev, struct device_attribute *attr,
 		}
 	}
 
-	ipa_update();
 	spin_unlock_irqrestore(&platform->gpu_dvfs_spinlock, flags);
 
 	return count;
