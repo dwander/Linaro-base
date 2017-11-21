@@ -2682,61 +2682,23 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 	int ret;
 	int not_using_ect = true;
 	unsigned int asv_big = asv_get_information(cal_asv_dvfs_big, dvfs_group, 0);
-	unsigned int asv_little = asv_get_information(cal_asv_dvfs_little, dvfs_group, 0);
 
 	if (!np) {
 		pr_info("%s: cpufreq_dt is not existed. \n", __func__);
 		return -ENODEV;
 	}
 
-	if (of_property_read_u32(np,(cl ? "cl1_idx_num" : "cl0_idx_num"),
+	if (of_property_read_u32(np, (cl ? "cl1_idx_num" : "cl0_idx_num"),
 				&ptr->max_idx_num))
 		return -ENODEV;
 
-	if ( (autoasv == 1) ) {
-		/* For Grade E phones, use stock for LITTLE freq_table */
-		if (asv_little < 3) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "low_cl0_max_support_idx"),
-						&ptr->max_support_idx))
-				return -ENODEV;
-		/* For Grade C and D phones, use mid OC for LITTLE freq_table */
-		} else if (asv_little < 9) {
-				if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "mid_cl0_max_support_idx"),
-						&ptr->max_support_idx))
-				return -ENODEV;
-		/* Grade A and B phones? That's amazing, let's unleash the Exynos */
-		} else {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
-							&ptr->max_support_idx))
-				return -ENODEV;
-		}
-	} else if ( (autoasv == 2) ) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "high_cl0_max_support_idx"),
-							&ptr->max_support_idx))
-				return -ENODEV;
-	} else if ( (autoasv == 3) ) {
-			if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "stock_cl0_max_support_idx"),
-							&ptr->max_support_idx))
-				return -ENODEV;
-	} else {
-			pr_err("%s: autoasv has failed to register little core freqs\n", __func__);
-	}
+	if (of_property_read_u32(np, (cl ? "cl1_max_support_idx" : "cl0_max_support_idx"),
+				&ptr->max_support_idx))
+		return -ENODEV;
 
-	if ( (autoasv == 1) ) {
-		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
-					&ptr->min_support_idx))
-			return -ENODEV;
-	} else if ( (autoasv == 2) ) {
-		if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
-					&ptr->min_support_idx))
-			return -ENODEV;
-	} else if ( (autoasv == 3) ) {
-		if (of_property_read_u32(np, (cl ? "stock_cl1_min_support_idx" : "stock_cl0_min_support_idx"),
-					&ptr->min_support_idx))
-			return -ENODEV;
-	} else {
-			pr_err("%s: autoasv has failed to register min freqs\n", __func__);
-	}
+	if (of_property_read_u32(np, (cl ? "cl1_min_support_idx" : "cl0_min_support_idx"),
+				&ptr->min_support_idx))
+		return -ENODEV;
 
 	if (of_property_read_u32(np, (cl ? "cl1_boot_max_qos" : "cl0_boot_max_qos"),
 				&ptr->boot_cpu_max_qos))
