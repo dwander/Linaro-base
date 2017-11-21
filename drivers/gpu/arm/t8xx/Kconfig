@@ -11,12 +11,6 @@
 # Boston, MA  02110-1301, USA.
 #
 #
-config DDK_VERSION_OS
-	string "version"
-	default ANDROID_MAJOR_VERSION
-	help
-		Android OS major version
-
 menuconfig MALI_T8XX
 	tristate "Mali-T8XX support"
 	default y
