@@ -424,15 +424,22 @@
 		/* For CPUFREQ table */
 		/* APO */
 		cl0_idx_num = <19>;
-		cl0_max_support_idx = <1>;
+		stock_cl0_min_support_idx = <15>;
+		stock_cl0_max_support_idx = <4>;
+		low_cl0_max_support_idx = <4>;
+		mid_cl0_max_support_idx = <3>;
+		high_cl0_max_support_idx = <2>;
+		ext_cl0_max_support_idx = <1>;
 		cl0_min_support_idx = <16>;
 		cl0_boot_max_qos = <1586000>;
 		cl0_boot_min_qos = <1274000>;
 		cl0_en_ema = <1>;
 
 		/* MNGS */
+		stock_cl1_min_support_idx = <22>;
+		stock_cl1_max_support_idx = <4>;
 		cl1_idx_num = <28>;
-		cl1_max_support_idx = <1>;
+		cl1_max_support_idx = <3>;
 		cl1_min_support_idx = <26>;
 		cl1_boot_max_qos = <2600000>;
 		cl1_boot_min_qos = <2496000>;
@@ -499,9 +506,9 @@
 		/*MNGS table ->	 idx  freq    volt   bus_lock */
 		cl1_dvfs_domain_name = "dvfs_big";
 		cl1_dvfs_table = < 0 3000000 1575000   1794000 /* ARM L0: 3.0GHz  */
-				   1 2912000 1528750   1794000 /* ARM L1: 2.9GMHz */
-				   2 2808000 1478750   1794000 /* ARM L2: 2.8GMHz */
-				   3 2704000 1428750   1794000 /* ARM L3: 2.7GHz  */
+				   1 2900000 1528750   1794000 /* ARM L1: 2.9GMHz */
+				   2 2800000 1478750   1794000 /* ARM L2: 2.8GMHz */
+				   3 2700000 1428750   1794000 /* ARM L3: 2.7GHz  */
 				   4 2600000 1378750   1794000 /* ARM L4: 2.6GHz  */
 				   5 2496000 1328750   1716000 /* ARM L5: 2.5GHz  */
 				   6 2392000 1268750   1716000 /* ARM L6: 2.4GHz  */
