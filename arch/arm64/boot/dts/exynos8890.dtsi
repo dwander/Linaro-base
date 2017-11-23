@@ -454,29 +454,29 @@
 					      7    /* Number of online core is 3 */
 					      7 >; /* Number of online core is 4 */
 
-		low_cl1_max_support_idx_table = < 6	   /* Number of online core is 0 */
-					      4    /* Number of online core is 1 */
-					      4    /* Number of online core is 2 */
+		low_cl1_max_support_idx_table = < 7	   /* Number of online core is 0 */
+					      3    /* Number of online core is 1 */
+					      3    /* Number of online core is 2 */
+					      7    /* Number of online core is 3 */
+					      7 >; /* Number of online core is 4 */
+
+		mid_cl1_max_support_idx_table = < 7	   /* Number of online core is 0 */
+					      3    /* Number of online core is 1 */
+					      3    /* Number of online core is 2 */
 					      6    /* Number of online core is 3 */
 					      6 >; /* Number of online core is 4 */
 
-		mid_cl1_max_support_idx_table = < 5	   /* Number of online core is 0 */
-					      4    /* Number of online core is 1 */
-					      4    /* Number of online core is 2 */
-					      5    /* Number of online core is 3 */
-					      5 >; /* Number of online core is 4 */
-
-		high_cl1_max_support_idx_table = < 5	   /* Number of online core is 0 */
-					      3    /* Number of online core is 1 */
-					      3    /* Number of online core is 2 */
-					      5    /* Number of online core is 3 */
-					      5 >; /* Number of online core is 4 */
-
-		ext_cl1_max_support_idx_table = < 5	   /* Number of online core is 0 */
+		high_cl1_max_support_idx_table = < 7	   /* Number of online core is 0 */
 					      2    /* Number of online core is 1 */
 					      2    /* Number of online core is 2 */
 					      5    /* Number of online core is 3 */
 					      5 >; /* Number of online core is 4 */
+
+		ext_cl1_max_support_idx_table = < 7	   /* Number of online core is 0 */
+					      1    /* Number of online core is 1 */
+					      1    /* Number of online core is 2 */
+					      4    /* Number of online core is 3 */
+					      4 >; /* Number of online core is 4 */
 
 		/* Boost freq*/
 		cl0_boost_freq = <754000>;
@@ -505,10 +505,10 @@
 
 		/*MNGS table ->	 idx  freq    volt   bus_lock */
 		cl1_dvfs_domain_name = "dvfs_big";
-		cl1_dvfs_table = < 0 3000000 1575000   1794000 /* ARM L0: 3.0GHz  */
-				   1 2900000 1528750   1794000 /* ARM L1: 2.9GMHz */
-				   2 2800000 1478750   1794000 /* ARM L2: 2.8GMHz */
-				   3 2700000 1428750   1794000 /* ARM L3: 2.7GHz  */
+		cl1_dvfs_table = < 0 3016000 1575000   1794000 /* ARM L0: 3.0GHz  */
+				   1 2912000 1528750   1794000 /* ARM L1: 2.9GMHz */
+				   2 2808000 1478750   1794000 /* ARM L2: 2.8GMHz */
+				   3 2704000 1428750   1794000 /* ARM L3: 2.7GHz  */
 				   4 2600000 1378750   1794000 /* ARM L4: 2.6GHz  */
 				   5 2496000 1328750   1716000 /* ARM L5: 2.5GHz  */
 				   6 2392000 1268750   1716000 /* ARM L6: 2.4GHz  */
