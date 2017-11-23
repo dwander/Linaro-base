@@ -2694,19 +2694,19 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 		return -ENODEV;
 
 	if (autoasv == 1) {
-		if (asv_little < 4) {
+		if (asv_little < 3) {
 			if (of_property_read_u32(np, "stock_cl0_max_support_idx",
 						&ptr->max_support_idx))
 				return -ENODEV;
-		} else if (asv_little < 7) {
+		} else if (asv_little < 5) {
 			if (of_property_read_u32(np, "low_cl0_max_support_idx",
 						&ptr->max_support_idx))
 				return -ENODEV;
-		} else if (asv_little < 10) {
+		} else if (asv_little < 7) {
 				if (of_property_read_u32(np, "mid_cl0_max_support_idx",
 						&ptr->max_support_idx))
 				return -ENODEV;
-		} else if (asv_little < 13) {
+		} else if (asv_little < 10) {
 				if (of_property_read_u32(np, "high_cl0_max_support_idx",
 						&ptr->max_support_idx))
 				return -ENODEV;
@@ -2774,14 +2774,18 @@ static int exynos_mp_cpufreq_parse_dt(struct device_node *np, cluster_type cl)
 		ptr->max_support_idx_table = kzalloc(sizeof(unsigned int)
 				* (NR_CLUST1_CPUS + 1), GFP_KERNEL);
 
-		if ( (autoasv == 1) ) {
-			/* For Grade D and E phones, use stock for BIG freq_table */
-			if (asv_big < 7) {
-			ret = of_property_read_u32_array(np, "low_cl1_max_support_idx_table",
+		if (autoasv == 1) {
+			if (asv_big < 3) {
+				ret = of_property_read_u32_array(np, "stock_cl1_max_support_idx_table",
 					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
-			/* For Grade C and B phones, use mid OC for BIG freq_table */
-			} else if (asv_big < 11) {
-			ret = of_property_read_u32_array(np, "mid_cl1_max_support_idx_table",
+			} else if (asv_big < 5) {
+				ret = of_property_read_u32_array(np, "low_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else if (asv_big < 7) {
+				ret = of_property_read_u32_array(np, "mid_cl1_max_support_idx_table",
+					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
+			} else if (asv_big < 10) {
+				ret = of_property_read_u32_array(np, "high_cl1_max_support_idx_table",
 					(unsigned int *)ptr->max_support_idx_table, NR_CLUST1_CPUS + 1);
 			/* Grade A phones? That's amazing, let's unleash the Exynos */
 			} else {
