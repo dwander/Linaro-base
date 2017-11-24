@@ -49,14 +49,17 @@ static struct pm_qos_request exynos_pcie_int_qos[MAX_RC_NUM];
 #ifdef CONFIG_CPU_IDLE
 static int exynos_pci_lpa_event(struct notifier_block *nb, unsigned long event, void *data);
 #endif
+#ifdef CONFIG_ARGOS
 static int sec_argos_l1ss_notifier(struct notifier_block *notifier, unsigned long speed, void *v);
+extern int sec_argos_register_notifier(struct notifier_block *n, char *label);
+extern int sec_argos_unregister_notifier(struct notifier_block *n, char *label);
+#endif
 static void exynos_pcie_resumed_phydown(struct pcie_port *pp);
 static void exynos_pcie_assert_phy_reset(struct pcie_port *pp);
 static int exynos_pcie_rd_own_conf(struct pcie_port *pp, int where, int size, u32 *val);
-extern int sec_argos_register_notifier(struct notifier_block *n, char *label);
-extern int sec_argos_unregister_notifier(struct notifier_block *n, char *label);
 void exynos_pcie_send_pme_turn_off(struct exynos_pcie *exynos_pcie);
 
+#ifdef CONFIG_ARGOS
 static struct notifier_block argos_l1ss_nb = {
         .notifier_call = sec_argos_l1ss_notifier,
 };
@@ -64,6 +67,7 @@ static struct notifier_block argos_l1ss_nb = {
 static struct notifier_block argos_l1ss_nb2 = {
         .notifier_call = sec_argos_l1ss_notifier,
 };
+#endif
 
 static inline void exynos_elb_writel(struct exynos_pcie *pcie, u32 val, u32 reg)
 {
@@ -162,6 +166,7 @@ int exynos_pcie_l1ss_ctrl(int enable, int id)
 	return	exynos_pcie_set_l1ss(enable, pp, id);
 }
 
+#ifdef CONFIG_ARGOS
 static int sec_argos_l1ss_notifier(struct notifier_block *notifier,
                 unsigned long speed, void *v)
 {
@@ -183,6 +188,7 @@ static int sec_argos_l1ss_notifier(struct notifier_block *notifier,
 
         return NOTIFY_OK;
 }
+#endif
 
 void exynos_pcie_register_dump(int ch_num)
 {
@@ -890,6 +896,7 @@ static int __init exynos_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, exynos_pcie);
 
+#ifdef CONFIG_ARGOS
         if (exynos_pcie->ch_num == 0) {
                 ret = sec_argos_register_notifier(&argos_l1ss_nb, "WIFI");
                 if (ret < 0) {
@@ -903,6 +910,7 @@ static int __init exynos_pcie_probe(struct platform_device *pdev)
                         goto probe_fail;
                 }
         }
+#endif
 
 probe_fail:
 	if (ret)
@@ -923,10 +931,12 @@ static int __exit exynos_pcie_remove(struct platform_device *pdev)
 	exynos_pm_unregister_notifier(&exynos_pcie->lpa_nb);
 #endif
 
+#ifdef CONFIG_ARGOS
         if (exynos_pcie->ch_num == 0) {
                 sec_argos_unregister_notifier(&argos_l1ss_nb, "WIFI");
                 sec_argos_unregister_notifier(&argos_l1ss_nb2, "P2P");
         }
+#endif
 
 	if (exynos_pcie->state > STATE_LINK_DOWN) {
 		if (of_device_is_compatible(pp->dev->of_node, "samsung,exynos8890-pcie")) {
