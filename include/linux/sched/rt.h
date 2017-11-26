@@ -57,4 +57,14 @@ extern void normalize_rt_tasks(void);
  */
 #define RR_TIMESLICE		(100 * HZ / 1000)
 
+/*
+ * Convert nice value [19,-20] to rlimit style value [1,40].
+ */
+#define nice_to_rlimit(nice) (MAX_NICE - nice + 1)
+
+/*
+ * Convert rlimit style value [1,40] to nice value [-20, 19].
+ */
+#define rlimit_to_nice(prio) (MAX_NICE - prio + 1)
+
 #endif /* _SCHED_RT_H */
