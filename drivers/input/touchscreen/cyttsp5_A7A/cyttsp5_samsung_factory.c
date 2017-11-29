@@ -1509,7 +1509,7 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 	bool cmd_found = false;
 
 	if (strlen(buf) >= FACTORY_CMD_STR_LEN) {		
-		dev_err(&sfd->dev, "%s: cmd length is over (%s,%d)!!\n", __func__, buf, (int)strlen(buf));
+		dev_err(sfd->dev, "%s: cmd length is over (%s,%d)!!\n", __func__, buf, (int)strlen(buf));
 		goto err_out;
 	}
 
