@@ -148,7 +148,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"",   "XZ", 11},	/* Universal if Country code is unknown or empty */
 	{"IR", "XZ", 11},	/* Universal if Country code is IRAN, (ISLAMIC REPUBLIC OF) */
 	{"SD", "XZ", 11},	/* Universal if Country code is SUDAN */
-	{"SY", "XZ", 11},	/* Universal if Country code is SYRIAN ARAB REPUBLIC */
+	{"SY", "XZ", 1},	/* Universal if Country code is SYRIAN ARAB REPUBLIC */
 	{"GL", "XZ", 11},	/* Universal if Country code is GREENLAND */
 	{"PS", "XZ", 11},	/* Universal if Country code is PALESTINIAN TERRITORY, OCCUPIED */
 	{"TL", "XZ", 11},	/* Universal if Country code is TIMOR-LESTE (EAST TIMOR) */
@@ -178,7 +178,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"",   "XZ", 11},	/* Universal if Country code is unknown or empty */
 	{"IR", "XZ", 11},	/* Universal if Country code is IRAN, (ISLAMIC REPUBLIC OF) */
 	{"SD", "XZ", 11},	/* Universal if Country code is SUDAN */
-	{"SY", "XZ", 11},	/* Universal if Country code is SYRIAN ARAB REPUBLIC */
+	{"SY", "XZ", 1},	/* Universal if Country code is SYRIAN ARAB REPUBLIC */
 	{"PS", "XZ", 11},	/* Universal if Country code is PALESTINIAN TERRITORY, OCCUPIED */
 	{"TL", "XZ", 11},	/* Universal if Country code is TIMOR-LESTE (EAST TIMOR) */
 	{"MH", "XZ", 11},	/* Universal if Country code is MARSHALL ISLANDS */
@@ -932,7 +932,6 @@ void sec_control_pm(dhd_pub_t *dhd, uint *power_mode)
 	struct file *fp = NULL;
 	char *filepath = PSMINFO;
 	char power_val = 0;
-	char iovbuf[WL_EVENTING_MASK_LEN + 12];
 #ifdef DHD_ENABLE_LPC
 	int ret = 0;
 	uint32 lpc = 0;
@@ -962,23 +961,18 @@ void sec_control_pm(dhd_pub_t *dhd, uint *power_mode)
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)power_mode,
 				sizeof(uint), TRUE, 0);
 			/* Turn off MPC in AP mode */
-			bcm_mkiovar("mpc", (char *)power_mode, 4,
-				iovbuf, sizeof(iovbuf));
-			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf,
-				sizeof(iovbuf), TRUE, 0);
+			dhd_iovar(dhd, 0, "mpc", (char *)power_mode, sizeof(*power_mode), NULL, 0,
+					TRUE);
 			g_pm_control = TRUE;
 #ifdef ROAM_ENABLE
 			/* Roaming off of dongle */
-			bcm_mkiovar("roam_off", (char *)&roamvar, 4,
-				iovbuf, sizeof(iovbuf));
-			dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf,
-				sizeof(iovbuf), TRUE, 0);
+			dhd_iovar(dhd, 0, "roam_off", (char *)&roamvar, sizeof(roamvar), NULL, 0,
+					TRUE);
 #endif
 #ifdef DHD_ENABLE_LPC
 			/* Set lpc 0 */
-			bcm_mkiovar("lpc", (char *)&lpc, 4, iovbuf, sizeof(iovbuf));
-			if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf,
-				sizeof(iovbuf), TRUE, 0)) < 0) {
+			ret = dhd_iovar(dhd, 0, "lpc", (char *)&lpc, sizeof(lpc), NULL, 0, TRUE);
+			if (ret < 0) {
 				DHD_ERROR(("[WIFI_SEC] %s: Set lpc failed  %d\n",
 				__FUNCTION__, ret));
 			}
@@ -1002,7 +996,6 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 	uint32 ant_val = 0;
 	uint32 btc_mode = 0;
 	char *filepath = ANTINFO;
-	char iovbuf[WLC_IOCTL_SMLEN];
 	uint chip_id = dhd_bus_chip_id(dhd);
 
 	/* Check if this chip can support MIMO */
@@ -1045,8 +1038,8 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 
 	/* bt coex mode off */
 	if (dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) {
-		bcm_mkiovar("btc_mode", (char *)&btc_mode, 4, iovbuf, sizeof(iovbuf));
-		ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+		ret = dhd_iovar(dhd, 0, "btc_mode", (char *)&btc_mode, sizeof(btc_mode), NULL, 0,
+				TRUE);
 		if (ret) {
 			DHD_ERROR(("[WIFI_SEC] %s: Fail to execute dhd_wl_ioctl_cmd(): "
 				"btc_mode, ret=%d\n",
@@ -1056,16 +1049,14 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 	}
 
 	/* Select Antenna */
-	bcm_mkiovar("txchain", (char *)&ant_val, 4, iovbuf, sizeof(iovbuf));
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+	ret = dhd_iovar(dhd, 0, "txchain", (char *)&ant_val, sizeof(ant_val), NULL, 0, TRUE);
 	if (ret) {
 		DHD_ERROR(("[WIFI_SEC] %s: Fail to execute dhd_wl_ioctl_cmd(): txchain, ret=%d\n",
 			__FUNCTION__, ret));
 		return ret;
 	}
 
-	bcm_mkiovar("rxchain", (char *)&ant_val, 4, iovbuf, sizeof(iovbuf));
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+	ret = dhd_iovar(dhd, 0, "rxchain", (char *)&ant_val, sizeof(ant_val), NULL, 0, TRUE);
 	if (ret) {
 		DHD_ERROR(("[WIFI_SEC] %s: Fail to execute dhd_wl_ioctl_cmd(): rxchain, ret=%d\n",
 			__FUNCTION__, ret));

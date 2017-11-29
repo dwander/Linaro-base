@@ -32,7 +32,6 @@
 #include <dhd_linux.h>
 
 #include <wlioctl.h>
-#include <wl_iw.h>
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
