@@ -1,7 +1,7 @@
 /*
  * Broadcom Dongle Host Driver (DHD), common DHD core.
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_common.c 606650 2015-12-16 08:13:58Z $
+ * $Id: dhd_common.c 698067 2017-05-08 03:27:59Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -106,6 +106,9 @@ extern int dhd_change_mtu(dhd_pub_t *dhd, int new_mtu, int ifidx);
 #if !defined(AP) && defined(WLP2P)
 extern int dhd_get_concurrent_capabilites(dhd_pub_t *dhd);
 #endif
+
+#define MAX_CHUNK_LEN 1408 /* 8 * 8 * 22 */
+
 bool ap_cfg_running = FALSE;
 bool ap_fw_loaded = FALSE;
 
@@ -117,15 +120,16 @@ bool ap_fw_loaded = FALSE;
 #define DHD_COMPILED "\nCompiled in " SRCBASE
 #endif /* DHD_DEBUG */
 
+#define CHIPID_MISMATCH	8
+
 #if defined(DHD_DEBUG)
 const char dhd_version[] = "Dongle Host Driver, version " EPI_VERSION_STR
 	DHD_COMPILED " on " __DATE__ " at " __TIME__;
 #else
 const char dhd_version[] = "\nDongle Host Driver, version " EPI_VERSION_STR "\nCompiled from ";
 #endif 
-#ifdef DHD_LOG_DUMP
 char fw_version[FW_VER_STR_LEN] = "\0";
-#endif /* DHD_LOG_DUMP */
+char clm_version[CLM_VER_STR_LEN] = "\0";
 
 void dhd_set_timer(void *bus, uint wdtick);
 
@@ -316,6 +320,7 @@ dhd_dump_to_kernelog(dhd_pub_t *dhdp)
 {
 	char buf[512];
 
+	DHD_ERROR(("F/W version: %s\n", fw_version));
 	bcm_bprintf_bypass = TRUE;
 	dhd_dump(dhdp, buf, sizeof(buf));
 	bcm_bprintf_bypass = FALSE;
@@ -341,7 +346,7 @@ dhd_wl_ioctl_get_intiovar(dhd_pub_t *dhd_pub, char *name, uint *pval,
 	char iovbuf[WLC_IOCTL_SMLEN];
 	int ret = -1;
 
- 	memset(iovbuf, 0, sizeof(iovbuf));
+	memset(iovbuf, 0, sizeof(iovbuf));
 	if (bcm_mkiovar(name, NULL, 0, iovbuf, sizeof(iovbuf))) {
 		ret = dhd_wl_ioctl_cmd(dhd_pub, cmd, iovbuf, sizeof(iovbuf), set, ifidx);
 		if (!ret) {
@@ -362,16 +367,15 @@ int
 dhd_wl_ioctl_set_intiovar(dhd_pub_t *dhd_pub, char *name, uint val,
 	int cmd, uint8 set, int ifidx)
 {
- 	char iovbuf[WLC_IOCTL_SMLEN] = {0};
+	char iovbuf[WLC_IOCTL_SMLEN] = {0};
 	int ret = -1;
 	int lval = htol32(val);
- 	uint len;
+	uint len;
 
- 	len = bcm_mkiovar(name, (char*)&lval, sizeof(lval), iovbuf, sizeof(iovbuf));
- 
- 	if (len) {
- 		ret = dhd_wl_ioctl_cmd(dhd_pub, cmd, iovbuf, len, set, ifidx);
+	len = bcm_mkiovar(name, (char*)&lval, sizeof(lval), iovbuf, sizeof(iovbuf));
 
+	if (len) {
+		ret = dhd_wl_ioctl_cmd(dhd_pub, cmd, iovbuf, len, set, ifidx);
 		if (ret) {
 			DHD_ERROR(("%s: set int iovar %s failed, ERR %d\n",
 				__FUNCTION__, name, ret));
@@ -392,15 +396,16 @@ dhd_wl_ioctl(dhd_pub_t *dhd_pub, int ifidx, wl_ioctl_t *ioc, void *buf, int len)
 	if (dhd_os_proto_block(dhd_pub))
 	{
 #ifdef DHD_LOG_DUMP
-		int slen, i, val, rem;
-		long int lval;
+		int slen, i, val, rem, lval, min_len;
 		char *pval, *pos, *msg;
 		char tmp[64];
 
 		/* WLC_GET_VAR */
 		if (ioc->cmd == WLC_GET_VAR) {
+			min_len = MIN(sizeof(tmp) - 1, strlen(buf));
 			memset(tmp, 0, sizeof(tmp));
-			bcopy(ioc->buf, tmp, strlen(ioc->buf) + 1);
+			bcopy(buf, tmp, min_len);
+			tmp[min_len] = '\0';
 		}
 #endif /* DHD_LOG_DUMP */
 		ret = dhd_prot_ioctl(dhd_pub, ifidx, ioc, buf, len);
@@ -422,36 +427,40 @@ dhd_wl_ioctl(dhd_pub_t *dhd_pub, int ifidx, wl_ioctl_t *ioc, void *buf, int len)
 #ifdef DHD_LOG_DUMP
 		if (ioc->cmd == WLC_GET_VAR || ioc->cmd == WLC_SET_VAR) {
 			lval = 0;
-			slen = strlen(ioc->buf) + 1;
-			msg = (char*)ioc->buf;
-			if (ioc->cmd == WLC_GET_VAR) {
-				bcopy(msg, &lval, sizeof(long int));
-				msg = tmp;
-			} else {
-				bcopy((msg + slen), &lval, sizeof(long int));
+			slen = strlen(buf) + 1;
+			msg = (char*)buf;
+			if (len >= slen + sizeof(lval)) {
+				if (ioc->cmd == WLC_GET_VAR) {
+					msg = tmp;
+					lval = *(int*)buf;
+				} else {
+					min_len = MIN(ioc->len - slen, sizeof(int));
+					bcopy((msg + slen), &lval, min_len);
+				}
 			}
-			DHD_ERROR_EX(("%s: cmd: %d, msg: %s, val: 0x%lx, len: %d, set: %d\n",
+			DHD_ERROR_MEM(("%s: cmd: %d, msg: %s, val: 0x%x, len: %d, set: %d\n",
 				ioc->cmd == WLC_GET_VAR ? "WLC_GET_VAR" : "WLC_SET_VAR",
 				ioc->cmd, msg, lval, ioc->len, ioc->set));
 		} else {
 			slen = ioc->len;
-			if (ioc->buf != NULL) {
-				val = *(int*)ioc->buf;
-				pval = (char*)ioc->buf;
+			if (buf != NULL) {
+				val = *(int*)buf;
+				pval = (char*)buf;
 				pos = tmp;
 				rem = sizeof(tmp);
 				memset(tmp, 0, sizeof(tmp));
 				for (i = 0; i < slen; i++) {
-					pos += snprintf(pos, rem, "%02x ", pval[i]);
-					rem = sizeof(tmp) - (int)(pos - tmp);
-					if (rem <= 0) {
+					if (rem <= 3) {
+						/* At least 2 byte required + 1 byte(NULL) */
 						break;
 					}
+					pos += snprintf(pos, rem, "%02x ", pval[i]);
+					rem = sizeof(tmp) - (int)(pos - tmp);
 				}
-				DHD_ERROR_EX(("WLC_IOCTL: cmd: %d, val: %d (%s), len: %d, "
+				DHD_ERROR_MEM(("WLC_IOCTL: cmd: %d, val: %d (%s), len: %d, "
 					"set: %d\n", ioc->cmd, val, tmp, ioc->len, ioc->set));
 			} else {
-				DHD_ERROR_EX(("WLC_IOCTL: cmd: %d, buf is NULL\n", ioc->cmd));
+				DHD_ERROR_MEM(("WLC_IOCTL: cmd: %d, buf is NULL\n", ioc->cmd));
 			}
 		}
 #endif /* DHD_LOG_DUMP */
@@ -461,14 +470,14 @@ dhd_wl_ioctl(dhd_pub_t *dhd_pub, int ifidx, wl_ioctl_t *ioc, void *buf, int len)
 					DHD_ERROR(("%s: %s: %s, %s\n",
 						__FUNCTION__, ioc->cmd == WLC_GET_VAR ?
 						"WLC_GET_VAR" : "WLC_SET_VAR",
-						(char *)ioc->buf,
+						(char *)buf,
 						ret == BCME_UNSUPPORTED ? "UNSUPPORTED"
 						: "NOT ASSOCIATED"));
 				} else {
 					DHD_ERROR(("%s: %s: %s, ret = %d\n",
 						__FUNCTION__, ioc->cmd == WLC_GET_VAR ?
 						"WLC_GET_VAR" : "WLC_SET_VAR",
-						(char *)ioc->buf, ret));
+						(char *)buf, ret));
 				}
 			} else {
 				if (ret == BCME_UNSUPPORTED || ret == BCME_NOTASSOCIATED) {
@@ -1382,6 +1391,7 @@ wl_show_host_event(dhd_pub_t *dhd_pub, wl_event_msg_t *event, void *event_data,
 	case WLC_E_PFN_SCAN_NONE:
 	case WLC_E_PFN_SCAN_ALLGONE:
 	case WLC_E_PFN_GSCAN_FULL_RESULT:
+	case WLC_E_PFN_SWC:
 		DHD_EVENT(("PNOEVENT: %s\n", event_name));
 		break;
 
@@ -1691,7 +1701,6 @@ wl_process_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata, uint pktlen
 	flags = ntoh16_ua((void *)&event->flags);
 	status = ntoh32_ua((void *)&event->status);
 	datalen = ntoh32_ua((void *)&event->datalen);
-	evlen = datalen + sizeof(bcm_event_t);
 	evlen = datalen + sizeof(bcm_event_t);
 
 	/* find equivalent host index for event ifidx */
@@ -2633,9 +2642,7 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 	int ret = -1;
 	int dtim_period = 0;
 	int ap_beacon = 0;
-#ifndef ENABLE_MAX_DTIM_IN_SUSPEND
 	int allowed_skip_dtim_cnt = 0;
-#endif /* !ENABLE_MAX_DTIM_IN_SUSPEND */
 	/* Check if associated */
 	if (dhd_is_associated(dhd, 0, NULL) == FALSE) {
 		DHD_TRACE(("%s NOT assoc ret %d\n", __FUNCTION__, ret));
@@ -2661,36 +2668,37 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 		goto exit;
 	}
 
-#ifdef ENABLE_MAX_DTIM_IN_SUSPEND
-	bcn_li_dtim = (int) (MAX_DTIM_ALLOWED_INTERVAL / (ap_beacon * dtim_period));
-	if (bcn_li_dtim == 0) {
-		bcn_li_dtim = 1;
-	}
-#else /* ENABLE_MAX_DTIM_IN_SUSPEND */
+	if (dhd->max_dtim_enable) {
+		bcn_li_dtim = (int) (MAX_DTIM_ALLOWED_INTERVAL / (ap_beacon * dtim_period));
+		if (bcn_li_dtim == 0) {
+			bcn_li_dtim = 1;
+		}
+	} else {
+		/* attemp to use platform defined dtim skip interval */
+		bcn_li_dtim = dhd->suspend_bcn_li_dtim;
 
-	/* attemp to use platform defined dtim skip interval */
-	bcn_li_dtim = dhd->suspend_bcn_li_dtim;
+		/* check if sta listen interval fits into AP dtim */
+		if (dtim_period > CUSTOM_LISTEN_INTERVAL) {
+			/* AP DTIM to big for our Listen Interval : no dtim skiping */
+			bcn_li_dtim = NO_DTIM_SKIP;
+			DHD_ERROR(("%s DTIM=%d > Listen=%d : too big ...\n",
+				__FUNCTION__, dtim_period, CUSTOM_LISTEN_INTERVAL));
+			goto exit;
+		}
 
-	/* check if sta listen interval fits into AP dtim */
-	if (dtim_period > CUSTOM_LISTEN_INTERVAL) {
-		/* AP DTIM to big for our Listen Interval : no dtim skiping */
-		bcn_li_dtim = NO_DTIM_SKIP;
-		DHD_ERROR(("%s DTIM=%d > Listen=%d : too big ...\n",
-			__FUNCTION__, dtim_period, CUSTOM_LISTEN_INTERVAL));
-		goto exit;
-	}
+		if ((dtim_period * ap_beacon * bcn_li_dtim) > MAX_DTIM_ALLOWED_INTERVAL) {
+			allowed_skip_dtim_cnt =
+				MAX_DTIM_ALLOWED_INTERVAL / (dtim_period * ap_beacon);
+			bcn_li_dtim =
+				(allowed_skip_dtim_cnt != 0) ? allowed_skip_dtim_cnt : NO_DTIM_SKIP;
+		}
 
-	if ((dtim_period * ap_beacon * bcn_li_dtim) > MAX_DTIM_ALLOWED_INTERVAL) {
-		 allowed_skip_dtim_cnt = MAX_DTIM_ALLOWED_INTERVAL / (dtim_period * ap_beacon);
-		 bcn_li_dtim = (allowed_skip_dtim_cnt != 0) ? allowed_skip_dtim_cnt : NO_DTIM_SKIP;
+		if ((bcn_li_dtim * dtim_period) > CUSTOM_LISTEN_INTERVAL) {
+			/* Round up dtim_skip to fit into STAs Listen Interval */
+			bcn_li_dtim = (int)(CUSTOM_LISTEN_INTERVAL / dtim_period);
+			DHD_TRACE(("%s agjust dtim_skip as %d\n", __FUNCTION__, bcn_li_dtim));
+		}
 	}
-
-	if ((bcn_li_dtim * dtim_period) > CUSTOM_LISTEN_INTERVAL) {
-		/* Round up dtim_skip to fit into STAs Listen Interval */
-		bcn_li_dtim = (int)(CUSTOM_LISTEN_INTERVAL / dtim_period);
-		DHD_TRACE(("%s agjust dtim_skip as %d\n", __FUNCTION__, bcn_li_dtim));
-	}
-#endif /* ENABLE_MAX_DTIM_IN_SUSPEND */
 
 	DHD_ERROR(("%s beacon=%d bcn_li_dtim=%d DTIM=%d Listen=%d\n",
 		__FUNCTION__, ap_beacon, bcn_li_dtim, dtim_period, CUSTOM_LISTEN_INTERVAL));
@@ -3032,3 +3040,213 @@ dhd_dump_eapol_4way_message(char *dump_data, bool direction)
 	}
 }
 #endif /* DHD_8021X_DUMP */
+
+int
+dhd_download_2_dongle(dhd_pub_t	*dhd, char *iovar, uint16 flag, uint16 dload_type,
+	unsigned char *dload_buf, int len)
+{
+	struct wl_dload_data *dload_ptr = (struct wl_dload_data *)dload_buf;
+	int err = 0;
+	int dload_data_offset;
+	static char iovar_buf[WLC_IOCTL_MEDLEN];
+	int iovar_len;
+
+	memset(iovar_buf, 0, sizeof(iovar_buf));
+
+	dload_data_offset = OFFSETOF(wl_dload_data_t, data);
+	dload_ptr->flag = (DLOAD_HANDLER_VER << DLOAD_FLAG_VER_SHIFT) | flag;
+	dload_ptr->dload_type = dload_type;
+	dload_ptr->len = htod32(len - dload_data_offset);
+	dload_ptr->crc = 0;
+	len = ROUNDUP(len, 8);
+
+	iovar_len = bcm_mkiovar(iovar, dload_buf,
+		(uint)len, iovar_buf, sizeof(iovar_buf));
+	if (iovar_len == 0) {
+		DHD_ERROR(("%s: insufficient buffer space passed to bcm_mkiovar for '%s' \n",
+		           __FUNCTION__, iovar));
+		return BCME_BUFTOOSHORT;
+	}
+
+	err = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovar_buf,
+			iovar_len, IOV_SET, 0);
+
+	return err;
+}
+
+int
+dhd_download_clm_blob(dhd_pub_t *dhd, unsigned char *image, uint32 len)
+{
+	int chunk_len;
+	int size2alloc;
+	unsigned char *new_buf;
+	int err = 0, data_offset;
+	uint16 dl_flag = DL_BEGIN;
+
+	data_offset = OFFSETOF(wl_dload_data_t, data);
+	size2alloc = data_offset + MAX_CHUNK_LEN;
+	size2alloc = ROUNDUP(size2alloc, 8);
+
+	if ((new_buf = (unsigned char *)MALLOCZ(dhd->osh, size2alloc)) != NULL) {
+		do {
+			chunk_len = dhd_os_get_image_block((char *)(new_buf + data_offset),
+				MAX_CHUNK_LEN, image);
+			if (chunk_len < 0) {
+				DHD_ERROR(("%s: dhd_os_get_image_block failed (%d)\n",
+					__FUNCTION__, chunk_len));
+				err = BCME_ERROR;
+				goto exit;
+			}
+
+			if (len - chunk_len == 0)
+				dl_flag |= DL_END;
+
+			err = dhd_download_2_dongle(dhd, "clmload", dl_flag, DL_TYPE_CLM,
+				new_buf, data_offset + chunk_len);
+
+			dl_flag &= ~DL_BEGIN;
+
+			len = len - chunk_len;
+		} while ((len > 0) && (err == 0));
+	} else {
+		err = BCME_NOMEM;
+	}
+exit:
+	if (new_buf) {
+		MFREE(dhd->osh, new_buf, size2alloc);
+	}
+	return err;
+}
+
+int
+dhd_check_current_clm_data(dhd_pub_t *dhd)
+{
+	char iovbuf[WLC_IOCTL_SMLEN];
+	wl_country_t *cspec;
+	int err = BCME_OK;
+
+	bcm_mkiovar("country", NULL, 0, iovbuf, sizeof(iovbuf));
+	err = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
+	if (err) {
+		DHD_ERROR(("%s: country code get failed\n", __FUNCTION__));
+		return err;
+	}
+
+	cspec = (wl_country_t *)iovbuf;
+	if ((strncmp(cspec->ccode, WL_CCODE_NULL_COUNTRY, WLC_CNTRY_BUF_SZ)) == 0) {
+		DHD_ERROR(("%s: ----- This FW is not included CLM data -----\n",
+			__FUNCTION__));
+		return FALSE;
+	}
+	DHD_ERROR(("%s: ----- This FW is included CLM data -----\n",
+		__FUNCTION__));
+	return TRUE;
+}
+
+int
+dhd_apply_default_clm(dhd_pub_t *dhd, char *clm_path)
+{
+	char *clm_blob_path;
+	int len;
+	unsigned char *imgbuf = NULL;
+	int err = BCME_OK;
+	char iovbuf[WLC_IOCTL_SMLEN] = {0};
+	int status = FALSE;
+
+	if (clm_path[0] != '\0') {
+		if (strlen(clm_path) > MOD_PARAM_PATHLEN) {
+			DHD_ERROR(("clm path exceeds max len\n"));
+			return BCME_ERROR;
+		}
+		clm_blob_path = clm_path;
+		DHD_TRACE(("clm path from module param:%s\n", clm_path));
+	} else {
+		clm_blob_path = CONFIG_BCMDHD_CLM_PATH;
+	}
+
+	/* If CLM blob file is found on the filesystem, download the file.
+	 * After CLM file download or If the blob file is not present,
+	 * validate the country code before proceeding with the initialization.
+	 * If country code is not valid, fail the initialization.
+	 */
+
+	imgbuf = dhd_os_open_image((char *)clm_blob_path);
+	if (imgbuf == NULL) {
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+		if (dhd->is_blob) {
+			err = BCME_ERROR;
+		} else {
+			status = dhd_check_current_clm_data(dhd);
+			if (status == TRUE) {
+				err = BCME_OK;
+			} else {
+				err = BCME_ERROR;
+			}
+		}
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+		goto exit;
+	}
+
+	len = dhd_os_get_image_size(imgbuf);
+
+	if ((len > 0) && (len < MAX_CLM_BUF_SIZE) && imgbuf) {
+		status = dhd_check_current_clm_data(dhd);
+		if (status == TRUE) {
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+			if (dhd->op_mode != DHD_FLAG_MFG_MODE) {
+				if (dhd->is_blob) {
+					err = BCME_ERROR;
+				}
+				goto exit;
+			}
+#else
+			DHD_ERROR(("%s: CLM already exist in F/W, "
+				"new CLM data will be added to the end of existing CLM data!\n",
+				__FUNCTION__));
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
+		}
+
+		/* Found blob file. Download the file */
+		DHD_TRACE(("clm file download from %s \n", clm_blob_path));
+		err = dhd_download_clm_blob(dhd, imgbuf, len);
+		if (err) {
+			DHD_ERROR(("%s: CLM download failed err=%d\n", __FUNCTION__, err));
+			/* Retrieve clmload_status and print */
+			bcm_mkiovar("clmload_status", NULL, 0, iovbuf, sizeof(iovbuf));
+			err = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
+			if (err) {
+				DHD_ERROR(("%s: clmload_status get failed err=%d \n",
+					__FUNCTION__, err));
+			} else {
+				DHD_ERROR(("%s: clmload_status: %d \n",
+					__FUNCTION__, *((int *)iovbuf)));
+				if (*((int *)iovbuf) == CHIPID_MISMATCH) {
+					DHD_ERROR(("Chip ID mismatch error \n"));
+				}
+			}
+			err = BCME_ERROR;
+			goto exit;
+		} else {
+			DHD_INFO(("%s: CLM download succeeded \n", __FUNCTION__));
+		}
+	} else {
+		DHD_INFO(("Skipping the clm download. len:%d memblk:%p \n", len, imgbuf));
+	}
+
+	/* Verify country code */
+	status = dhd_check_current_clm_data(dhd);
+
+	if (status != TRUE) {
+		/* Country code not initialized or CLM download not proper */
+		DHD_ERROR(("country code not initialized\n"));
+		err = BCME_ERROR;
+	}
+
+exit:
+
+	if (imgbuf) {
+		dhd_os_close_image(imgbuf);
+	}
+
+	return err;
+}

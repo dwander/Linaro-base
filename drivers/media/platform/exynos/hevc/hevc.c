@@ -56,19 +56,30 @@ static struct proc_dir_entry *hevc_proc_entry;
 
 #endif
 
-#define HEVC_SFR_AREA_COUNT	8
+#define HEVC_SFR_AREA_COUNT	19
 void hevc_dump_regs(struct hevc_dev *dev)
 {
 	int i;
 	int addr[HEVC_SFR_AREA_COUNT][2] = {
-		{ 0x0, 0x50 },
-		{ 0x1000, 0x138 },
-		{ 0x2000, 0x604 },
-		{ 0x6000, 0xA0 },
-		{ 0x7000, 0x220 },
-		{ 0x8000, 0x764 },
+		{ 0x0, 0x80 },
+		{ 0x1000, 0xCD0 },
+		{ 0xF000, 0xFF8 },
+		{ 0x2000, 0xA00 },
+		{ 0x3000, 0x40 },
+		{ 0x3110, 0x10 },
+		{ 0x5000, 0x100 },
+		{ 0x5200, 0x300 },
+		{ 0x5600, 0x100 },
+		{ 0x5800, 0x100 },
+		{ 0x5A00, 0x100 },
+		{ 0x6000, 0xC4 },
+		{ 0x7000, 0x21C },
+		{ 0x8000, 0x20C },
+		{ 0x9000, 0x10C },
 		{ 0xA000, 0x20C },
-		{ 0xF000, 0x6FF },
+		{ 0xB000, 0x444 },
+		{ 0xC000, 0x84 },
+		{ 0xD000, 0x74 },
 	};
 
 	pr_err("dumping registers (SFR base = %p)\n", dev->regs_base);
@@ -1105,7 +1116,9 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 
 	if (!dev) {
 		hevc_err("no hevc device to run\n");
-		goto irq_cleanup_hw;
+		hevc_clear_int_flags();
+		hevc_clock_off();
+		goto irq_cleanup_err;
 	}
 
 	if (atomic_read(&dev->pm.power) == 0) {
@@ -1135,7 +1148,9 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 	ctx = dev->ctx[dev->curr_ctx];
 	if (!ctx) {
 		hevc_err("no hevc context to run\n");
-		goto irq_cleanup_hw;
+		hevc_clear_int_flags();
+		hevc_clock_off();
+		goto irq_cleanup_err;
 	}
 
 	if (ctx->type == HEVCINST_DECODER)
@@ -1160,6 +1175,19 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 	case HEVC_R2H_CMD_FIELD_DONE_RET:
 	case HEVC_R2H_CMD_FRAME_DONE_RET:
 		if (ctx->type == HEVCINST_DECODER)
+			if (ctx->state == HEVCINST_SPECIAL_PARSING_NAL) {
+				hevc_clear_int_flags();
+				spin_lock_irq(&dev->condlock);
+				clear_bit(ctx->num, &dev->ctx_work_bits);
+				spin_unlock_irq(&dev->condlock);
+				ctx->state =  HEVCINST_RUNNING;
+				if (hevc_clear_hw_bit(ctx) == 0)
+					BUG();
+				hevc_clock_off();
+				wake_up_ctx(ctx, reason, err);
+				goto done;
+
+			}
 			hevc_handle_frame(ctx, reason, err);
 		break;
 	case HEVC_R2H_CMD_SEQ_DONE_RET:
@@ -1234,7 +1262,6 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 		clear_work_bit(ctx);
 		if (hevc_clear_hw_bit(ctx) == 0)
 			BUG();
-		wake_up_ctx(ctx, reason, err);
 		goto irq_cleanup_hw;
 		break;
 	case HEVC_R2H_CMD_CLOSE_INSTANCE_RET:
@@ -1242,7 +1269,6 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 		clear_work_bit(ctx);
 		if (hevc_clear_hw_bit(ctx) == 0)
 			BUG();
-		wake_up_ctx(ctx, reason, err);
 		goto irq_cleanup_hw;
 		break;
 	case HEVC_R2H_CMD_NAL_ABORT_RET:
@@ -1250,7 +1276,6 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 		clear_work_bit(ctx);
 		if (hevc_clear_hw_bit(ctx) == 0)
 			BUG();
-		wake_up_ctx(ctx, reason, err);
 		goto irq_cleanup_hw;
 		break;
 	case HEVC_R2H_CMD_DPB_FLUSH_RET:
@@ -1258,7 +1283,6 @@ static irqreturn_t hevc_irq(int irq, void *priv)
 		clear_work_bit(ctx);
 		if (hevc_clear_hw_bit(ctx) == 0)
 			BUG();
-		wake_up_ctx(ctx, reason, err);
 		goto irq_cleanup_hw;
 		break;
 	case HEVC_R2H_CMD_INIT_BUFFERS_RET:
@@ -1331,7 +1355,9 @@ irq_cleanup_hw:
 	hevc_clear_int_flags();
 
 	hevc_clock_off();
+	wake_up_ctx(ctx, reason, err);
 
+irq_cleanup_err:
 	if (dev)
 		queue_work(dev->sched_wq, &dev->sched_work);
 

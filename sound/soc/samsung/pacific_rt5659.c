@@ -67,6 +67,7 @@ struct rt5659_machine_priv {
 };
 
 static struct rt5659_machine_priv pacific_rt5659_priv = {
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 	.rt5659_hp_jack_gpio = {
 		.name = "headphone detect",
 		.invert = 1,
@@ -76,6 +77,7 @@ static struct rt5659_machine_priv pacific_rt5659_priv = {
 		.wake = true,
 		.jack_status_check = rt5659_jack_status_check,
 	},
+#endif
 };
 
 static const struct snd_soc_component_driver pacific_cmpnt = {
@@ -84,7 +86,7 @@ static const struct snd_soc_component_driver pacific_cmpnt = {
 
 static const struct snd_kcontrol_new pacific_codec_controls[] = {
 };
-#ifdef CONFIG_SWITCH
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 static struct switch_dev rt5659_headset_switch = {
 	.name = "h2w",
 };
@@ -110,6 +112,7 @@ static struct notifier_block rt5659_jack_detect_nb = {
 */
 #endif
 
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 int rt5659_jack_status_check(void)
 {
 	struct snd_soc_codec *codec = pacific_rt5659_priv.codec;
@@ -198,6 +201,7 @@ int rt5659_jack_status_check(void)
 
 	return report;
 }
+#endif
 
 /*
 static int rt5659_ext_submicbias(struct snd_soc_dapm_widget *w,
@@ -628,7 +632,7 @@ static int pacific_of_get_pdata(struct snd_soc_card *card)
 
 	return 0;
 }
-
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 static void jd_check_handler(struct work_struct *work)
 {
 	struct snd_soc_codec *codec = pacific_rt5659_priv.codec;
@@ -651,14 +655,16 @@ static void jd_check_callback(unsigned long data)
 		jiffies + msecs_to_jiffies(500)))
 		printk(KERN_INFO "Error in mod_timer\n");
 }
-
+#endif
 static int pacific_late_probe(struct snd_soc_card *card)
 {
 	struct snd_soc_codec *codec = card->rtd[0].codec;
 	struct snd_soc_dai *codec_dai = card->rtd[0].codec_dai;
 	struct snd_soc_dai *cpu_dai = card->rtd[0].cpu_dai;
 	struct rt5659_machine_priv *priv = card->drvdata;
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 	struct snd_soc_jack *jack = &priv->rt5659_hp_jack;
+#endif
 	int ret;
 
 	priv->codec = codec;
@@ -693,7 +699,7 @@ static int pacific_late_probe(struct snd_soc_card *card)
 	snd_soc_dapm_ignore_suspend(&codec->dapm, "AIF3 Playback");
 	snd_soc_dapm_ignore_suspend(&codec->dapm, "AIF3 Capture");
 	snd_soc_dapm_sync(&codec->dapm);
-
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 	setup_timer(&priv->jd_check_timer, jd_check_callback, 0);
 	INIT_WORK(&priv->jd_check_work, jd_check_handler);
     mutex_init(&priv->mutex);
@@ -716,7 +722,7 @@ static int pacific_late_probe(struct snd_soc_card *card)
 
 	priv->det_delay_time = 200;
 	wake_lock_init(&priv->jack_wake_lock, WAKE_LOCK_SUSPEND, "jack_det");
-
+#endif
 	return 0;
 }
 
@@ -870,7 +876,7 @@ static int pacific_audio_probe(struct platform_device *pdev)
 		}
 	}
 
-#ifdef CONFIG_SWITCH
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 	/* Addd h2w swith class support */
 	ret = switch_dev_register(&rt5659_headset_switch);
 	if (ret < 0) {
@@ -902,8 +908,8 @@ static int pacific_audio_remove(struct platform_device *pdev)
 		clk_unprepare(priv->mclk);
 		devm_clk_put(card->dev, priv->mclk);
 	}
-	
-#ifdef CONFIG_SWITCH
+
+#if !defined(CONFIG_SEC_DEV_JACK) &&!defined(CONFIG_SEC_DEV_JACK_ANT)
 	switch_dev_unregister(&rt5659_headset_switch);
 #endif
 	snd_soc_jack_free_gpios(&priv->rt5659_hp_jack, 1,

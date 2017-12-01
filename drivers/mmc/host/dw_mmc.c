@@ -949,7 +949,7 @@ static void dw_mci_idmac_stop_dma(struct dw_mci *host)
 	mci_writel(host, BMOD, temp);
 }
 
-static void dw_mci_idma_reset_dma(struct dw_mci *host)
+void dw_mci_idma_reset_dma(struct dw_mci *host)
 {
 	u32 temp;
 
@@ -3537,11 +3537,14 @@ static void dw_mci_work_routine_card(struct work_struct *work)
 			present = dw_mci_get_cd(mmc);
 		}
 
-		if (!present)
+		if (!present) {
 			mmc_detect_change(slot->mmc, 0);
-		else
+			if (host->pdata->only_once_tune)
+				host->pdata->tuned = false;
+		} else {
 			mmc_detect_change(slot->mmc,
 					msecs_to_jiffies(host->pdata->detect_delay_ms));
+		}
 	}
 }
 

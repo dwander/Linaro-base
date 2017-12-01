@@ -101,7 +101,14 @@
 
 	arm-pmu {
 			compatible = "arm,cortex-a15-pmu", "arm,cortex-a7-pmu";
-			interrupts = <0 17 4>, <0 18 4>;
+			interrupts = <0 52 4>,
+				     <0 53 4>,
+				     <0 54 4>,
+				     <0 55 4>,
+				     <0 32 4>,
+				     <0 33 4>,
+				     <0 34 4>,
+				     <0 35 4>;
 	};
 
 	coresight {
@@ -1101,6 +1108,7 @@
 		compatible = "arm,mali";
 		reg = <0x14AC0000 0x5000>;
 		interrupts = <0 282 0>, <0 283 0>, <0 281 0>;
+		interrupt-names = "JOB", "MMU", "GPU";
 		clocks = <&clock 1>, <&clock 10>, <&clock 1000>, <&clock 3120>, <&clock 4132>, <&clock 5072>;
 		clock-names = "fin_pll", "fout_g3d_pll", "aclk_g3d", "mout_g3d_pll", "dout_aclk_g3d", "mout_aclk_g3d";
 		samsung,power-domain = <&pd_g3d>;
@@ -2200,23 +2208,43 @@
 			};
 			mfc_qos_extra_var_0 {
 				thrd_mb = <0>;
-				freq_mfc = <200000>;
-				freq_int = <200000>;
-				freq_mif = <413000>;
-				freq_cpu = <0>;
-				freq_kfc = <400000>;
+				freq_mfc = <100000>;
+				freq_int = <100000>;
+				freq_mif = <667000>;
+				freq_cpu = <1300000>;
+				freq_kfc = <1300000>;
 			};
 			mfc_qos_extra_var_1 {
-				thrd_mb = <0xFFFFFFFF>;
+				thrd_mb = <108000>;
+				freq_mfc = <160000>;
+				freq_int = <133000>;
+				freq_mif = <667000>;
+				freq_cpu = <1300000>;
+				freq_kfc = <1300000>;
 			};
 			mfc_qos_extra_var_2 {
-				thrd_mb = <0xFFFFFFFF>;
+				thrd_mb = <244800>;
+				freq_mfc = <200000>;
+				freq_int = <200000>;
+				freq_mif = <825000>;
+				freq_cpu = <1300000>;
+				freq_kfc = <1300000>;
 			};
 			mfc_qos_extra_var_3 {
-				thrd_mb = <0xFFFFFFFF>;
+				thrd_mb = <367200>;
+				freq_mfc = <267000>;
+				freq_int = <267000>;
+				freq_mif = <825000>;
+				freq_cpu = <1300000>;
+				freq_kfc = <1300000>;
 			};
 			mfc_qos_extra_var_4 {
-				thrd_mb = <0xFFFFFFFF>;
+				thrd_mb = <489600>;
+				freq_mfc = <400000>;
+				freq_int = <400000>;
+				freq_mif = <825000>;
+				freq_cpu = <1300000>;
+				freq_kfc = <1300000>;
 			};
 		};
 	};

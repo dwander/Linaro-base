@@ -256,7 +256,10 @@ int s5p_mfc_alloc_codec_buffers(struct s5p_mfc_ctx *ctx)
 		ctx->port_a_size += add_size1;
 		break;
 	case S5P_FIMV_CODEC_H264_ENC:
-		if (mfc_version(dev) == 0x61)
+		if (FW_HAS_E_MIN_SCRATCH_BUF(dev))
+			mfc_debug(2, "Use min scratch buffer size, %d\n",
+					ctx->scratch_buf_size);
+		else if (mfc_version(dev) == 0x61)
 			ctx->scratch_buf_size =
 				ENC_V61_H264_SCRATCH_SIZE(mb_width, mb_height);
 		else if (IS_MFCv8X(dev))
@@ -274,7 +277,10 @@ int s5p_mfc_alloc_codec_buffers(struct s5p_mfc_ctx *ctx)
 		break;
 	case S5P_FIMV_CODEC_MPEG4_ENC:
 	case S5P_FIMV_CODEC_H263_ENC:
-		if (mfc_version(dev) == 0x61)
+		if (FW_HAS_E_MIN_SCRATCH_BUF(dev))
+			mfc_debug(2, "Use min scratch buffer size, %d\n",
+					ctx->scratch_buf_size);
+		else if (mfc_version(dev) == 0x61)
 			ctx->scratch_buf_size =
 				ENC_V61_MPEG4_SCRATCH_SIZE(mb_width, mb_height);
 		else
@@ -288,7 +294,10 @@ int s5p_mfc_alloc_codec_buffers(struct s5p_mfc_ctx *ctx)
 		ctx->port_b_size = 0;
 		break;
 	case S5P_FIMV_CODEC_VP8_ENC:
-		if (IS_MFCv8X(dev))
+		if (FW_HAS_E_MIN_SCRATCH_BUF(dev))
+			mfc_debug(2, "Use min scratch buffer size, %d\n",
+					ctx->scratch_buf_size);
+		else if (IS_MFCv8X(dev))
 			ctx->scratch_buf_size =
 				ENC_V80_VP8_SCRATCH_SIZE(mb_width, mb_height);
 		else
@@ -487,6 +496,8 @@ int mfc_alloc_dev_context_buffer(struct s5p_mfc_dev *dev,
 	struct s5p_mfc_buf_size_v6 *buf_size;
 	void *alloc_ctx;
 	struct s5p_mfc_extra_buf *ctx_buf;
+	int firmware_size;
+	unsigned long fw_ofs;
 
 	mfc_debug_enter();
 	if (!dev) {
@@ -496,30 +507,21 @@ int mfc_alloc_dev_context_buffer(struct s5p_mfc_dev *dev,
 	buf_size = dev->variant->buf_size->buf;
 	alloc_ctx = dev->alloc_ctx[MFC_BANK_A_ALLOC_CTX];
 	ctx_buf = &dev->ctx_buf;
+	fw_ofs = dev->fw_info.ofs;
 
 #ifdef CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
 	if (buf_type == MFCBUF_DRM) {
 		alloc_ctx = dev->alloc_ctx_drm;
 		ctx_buf = &dev->ctx_buf_drm;
+		fw_ofs = dev->drm_fw_info.ofs;
 	}
 #endif
-	ctx_buf->alloc =
-			s5p_mfc_mem_alloc_priv(alloc_ctx, buf_size->dev_ctx);
-	if (IS_ERR(ctx_buf->alloc)) {
-		mfc_err_dev("Allocating DESC buffer failed.\n");
-		return PTR_ERR(ctx_buf->alloc);
-	}
 
-	ctx_buf->ofs = s5p_mfc_mem_daddr_priv(ctx_buf->alloc);
-	ctx_buf->virt = s5p_mfc_mem_vaddr_priv(ctx_buf->alloc);
-	if (!ctx_buf->virt) {
-		s5p_mfc_mem_free_priv(ctx_buf->alloc);
-		ctx_buf->alloc = NULL;
-		ctx_buf->ofs = 0;
+	firmware_size = dev->variant->buf_size->firmware_code;
 
-		mfc_err_dev("Remapping DESC buffer failed.\n");
-		return -ENOMEM;
-	}
+	ctx_buf->alloc = NULL;
+	ctx_buf->virt = 0;
+	ctx_buf->ofs = fw_ofs + firmware_size;
 
 	if (IS_MFCv7X(dev)) {
 		if (alloc_dev_dis_shared_buffer(dev, alloc_ctx, buf_type) < 0) {
@@ -546,9 +548,11 @@ int s5p_mfc_alloc_dev_context_buffer(struct s5p_mfc_dev *dev)
 	if (ret)
 		return ret;
 #ifdef CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
-	ret = mfc_alloc_dev_context_buffer(dev, MFCBUF_DRM);
-	if (ret)
-		return ret;
+	if (dev->drm_fw_status) {
+		ret = mfc_alloc_dev_context_buffer(dev, MFCBUF_DRM);
+		if (ret)
+			return ret;
+	}
 #endif
 
 	return ret;
@@ -597,6 +601,10 @@ void mfc_release_dev_context_buffer(struct s5p_mfc_dev *dev,
 		ctx_buf->alloc = NULL;
 		ctx_buf->ofs = 0;
 		ctx_buf->virt = NULL;
+	} else {
+		/* In case of using FW region for common context buffer */
+		if (ctx_buf->ofs)
+			ctx_buf->ofs = 0;
 	}
 
 	if (IS_MFCv7X(dev))
@@ -887,7 +895,7 @@ int s5p_mfc_set_dec_stream_buffer(struct s5p_mfc_ctx *ctx, dma_addr_t buf_addr,
 	if (cpb_buf_size < strm_size + 4)
 		mfc_info_ctx("cpb_buf_size(%zu) < strm_size(0x%08x) + 4 bytes\n",
 				cpb_buf_size, strm_size);
-	if (ctx->state == MFCINST_GOT_INST && strm_size == 0)
+	if (strm_size == 0)
 		mfc_info_ctx("stream size is 0\n");
 
 	WRITEL(strm_size, S5P_FIMV_D_STREAM_DATA_SIZE);
@@ -2193,6 +2201,9 @@ static int s5p_mfc_init_decode(struct s5p_mfc_ctx *ctx)
 	if (dec->is_dual_dpb)
 		reg |= (0x1 << S5P_FIMV_D_OPT_DISPLAY_LINEAR_EN);
 
+	/* Parsing all including PPS */
+	reg |= (0x1 << S5P_FIMV_D_OPT_SPECIAL_PARSING_SHIFT);
+
 	WRITEL(reg, S5P_FIMV_D_DEC_OPTIONS);
 
 	if (ctx->codec_mode == S5P_FIMV_CODEC_FIMV1_DEC) {
@@ -3100,6 +3111,7 @@ void s5p_mfc_try_run(struct s5p_mfc_dev *dev)
 			ret = s5p_mfc_run_dec_last_frames(ctx);
 			break;
 		case MFCINST_RUNNING:
+		case MFCINST_SPECIAL_PARSING_NAL:
 			ret = s5p_mfc_run_dec_frame(ctx);
 			break;
 		case MFCINST_INIT:
@@ -3109,6 +3121,7 @@ void s5p_mfc_try_run(struct s5p_mfc_dev *dev)
 			ret = s5p_mfc_close_inst(ctx);
 			break;
 		case MFCINST_GOT_INST:
+		case MFCINST_SPECIAL_PARSING:
 			ret = s5p_mfc_run_init_dec(ctx);
 			break;
 		case MFCINST_HEAD_PARSED:

@@ -326,6 +326,8 @@ static ssize_t max77804_flash(struct device *dev,
 
 static DEVICE_ATTR(rear_flash, S_IWUSR|S_IWGRP,
 	NULL, max77804_flash);
+static DEVICE_ATTR(rear_torch_flash, S_IWUSR|S_IWGRP,
+	NULL, max77804_flash);
 #endif
 
 #if defined(CONFIG_OF)
@@ -511,6 +513,10 @@ static int max77804_led_probe(struct platform_device *pdev)
 		pr_err("failed to create device file, %s\n",
 				dev_attr_rear_flash.attr.name);
 	}
+	if (device_create_file(flash_dev, &dev_attr_rear_torch_flash) < 0) {
+		pr_err("failed to create device file, %s\n",
+				dev_attr_rear_torch_flash.attr.name);
+	}
 #endif
 
 #ifdef CONFIG_OF
@@ -555,6 +561,7 @@ static int __devexit max77804_led_remove(struct platform_device *pdev)
 	kfree(led_datas);
 #if defined(CONFIG_SOC_EXYNOS5422_REV_0) || defined(CONFIG_SOC_EXYNOS5430) || defined(CONFIG_SOC_EXYNOS5433)
 	device_remove_file(flash_dev, &dev_attr_rear_flash);
+	device_remove_file(flash_dev, &dev_attr_rear_torch_flash);
 	device_destroy(camera_class, 0);
 	class_destroy(camera_class);
 #endif

@@ -28,9 +28,17 @@ DHDCFLAGS += -DDHD_TRACE_WAKE_LOCK
 DHDCFLAGS += -DBCMASSERT_LOG
 # Collect Current Assoc/Reject Status for Big Data logging
 DHDCFLAGS += -DDHD_ENABLE_BIGDATA_LOGGING
+# Enable SI utility error log
+DHDCFLAGS += -DSI_ERROR_ENFORCE
 
 # Print 8021X
 DHDCFLAGS += -DDHD_8021X_DUMP
+
+# Print DHCP
+DHDCFLAGS += -DDHD_DHCP_DUMP
+
+# Print ICMP
+DHDCFLAGS += -DDHD_ICMP_DUMP
 
 # VSDB
 DHDCFLAGS += -DVSDB
@@ -71,14 +79,13 @@ DHDCFLAGS += -DSOFTAP_SEND_HANGEVT
 DHDCFLAGS += -DSKIP_WLFC_ON_CONCURRENT
 DHDCFLAGS += -DIPV6_NDO_SUPPORT
 DHDCFLAGS += -DCUSTOM_EVENT_PM_WAKE=20
+DHDCFLAGS += -DCUSTOM_KEEP_ALIVE_SETTING=30000
 
 # Extended HANG event with reason codes
 DHDCFLAGS += -DDHD_USE_EXTENDED_HANG_REASON
 
 # For special PNO Event keep wake lock for 10sec
 DHDCFLAGS += -DCUSTOM_PNO_EVENT_LOCK_xTIME=10
-# For Passing all multicast packets to host when not in suspend mode.
-DHDCFLAGS += -DPASS_ALL_MCAST_PKTS
 
 # Early suspend
 DHDCFLAGS += -DDHD_USE_EARLYSUSPEND
@@ -122,7 +129,8 @@ DHDCFLAGS += -DDHD_USE_IDLECOUNT
 # Used short dwell time during initial scan
 DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 
-# Japan ccode revision will be fixed by nvram's value
+# Korea and Japan ccode revision will be fixed by nvram's value
+DHDCFLAGS += -DKEEP_KR_REGREV
 DHDCFLAGS += -DKEEP_JP_REGREV
 
 # SKB TAILPAD to avoid out of boundary memory access
@@ -133,16 +141,20 @@ DHDCFLAGS += -DSUPPORT_P2P_GO_PS
 # reliable multicast
 DHDCFLAGS += -DWL_RELMCAST
 
-# FCC power limit control on ch12/13.
-DHDCFLAGS += -DFCC_PWR_LIMIT_2G
-
 # WFA Certification feature
 DHDCFLAGS += -DUSE_WFA_CERT_CONF
 
 # Does not forword internal packet
 DHDCFLAGS += -DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
 
+# Customer scan timeout setting
+DHDCFLAGS += -DCUSTOMER_SCAN_TIMEOUT_SETTING
 
+# Enable HANG event test private command
+DHDCFLAGS += -DSUPPORT_TRIGGER_HANG_EVENT
+
+# Random mac scan
+DHDCFLAGS += -DSUPPORT_RANDOM_MAC_SCAN
 
 ##############################
 # Android Platform Definition
@@ -310,8 +322,7 @@ ifeq ($(CONFIG_BCM43455),y)
 endif
   DHDCFLAGS += -DCUSTOM_PSPRETEND_THR=30
   DHDCFLAGS += -DDHD_LOG_DUMP
-  # US/988 country code with higher power on UNII-1 5G band
-  DHDCFLAGS += -DDHD_SUPPORT_FCC_US_988
+
   # FCC power limit control on ch12/13.
   DHDCFLAGS += -DFCC_PWR_LIMIT_2G
 
@@ -455,6 +466,8 @@ ifneq ($(CONFIG_BCM4334W),)
   DHDCFLAGS += -DPROP_TXSTATUS_VSDB
   DHDCFLAGS += -DWES_SUPPORT
   DHDCFLAGS += -DSUPPORT_WL_TXPOWER
+  # 4334W not enabled PM wake feature
+  DHDCFLAGS :=$(filter-out -DCUSTOM_EVENT_PM_WAKE=20,$(DHDCFLAGS))
 ifeq ($(CONFIG_ARCH_MSM8960),y)
   DHDCFLAGS += -DDHD_SDALIGN=4
 endif
@@ -504,8 +517,11 @@ endif
   DHDCFLAGS += -DCUSTOM_ROAM_TIME_THRESH_IN_SUSPEND=6000
   DHDCFLAGS += -DMAX_DTIM_ALLOWED_INTERVAL=925
 
+ifeq ($(CONFIG_WLAN_ON7),y)
+  DHDCFLAGS += -DDHD_SUPPORT_TR_212
+endif
+
   # Remove common feature for BCM4343
-  DHDCFLAGS :=$(filter-out -DDHD_USE_IDLECOUNT,$(DHDCFLAGS))
   DHDCFLAGS :=$(filter-out -DDISABLE_11H_SOFTAP,$(DHDCFLAGS))
   DHDCFLAGS :=$(filter-out -DSUPPORT_P2P_GO_PS,$(DHDCFLAGS))
 endif
@@ -565,12 +581,16 @@ ifeq ($(CONFIG_SPI_SC8810),y)
   DHDCFLAGS :=$(filter-out -DWL_CFG80211_STA_EVENT,$(DHDCFLAGS))
 endif
 
-# For SLP feature
-ifeq ($(CONFIG_SLP),y)
+# For TIZEN(SLP) feature
+ifeq ($(filter y,$(CONFIG_SLP) $(CONFIG_TIZEN)),y)
   DHDCFLAGS += -DUSE_INITIAL_2G_SCAN
   DHDCFLAGS += -DPLATFORM_SLP -DWRITE_MACADDR
-  DHDCFLAGS += -DSUPPORT_MULTIPLE_CHIPS -DENABLE_4335BT_WAR
+  DHDCFLAGS += -DSUPPORT_MULTIPLE_CHIPS
   DHDCFLAGS += -USUPPORT_MULTIPLE_REVISION -UCONFIG_HAS_WAKELOCK
+  DHDCFLAGS += -DREMOVE_P2PIE_BEFORE_DELIF
+  # RX pkt dump for host wake.
+  DHDCFLAGS += -DENABLE_WAKEUP_PKT_DUMP
+  DHDCFLAGS += -DENABLE_IPMCAST_FILTER
 endif
 
 # GGSM_WIFI_5GHz_CHANNELS feature is define for only GGSM model
@@ -579,6 +599,10 @@ ifeq ($(GGSM_WIFI_5GHz_CHANNELS),true)
 endif
 
 ifeq ($(CONFIG_OF),y)
+ifneq ($(CONFIG_SOC_EXYNOS5433),)
+obj-$(CONFIG_SOC_EXYNOS5433) += dhd_custom_exynos.o
+DHDCFLAGS += -DDHD_OF_SUPPORT
+endif
 ifneq ($(CONFIG_MACH_UNIVERSAL5430),)
 obj-$(CONFIG_MACH_UNIVERSAL5430) += dhd_custom_exynos.o
 DHDCFLAGS += -DDHD_OF_SUPPORT
@@ -598,6 +622,18 @@ DHDCFLAGS += -DDHD_OF_SUPPORT
 endif
 ifneq ($(CONFIG_MACH_UNIVERSAL5433),)
 DHDCFLAGS += -DSDIO_PADDING_FOR_BLK_TRANS
+endif
+ifneq ($(CONFIG_SOC_EXYNOS7870),)
+DHDCFLAGS += -DDHD_OF_SUPPORT
+DHDCFLAGS += -Wno-date-time
+endif
+ifneq ($(CONFIG_SOC_EXYNOS7420),)
+DHDCFLAGS += -DDHD_OF_SUPPORT
+DHDCFLAGS += -Wno-date-time
+endif
+ifneq ($(CONFIG_ARCH_MDM9607),)
+DHDCFLAGS += -DDHD_OF_SUPPORT
+DHDCFLAGS += -Wno-date-time
 endif
 endif
 

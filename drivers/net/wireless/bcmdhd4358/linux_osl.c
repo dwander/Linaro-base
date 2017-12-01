@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.c 551293 2015-04-22 22:58:36Z $
+ * $Id: linux_osl.c 655338 2016-08-19 03:50:52Z $
  */
 
 #define LINUX_PORT
@@ -670,16 +670,39 @@ osl_pkt_tonative(osl_t *osh, void *pkt)
 void * BCMFASTPATH
 osl_pkt_frmnative(osl_t *osh, void *pkt)
 {
+	struct sk_buff *cskb;
 	struct sk_buff *nskb;
+	unsigned long pktalloced = 0;
+
 
 	if (osh->pub.pkttag)
 		OSL_PKTTAG_CLEAR(pkt);
 
-	/* Increment the packet counter */
-	for (nskb = (struct sk_buff *)pkt; nskb; nskb = nskb->next) {
-		atomic_add(PKTISCHAINED(nskb) ? PKTCCNT(nskb) : 1, &osh->cmn->pktalloced);
+	/* walk the PKTCLINK() list */
+	for (cskb = (struct sk_buff *)pkt;
+		cskb != NULL;
+		cskb = PKTISCHAINED(cskb) ? PKTCLINK(cskb) : NULL) {
 
+		/* walk the pkt buffer list */
+		for (nskb = cskb; nskb; nskb = nskb->next) {
+
+			/* Increment the packet counter */
+			pktalloced++;
+
+			/* clean the 'prev' pointer
+			 * Kernel 3.18 is leaving skb->prev pointer set to skb
+			 * to indicate a non-fragmented skb
+			 */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
+			nskb->prev = NULL;
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0) */
+
+
+		}
 	}
+	/* Increment the packet counter */
+	atomic_add(pktalloced, &osh->cmn->pktalloced);
+
 	return (void *)pkt;
 }
 
@@ -1000,8 +1023,8 @@ osl_pktfree_static(osl_t *osh, void *p, bool send)
 	}
 #endif /* ENHANCED_STATIC_BUF */
 	up(&bcm_static_skb->osl_pkt_sem);
-	osl_pktfree(osh, p, send);
 #endif /* BCMPCIE && DHD_USE_STATIC_CTRLBUF */
+	osl_pktfree(osh, p, send);
 }
 
 #if defined(BCMPCIE) && defined(DHD_USE_STATIC_CTRLBUF)
@@ -1302,7 +1325,12 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 	{
 		dma_addr_t pap_lin;
 		va = pci_alloc_consistent(osh->pdev, size, &pap_lin);
+#ifdef BCMDMA64OSL
+		PHYSADDRLOSET(*pap, pap_lin & 0xffffffff);
+		PHYSADDRHISET(*pap, (pap_lin >> 32) & 0xffffffff);
+#else
 		*pap = (dmaaddr_t)pap_lin;
+#endif /* BCMDMA64OSL */
 	}
 #endif 
 
@@ -1318,12 +1346,20 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 void
 osl_dma_free_consistent(osl_t *osh, void *va, uint size, dmaaddr_t pa)
 {
+#ifdef BCMDMA64OSL
+	dma_addr_t paddr;
+#endif /* BCMDMA64OSL */
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
 
 #if defined(USE_KMALLOC_FOR_FLOW_RING) && defined(__ARM_ARCH_7A__)
 	kfree(va);
 #else
+#ifdef BCMDMA64OSL
+	PHYSADDRTOULONG(pa, paddr);
+	pci_free_consistent(osh->pdev, size, va, paddr);
+#else
 	pci_free_consistent(osh->pdev, size, va, (dma_addr_t)pa);
+#endif /* BCMDMA64OSL */
 #endif 
 }
 
@@ -1331,6 +1367,9 @@ dmaaddr_t BCMFASTPATH
 osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_map_t *dmah)
 {
 	int dir;
+	dmaaddr_t ret_addr;
+	dma_addr_t map_addr;
+	int ret;
 
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
 	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
@@ -1366,17 +1405,43 @@ osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_
 	}
 #endif /* __ARM_ARCH_7A__ && BCMDMASGLISTOSL */
 
-	return (pci_map_single(osh->pdev, va, size, dir));
+
+	map_addr = pci_map_single(osh->pdev, va, size, dir);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+	ret = pci_dma_mapping_error(osh->pdev, map_addr);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 5))
+	ret = pci_dma_mapping_error(map_addr);
+#else
+	ret = 0;
+#endif
+	if (ret) {
+		printk("%s: Failed to map memory\n", __FUNCTION__);
+		PHYSADDRLOSET(ret_addr, 0);
+		PHYSADDRHISET(ret_addr, 0);
+	} else {
+		PHYSADDRLOSET(ret_addr, map_addr & 0xffffffff);
+		PHYSADDRHISET(ret_addr, (map_addr >> 32) & 0xffffffff);
+	}
+
+	return ret_addr;
 }
 
 void BCMFASTPATH
-osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction)
+osl_dma_unmap(osl_t *osh, dmaaddr_t pa, uint size, int direction)
 {
 	int dir;
+#ifdef BCMDMA64OSL
+	dma_addr_t paddr;
+#endif /* BCMDMA64OSL */
 
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
 	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
+#ifdef BCMDMA64OSL
+	PHYSADDRTOULONG(pa, paddr);
+	pci_unmap_single(osh->pdev, paddr, size, dir);
+#else
 	pci_unmap_single(osh->pdev, (uint32)pa, size, dir);
+#endif /* BCMDMA64OSL */
 }
 
 /* OSL function for CPU relax */

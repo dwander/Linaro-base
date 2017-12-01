@@ -1497,11 +1497,17 @@ static int max77888_muic_logically_detach(struct max77888_muic_data *muic_data,
 	case ATTACHED_DEV_CDP_MUIC:
 		break;
 	case ATTACHED_DEV_OTG_MUIC:
-		if (new_dev == ATTACHED_DEV_USB_LANHUB_MUIC)
+		if (new_dev == ATTACHED_DEV_USB_LANHUB_MUIC) {
+			force_path_open = false;
+			enable_accdet = false;
 			goto out;
+		}
 	case ATTACHED_DEV_USB_LANHUB_MUIC:
-		if (new_dev == ATTACHED_DEV_OTG_MUIC)
-			goto out;
+		if (new_dev == ATTACHED_DEV_OTG_MUIC) {
+			force_path_open = false;
+			enable_accdet = false;
+		}
+		break;
 	case ATTACHED_DEV_CHARGING_CABLE_MUIC:
 	case ATTACHED_DEV_HMT_MUIC:
 	case ATTACHED_DEV_UNDEFINED_CHARGING_MUIC:
@@ -1814,6 +1820,7 @@ static bool muic_check_vps_chgtyp
 		switch (chgtyp) {
 		case CHGTYP_500MA:
 		case CHGTYP_1A:
+		case CHGTYP_SPECIAL_3_3V_CHARGER:
 			ret = true;
 			goto out;
 		default:

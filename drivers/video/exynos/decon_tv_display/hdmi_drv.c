@@ -1057,14 +1057,17 @@ static int hdmi_probe(struct platform_device *pdev)
 	dev_info(dev, "success register switch device\n");
 
 	/* External hpd */
-	hdmi_dev->ext_irq = gpio_to_irq(hdmi_dev->res.gpio_hpd);
-	ret = devm_request_irq(dev, hdmi_dev->ext_irq, hdmi_irq_handler_ext,
-			IRQ_TYPE_EDGE_BOTH, "hdmi-ext", hdmi_dev);
-	if (ret) {
-		dev_err(dev, "request ext interrupt failed.\n");
-		goto fail_switch;
-	} else {
-		dev_info(dev, "success request hdmi-ext irq\n");
+	if (hdmi_dev->res.gpio_hpd) {
+		hdmi_dev->ext_irq = gpio_to_irq(hdmi_dev->res.gpio_hpd);
+		ret = devm_request_irq(dev, hdmi_dev->ext_irq, hdmi_irq_handler_ext,
+				IRQ_TYPE_EDGE_BOTH, "hdmi-ext", hdmi_dev);
+		if (ret) {
+			dev_err(dev, "request ext interrupt failed.\n");
+			goto fail_switch;
+		}
+		else {
+			dev_info(dev, "success request hdmi-ext irq\n");
+		}
 	}
 
 #ifdef CONFIG_SEC_MHL_SUPPORT

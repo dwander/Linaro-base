@@ -232,7 +232,7 @@ struct synaptics_rmi4_f12_finger_data {
 	unsigned char x_msb;
 	unsigned char y_lsb;
 	unsigned char y_msb;
-#ifdef REPORT_2D_Z
+#if defined(TSP_SUPPROT_MULTIMEDIA) ||defined(REPORT_2D_Z)
 	unsigned char z;
 #endif
 #ifdef REPORT_2D_W

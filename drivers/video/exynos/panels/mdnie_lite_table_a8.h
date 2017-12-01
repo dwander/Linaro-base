@@ -5,10 +5,10 @@
 /* SCR Position can be different each panel */
 static struct mdnie_scr_info scr_info = {
 	.index = 1,
-	.color_blind = 131,	/* ASCR_WIDE_CR[7:0] */
-	.white_r = 149,		/* ASCR_WIDE_WR[7:0] */
-	.white_g = 151,		/* ASCR_WIDE_WG[7:0] */
-	.white_b = 153		/* ASCR_WIDE_WB[7:0] */
+	.cr = 131,		/* ASCR_WIDE_CR[7:0] */
+	.wr = 149,		/* ASCR_WIDE_WR[7:0] */
+	.wg = 151,		/* ASCR_WIDE_WG[7:0] */
+	.wb = 153		/* ASCR_WIDE_WB[7:0] */
 };
 
 static inline int color_offset_f1(int x, int y)
@@ -62,6 +62,23 @@ static unsigned char *coordinate_data[MODE_MAX] = {
 	coordinate_data_1,
 	coordinate_data_1,
 };
+
+static inline int get_hbm_index(int idx)
+{
+	int i = 0;
+	int idx_list[] = {
+		40000	/* idx < 40000: HBM_OFF */
+				/* idx >= 40000: HBM_ON */
+	};
+
+	while (i < ARRAY_SIZE(idx_list)) {
+		if (idx < idx_list[i])
+			break;
+		i++;
+	}
+
+	return i;
+}
 
 static unsigned char GRAYSCALE_1[] = {
 	0xEC,
@@ -8589,6 +8606,7 @@ static unsigned char LOCAL_CE_TEXT_2[] = {
 };
 
 ///////////////// FOR DMB performance //////////////////////////
+#ifdef CONFIG_TDMB
 static unsigned char START_DMB_1[] = {
 	0xCE,
 	0x29,
@@ -8625,15 +8643,7 @@ static unsigned char END_DMB_2[] = {
 	0x01, 0x00, 0x02, 0x5A
 };
 
-static unsigned char LEVEL_UNLOCK[] = {
-	0xF0,
-	0x5A, 0x5A
-};
 
-static unsigned char LEVEL_LOCK[] = {
-	0xF0,
-	0xA5, 0xA5
-};
 
 #define MDNIE_SET(id)	\
 {							\
@@ -8662,6 +8672,38 @@ static unsigned char LEVEL_LOCK[] = {
 		{	.cmd = LEVEL_LOCK,	.len = ARRAY_SIZE(LEVEL_LOCK),		.sleep = 0,},	\
 	}	\
 }
+#else
+#define MDNIE_SET(id)	\
+{							\
+	.name		= #id,				\
+	.update_flag	= {0, 1, 2, 0},			\
+	.seq		= {				\
+		{	.cmd = LEVEL_UNLOCK,	.len = ARRAY_SIZE(LEVEL_UNLOCK),	.sleep = 0,},	\
+		{	.cmd = id##_1,		.len = ARRAY_SIZE(id##_1),		.sleep = 0,},	\
+		{	.cmd = id##_2,		.len = ARRAY_SIZE(id##_2),		.sleep = 0,},	\
+		{	.cmd = LEVEL_LOCK,	.len = ARRAY_SIZE(LEVEL_LOCK),		.sleep = 0,},	\
+	}	\
+}
+#define MDNIE_SET_DMB(id)	\
+{							\
+	.name		= #id,				\
+	.update_flag	= {0, 1, 2, 0},			\
+	.seq		= {				\
+		{	.cmd = LEVEL_UNLOCK,	.len = ARRAY_SIZE(LEVEL_UNLOCK),	.sleep = 0,},	\
+		{	.cmd = id##_1,		.len = ARRAY_SIZE(id##_1),		.sleep = 0,},	\
+		{	.cmd = id##_2,		.len = ARRAY_SIZE(id##_2),		.sleep = 0,},	\
+		{	.cmd = LEVEL_LOCK,	.len = ARRAY_SIZE(LEVEL_LOCK),		.sleep = 0,},	\
+	}	\
+}
+#endif
+static unsigned char LEVEL_UNLOCK[] = {
+	0xF0,
+	0x5A, 0x5A
+};
+static unsigned char LEVEL_LOCK[] = {
+	0xF0,
+	0xA5, 0xA5
+};
 
 static struct mdnie_table bypass_table[BYPASS_MAX] = {
 	[BYPASS_ON] = MDNIE_SET(BYPASS)
@@ -8776,7 +8818,8 @@ static struct mdnie_tune tune_info = {
 
 	.coordinate_table = coordinate_data,
 	.scr_info = &scr_info,
-	.color_offset = {color_offset_f1, color_offset_f2, color_offset_f3, color_offset_f4}
+	.get_hbm_index = get_hbm_index,
+	.color_offset = {NULL, color_offset_f1, color_offset_f2, color_offset_f3, color_offset_f4}
 };
 
 #endif

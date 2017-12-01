@@ -517,6 +517,9 @@ static int sx9310_set_mode(struct sx9310_p *data, unsigned char mode)
 			setup_reg[2].val);
 		disable_irq(data->irq);
 		disable_irq_wake(data->irq);
+		/* make sure no interrupts are pending since enabling irq
+		 * will only work on next falling edge */
+		sx9310_read_irqstate(data);
 	} else if (mode == SX9310_MODE_NORMAL) {
 		ret = sx9310_i2c_write(data, SX9310_CPS_CTRL0_REG,
 			setup_reg[2].val | ENABLE_CSX);
@@ -526,13 +529,12 @@ static int sx9310_set_mode(struct sx9310_p *data, unsigned char mode)
 		msleep(400);
 
 		sx9310_touchCheckWithRefSensor(data);
+		/* make sure no interrupts are pending since enabling irq
+		 * will only work on next falling edge */
+		sx9310_read_irqstate(data);
 		enable_irq(data->irq);
 		enable_irq_wake(data->irq);
 	}
-
-	/* make sure no interrupts are pending since enabling irq
-	 * will only work on next falling edge */
-	sx9310_read_irqstate(data);
 
 	pr_info("[SX9310]: %s - change the mode : %u\n", __func__, mode);
 
@@ -679,7 +681,7 @@ static ssize_t sx9310_register_write_store(struct device *dev,
 	int regist = 0, val = 0;
 	struct sx9310_p *data = dev_get_drvdata(dev);
 
-	if (sscanf(buf, "%d,%d", &regist, &val) != 2) {
+	if (sscanf(buf, "%4d,%4d", &regist, &val) != 2) {
 		pr_err("[SX9310]: %s - The number of data are wrong\n",
 			__func__);
 		return -EINVAL;
@@ -699,7 +701,7 @@ static ssize_t sx9310_register_read_store(struct device *dev,
 	unsigned char val = 0;
 	struct sx9310_p *data = dev_get_drvdata(dev);
 
-	if (sscanf(buf, "%d", &regist) != 1) {
+	if (sscanf(buf, "%4d", &regist) != 1) {
 		pr_err("[SX9310]: %s - The number of data are wrong\n",
 			__func__);
 		return -EINVAL;

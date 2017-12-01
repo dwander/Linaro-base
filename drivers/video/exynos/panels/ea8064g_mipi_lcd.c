@@ -39,10 +39,11 @@
 #endif
 
 #define POWER_IS_ON(pwr)		(pwr <= FB_BLANK_NORMAL)
-#define LEVEL_IS_HBM(level)		(level >= 6)
+#define LEVEL_IS_HBM(brightness)	(brightness == EXTEND_BRIGHTNESS)
 
 #define NORMAL_TEMPERATURE		25	/* 25 degree */
 
+#define EXTEND_BRIGHTNESS		355
 #define MIN_BRIGHTNESS			0
 #define MAX_BRIGHTNESS			255
 #define DEFAULT_BRIGHTNESS		134
@@ -93,7 +94,7 @@ union elvss_info {
 
 struct lcd_info {
 	unsigned int			bl;
-	unsigned int			auto_brightness;
+	unsigned int			brightness;
 	unsigned int			acl_enable;
 	unsigned int			siop_enable;
 	unsigned int			current_acl;
@@ -121,6 +122,9 @@ struct lcd_info {
 	unsigned int			coordinate[2];
 	unsigned int			partial_range[2];
 	unsigned char			date[2];
+
+	int						lux;
+	struct class			*mdnie_class;
 
 #if defined(CONFIG_ESD_FG)
 	unsigned int			esd_fg_irq;
@@ -530,7 +534,7 @@ static int ea8064g_set_acl(struct lcd_info *lcd, u8 force)
 {
 	int ret = 0, level = ACL_STATUS_15P;
 
-	if (lcd->siop_enable || LEVEL_IS_HBM(lcd->auto_brightness))
+	if (lcd->siop_enable || LEVEL_IS_HBM(lcd->brightness))
 		goto acl_update;
 
 	if (!lcd->acl_enable)
@@ -541,7 +545,7 @@ acl_update:
 		ret = ea8064g_write(lcd, ACL_OPR_TABLE[level], OPR_PARAM_SIZE);
 		ret += ea8064g_write(lcd, ACL_CUTOFF_TABLE[level], ACL_PARAM_SIZE);
 		lcd->current_acl = ACL_CUTOFF_TABLE[level][1];
-		dev_info(&lcd->ld->dev, "acl: %d, auto_brightness: %d\n", lcd->current_acl, lcd->auto_brightness);
+		dev_info(&lcd->ld->dev, "acl: %d, brightness: %d\n", lcd->current_acl, lcd->brightness);
 	}
 
 	if (!ret)
@@ -608,12 +612,12 @@ static int ea8064g_set_tset(struct lcd_info *lcd, u8 force)
 
 static int ea8064g_set_hbm(struct lcd_info *lcd, u8 force)
 {
-	int ret = 0, level = LEVEL_IS_HBM(lcd->auto_brightness);
+	int ret = 0, level = LEVEL_IS_HBM(lcd->brightness);
 
 	if (force || lcd->current_hbm != HBM_TABLE[level][1]) {
 		ret = ea8064g_write(lcd, HBM_TABLE[level], HBM_PARAM_SIZE);
 		lcd->current_hbm = HBM_TABLE[level][1];
-		dev_info(&lcd->ld->dev, "hbm: %d, auto_brightness: %d\n", lcd->current_hbm, lcd->auto_brightness);
+		dev_info(&lcd->ld->dev, "hbm: %d, brightness: %d\n", lcd->current_hbm, lcd->brightness);
 	}
 
 	if (!ret)
@@ -869,15 +873,13 @@ static void show_lcd_table(struct lcd_info *lcd)
 
 static int update_brightness(struct lcd_info *lcd, u8 force)
 {
-	u32 brightness;
-
 	mutex_lock(&lcd->bl_lock);
 
-	brightness = lcd->bd->props.brightness;
+	lcd->brightness = lcd->bd->props.brightness;
 
-	lcd->bl = get_backlight_level_from_brightness(brightness);
+	lcd->bl = get_backlight_level_from_brightness(lcd->brightness > MAX_BRIGHTNESS ? MAX_BRIGHTNESS : lcd->brightness);
 
-	if (LEVEL_IS_HBM(lcd->auto_brightness) && (brightness == lcd->bd->props.max_brightness))
+	if (LEVEL_IS_HBM(lcd->brightness))
 		lcd->bl = IBRIGHTNESS_500NT;
 
 	if (force || (lcd->ldi_enable && (lcd->current_bl != lcd->bl))) {
@@ -896,7 +898,7 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 		lcd->current_bl = lcd->bl;
 
 		dev_info(&lcd->ld->dev, "brightness=%d, bl=%d, candela=%d\n",
-			brightness, lcd->bl, index_brightness_table[lcd->bl]);
+			lcd->brightness, lcd->bl, index_brightness_table[lcd->bl]);
 	}
 
 	mutex_unlock(&lcd->bl_lock);
@@ -1113,7 +1115,7 @@ static int ea8064g_get_brightness(struct backlight_device *bd)
 {
 	struct lcd_info *lcd = bl_get_data(bd);
 
-	return index_brightness_table[lcd->bl];
+	return DIM_TABLE[lcd->bl];
 }
 
 static int ea8064g_set_brightness(struct backlight_device *bd)
@@ -1227,45 +1229,13 @@ static ssize_t brightness_table_show(struct device *dev,
 	int i, bl;
 	char *pos = buf;
 
-	for (i = 0; i <= MAX_BRIGHTNESS; i++) {
-		bl = get_backlight_level_from_brightness(i);
-		pos += sprintf(pos, "%3d %3d\n", i, index_brightness_table[bl]);
+	for (i = 0; i <= EXTEND_BRIGHTNESS; i++) {
+		bl = get_backlight_level_from_brightness(i > MAX_BRIGHTNESS ? MAX_BRIGHTNESS : i);
+		bl = LEVEL_IS_HBM(i) ? IBRIGHTNESS_500NT : bl;
+		pos += sprintf(pos, "%3d %3d\n", i, DIM_TABLE[bl]);
 	}
 
 	return pos - buf;
-}
-
-static ssize_t auto_brightness_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct lcd_info *lcd = dev_get_drvdata(dev);
-
-	sprintf(buf, "%u\n", lcd->auto_brightness);
-
-	return strlen(buf);
-}
-
-static ssize_t auto_brightness_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct lcd_info *lcd = dev_get_drvdata(dev);
-	int value;
-	int rc;
-
-	rc = kstrtoul(buf, (unsigned int)0, (unsigned long *)&value);
-	if (rc < 0)
-		return rc;
-	else {
-		if (lcd->auto_brightness != value) {
-			dev_info(dev, "%s: %d, %d\n", __func__, lcd->auto_brightness, value);
-			mutex_lock(&lcd->bl_lock);
-			lcd->auto_brightness = value;
-			mutex_unlock(&lcd->bl_lock);
-			if (lcd->ldi_enable)
-				update_brightness(lcd, 0);
-		}
-	}
-	return size;
 }
 
 static ssize_t siop_enable_show(struct device *dev,
@@ -1359,17 +1329,50 @@ static ssize_t manufacture_date_show(struct device *dev,
 	return strlen(buf);
 }
 
+static ssize_t lux_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+
+	sprintf(buf, "%d\n", lcd->lux);
+
+	return strlen(buf);
+}
+
+static ssize_t lux_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = kstrtoint(buf, 0, &value);
+
+	if (rc < 0)
+		return rc;
+
+	if (lcd->lux != value) {
+		mutex_lock(&lcd->lock);
+		lcd->lux = value;
+		mutex_unlock(&lcd->lock);
+
+		attr_store_for_each(lcd->mdnie_class, attr->attr.name, buf, size);
+	}
+
+	return size;
+}
+
 
 static DEVICE_ATTR(power_reduce, 0664, power_reduce_show, power_reduce_store);
 static DEVICE_ATTR(lcd_type, 0444, lcd_type_show, NULL);
 static DEVICE_ATTR(window_type, 0444, window_type_show, NULL);
 static DEVICE_ATTR(ddi_id, 0444, ddi_id_show, NULL);
 static DEVICE_ATTR(brightness_table, 0444, brightness_table_show, NULL);
-static DEVICE_ATTR(auto_brightness, 0644, auto_brightness_show, auto_brightness_store);
 static DEVICE_ATTR(siop_enable, 0664, siop_enable_show, siop_enable_store);
 static DEVICE_ATTR(temperature, 0664, temperature_show, temperature_store);
 static DEVICE_ATTR(color_coordinate, 0444, color_coordinate_show, NULL);
 static DEVICE_ATTR(manufacture_date, 0444, manufacture_date_show, NULL);
+static DEVICE_ATTR(lux, 0644, lux_show, lux_store);
 
 static int ea8064g_probe(struct mipi_dsim_device *dsim)
 {
@@ -1402,7 +1405,7 @@ static int ea8064g_probe(struct mipi_dsim_device *dsim)
 
 	lcd->dev = dsim->dev;
 	lcd->dsim = dsim;
-	lcd->bd->props.max_brightness = MAX_BRIGHTNESS;
+	lcd->bd->props.max_brightness = EXTEND_BRIGHTNESS;
 	lcd->bd->props.brightness = DEFAULT_BRIGHTNESS;
 	lcd->bl = DEFAULT_GAMMA_INDEX;
 	lcd->current_bl = lcd->bl;
@@ -1413,10 +1416,10 @@ static int ea8064g_probe(struct mipi_dsim_device *dsim)
 #else
 	lcd->power = FB_BLANK_UNBLANK;
 #endif
-	lcd->auto_brightness = 0;
 	lcd->connected = 1;
 	lcd->siop_enable = 0;
 	lcd->temperature = NORMAL_TEMPERATURE;
+	lcd->lux = -1;
 
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_power_reduce);
 	if (ret < 0)
@@ -1438,10 +1441,6 @@ static int ea8064g_probe(struct mipi_dsim_device *dsim)
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
-	ret = device_create_file(&lcd->bd->dev, &dev_attr_auto_brightness);
-	if (ret < 0)
-		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
-
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_siop_enable);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
@@ -1455,6 +1454,10 @@ static int ea8064g_probe(struct mipi_dsim_device *dsim)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_manufacture_date);
+	if (ret < 0)
+		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
+
+	ret = device_create_file(&lcd->ld->dev, &dev_attr_lux);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
@@ -1486,6 +1489,7 @@ static int ea8064g_probe(struct mipi_dsim_device *dsim)
 
 #if defined(CONFIG_DECON_MDNIE_LITE)
 	mdnie_register(&lcd->ld->dev, lcd, (mdnie_w)ea8064g_send_seq, (mdnie_r)ea8064g_read, &tune_info);
+	lcd->mdnie_class = get_mdnie_class();
 #endif
 
 	update_brightness(lcd, 1);

@@ -42,6 +42,10 @@
 #include <linux/muic/muic_notifier.h>
 #endif /* CONFIG_MUIC_NOTIFIER */
 
+#if defined(CONFIG_VBUS_NOTIFIER)
+#include <linux/vbus_notifier.h>
+#endif /* CONFIG_VBUS_NOTIFIER */
+
 #if defined(CONFIG_USB_EXTERNAL_NOTIFY)
 #include <linux/usb_notify.h>
 #endif
@@ -78,6 +82,10 @@ static const struct max77843_muic_vps_data muic_vps_table[] = {
 		.control1	= CTRL1_OPEN,
 		.vps_name	= "MHL",
 		.attached_dev	= ATTACHED_DEV_MHL_MUIC,
+#if defined(CONFIG_MUIC_MAX77843_UNSUPPORTED_MHL)
+		.vps_name	= "MHL but changed to Undefined Charging",
+		.attached_dev	= ATTACHED_DEV_UNDEFINED_CHARGING_MUIC,
+#endif  /* CONFIG_MUIC_MAX77843_UNSUPPORTED_MHL */
 	},
 	{
 		.adc1k		= 0x00,
@@ -1157,6 +1165,180 @@ static ssize_t max77843_muic_set_afc_disable(struct device *dev,
 }
 #endif /* CONFIG_HV_MUIC_MAX77843_AFC */
 
+#ifdef CONFIG_MUIC_HV_FORCE_LIMIT
+static ssize_t max77843_muic_show_hv(struct device *dev,
+					   struct device_attribute *attr,
+					   char *buf)
+{
+	struct max77843_muic_data *muic_data = dev_get_drvdata(dev);
+	struct muic_platform_data *pdata = muic_data->pdata;
+
+	pr_info("%s:%s %s", MUIC_DEV_NAME, __func__, pdata->hv_sel ? "5V":"9V");
+
+	return sprintf(buf, "%s\n", pdata->hv_sel ? "5V":"9V");
+}
+
+#define HV_FORCE_CHANGE_WAIT_MAX 30 //*10ms
+void max77843_muic_afc_control_ping
+		(struct max77843_muic_data *muic_data, bool ping_continue)
+{
+	int ret;
+
+	pr_info("%s:%s control ping[%d, %c]\n", MUIC_DEV_NAME, __func__,
+				muic_data->afc_count, ping_continue ? 'T' : 'F');
+
+	if (ping_continue)
+		ret = max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVCONTROL2, 0x5B);
+	else
+		ret = max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVCONTROL2, 0x03);
+
+	if (ret) {
+		pr_err("%s:%s cannot writing HVCONTROL2 reg(%d)\n",
+				MUIC_DEV_NAME, __func__, ret);
+	}
+}
+static void max77843_muic_adcmode_switch_vbus
+		(struct max77843_muic_data *muic_data, bool always_on)
+{
+	struct i2c_client	*i2c = muic_data->i2c;
+	int ret;
+
+	pr_info("%s:%s always_on:%c\n", MUIC_HV_DEV_NAME, __func__, (always_on ? 'T' : 'F'));
+
+	if (always_on) {
+#if !defined(CONFIG_SEC_FACTORY)
+		max77843_muic_set_adcmode_always(muic_data);
+#endif /* CONFIG_SEC_FACTORY */
+		ret = max77843_muic_update_reg(i2c, MAX77843_MUIC_REG_HVCONTROL1,
+					(MAX77843_ENABLE_BIT << HVCONTROL1_VBUSADCEN_SHIFT),
+					HVCONTROL1_VBUSADCEN_MASK, true);
+	} else {
+#if !defined(CONFIG_SEC_FACTORY)
+		max77843_muic_set_adcmode_oneshot(muic_data);
+#endif /* CONFIG_SEC_FACTORY */
+		/* non MAXIM */
+		ret = max77843_muic_update_reg(i2c, MAX77843_MUIC_REG_HVCONTROL1,
+					(MAX77843_DISABLE_BIT << HVCONTROL1_VBUSADCEN_SHIFT),
+					HVCONTROL1_VBUSADCEN_MASK, true);
+	}
+
+	if (ret)
+		pr_err("%s:%s cannot switch adcmode(%d)\n", MUIC_HV_DEV_NAME, __func__, ret);
+}
+
+static ssize_t max77843_muic_set_hv(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	struct max77843_muic_data *muic_data = dev_get_drvdata(dev);
+	unsigned int repeat_cnt;
+
+	if (!strncasecmp(buf, "5V", 2)) {
+
+		if(muic_data->pdata->hv_sel == 1) {
+			pr_info("%s:%s off 9V called twice [%d]\n",	MUIC_DEV_NAME, __func__, muic_data->pdata->hv_sel);
+			return count;
+		}
+
+		muic_data->pdata->hv_sel = 1;
+
+		switch (muic_data->attached_dev) {
+		case ATTACHED_DEV_AFC_CHARGER_9V_MUIC:
+			pr_info("%s:%s reset muic to change AFC 9V => TA 5V case 1 attached_dev[%d]\n", MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+
+			muic_data->afc_count = 0;
+			max77843_muic_adcmode_switch_vbus(muic_data, true);
+			max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVTXBYTE, 0x0C);
+			max77843_muic_afc_control_ping(muic_data, true);
+
+			repeat_cnt = HV_FORCE_CHANGE_WAIT_MAX;
+			while((muic_data->attached_dev != ATTACHED_DEV_AFC_CHARGER_5V_MUIC)&&(repeat_cnt--!=0)) {
+				msleep(10);
+//				pr_info("%s:%s wait until attached device changing attached_dev[%d]\n", MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			}
+			pr_info("%s:%s change done attached_dev[%d] waited[%d]ms \n", MUIC_DEV_NAME, __func__, muic_data->attached_dev, (30-repeat_cnt)*10);
+
+
+			break;
+		case ATTACHED_DEV_QC_CHARGER_9V_MUIC:
+			pr_info("%s:%s reset muic to change QC 9V => TA 5V case 1 attached_dev[%d]\n", MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+
+			max77843_muic_adcmode_switch_vbus(muic_data, true);
+			max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVCONTROL1, 0x33);
+
+			repeat_cnt = HV_FORCE_CHANGE_WAIT_MAX;
+			while((muic_data->attached_dev != ATTACHED_DEV_QC_CHARGER_5V_MUIC)&&(repeat_cnt--!=0)) {
+				msleep(10);
+//				pr_info("%s:%s wait until attached device changing attached_dev[%d]\n",	MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			}
+			pr_info("%s:%s change done attached_dev[%d] waited[%d]ms \n", MUIC_DEV_NAME, __func__, muic_data->attached_dev, (30-repeat_cnt)*10);
+
+			break;
+		default:
+			pr_info("%s:%s reset called case 1 but charger is not connected attached_dev[%d]\n",	MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			break;
+		}
+
+	}	else if(!strncasecmp(buf, "9V", 2)){
+
+		if(muic_data->pdata->hv_sel == 0) {
+			pr_info("%s:%s off 5V called twice [%d]\n",	MUIC_DEV_NAME, __func__, muic_data->pdata->hv_sel);
+			return count;
+		}
+
+		muic_data->pdata->hv_sel = 0;
+
+		switch (muic_data->attached_dev) {
+		case ATTACHED_DEV_AFC_CHARGER_5V_MUIC:
+			pr_info("%s:%s reset muic to change AFC 5V => TA 9V case 2 attached_dev[%d]\n",	MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+
+			muic_data->afc_count = 0;
+			muic_data->pdata->silent_chg_change_state = SILENT_CHG_CHANGING;
+
+			max77843_muic_adcmode_switch_vbus(muic_data, true);
+			max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVTXBYTE, 0x46);
+			max77843_muic_afc_control_ping(muic_data, true);
+
+			repeat_cnt = HV_FORCE_CHANGE_WAIT_MAX;
+			while((muic_data->attached_dev != ATTACHED_DEV_AFC_CHARGER_9V_MUIC)&&(repeat_cnt--!=0)) {
+				msleep(10);
+//				pr_info("%s:%s wait until attached device changing attached_dev[%d]\n", MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			}
+			muic_data->pdata->silent_chg_change_state = SILENT_CHG_DONE;
+			pr_info("%s:%s change done attached_dev[%d] waited[%d]ms \n", MUIC_DEV_NAME, __func__, muic_data->attached_dev, (30-repeat_cnt)*10);
+
+			break;
+		case ATTACHED_DEV_QC_CHARGER_5V_MUIC:
+			pr_info("%s:%s reset muic to change QC 5V => TA 9V case 2 attached_dev[%d]\n", MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+
+			muic_data->pdata->silent_chg_change_state = SILENT_CHG_CHANGING;
+			max77843_muic_adcmode_switch_vbus(muic_data, true);
+			muic_data->is_qc_vb_settle = false;
+			max77843_write_reg(muic_data->i2c, MAX77843_MUIC_REG_HVCONTROL1, 0x3D);
+
+			repeat_cnt = HV_FORCE_CHANGE_WAIT_MAX;
+			while((muic_data->attached_dev != ATTACHED_DEV_QC_CHARGER_9V_MUIC)&&(repeat_cnt--!=0)) {
+				msleep(10);
+//				pr_info("%s:%s wait until attached device changing attached_dev[%d]\n",	MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			}
+			muic_data->pdata->silent_chg_change_state = SILENT_CHG_DONE;
+
+			pr_info("%s:%s change done attached_dev[%d] waited[%d]ms \n", MUIC_DEV_NAME, __func__, muic_data->attached_dev, (30-repeat_cnt)*10);
+
+			break;
+		default:
+			pr_info("%s:%s reset called case 2 but charger is not connected attached_dev[%d]\n",	MUIC_DEV_NAME, __func__, muic_data->attached_dev);
+			break;
+		}
+
+	}else{
+		pr_warn("%s:%s invalid value\n", MUIC_DEV_NAME, __func__);
+	}
+
+	return count;
+}
+#endif
+
 static DEVICE_ATTR(uart_sel, 0664, max77843_muic_show_uart_sel,
 		max77843_muic_set_uart_sel);
 static DEVICE_ATTR(usb_sel, 0664, max77843_muic_show_usb_sel,
@@ -1183,6 +1365,11 @@ static DEVICE_ATTR(afc_disable, 0664,
 		max77843_muic_show_afc_disable, max77843_muic_set_afc_disable);
 #endif /* CONFIG_HV_MUIC_MAX77843_AFC */
 
+#ifdef CONFIG_MUIC_HV_FORCE_LIMIT
+static DEVICE_ATTR(hv_sel, 0664, max77843_muic_show_hv,
+		max77843_muic_set_hv);
+#endif
+
 static struct attribute *max77843_muic_attributes[] = {
 	&dev_attr_uart_sel.attr,
 	&dev_attr_usb_sel.attr,
@@ -1201,6 +1388,9 @@ static struct attribute *max77843_muic_attributes[] = {
 #if defined(CONFIG_HV_MUIC_MAX77843_AFC)
 	&dev_attr_afc_disable.attr,
 #endif /* CONFIG_HV_MUIC_MAX77843_AFC */
+#ifdef CONFIG_MUIC_HV_FORCE_LIMIT
+	&dev_attr_hv_sel.attr,
+#endif
 	NULL
 };
 

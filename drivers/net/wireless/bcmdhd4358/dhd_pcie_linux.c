@@ -1,7 +1,7 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie_linux.c 601802 2015-11-24 07:05:07Z $
+ * $Id: dhd_pcie_linux.c 684667 2017-02-14 05:42:04Z $
  */
 
 
@@ -49,11 +49,11 @@
 #include <dhd_pcie.h>
 #include <dhd_linux.h>
 #ifdef CONFIG_ARCH_MSM
-#ifdef CONFIG_ARCH_MSM8994
+#ifdef CONFIG_PCI_MSM
 #include <linux/msm_pcie.h>
 #else
 #include <mach/msm_pcie.h>
-#endif /* CONFIG_ARCH_MSM8994 */
+#endif /* CONFIG_PCI_MSM */
 #endif /* CONFIG_ARCH_MSM */
 
 #define PCI_CFG_RETRY	10
@@ -232,27 +232,42 @@ static int dhdpcie_pci_resume(struct pci_dev *pdev)
 	return dhdpcie_set_suspend_resume(pdev, FALSE);
 }
 
+extern void dhd_dpc_tasklet_kill(dhd_pub_t *dhdp);
+
 static int dhdpcie_suspend_dev(struct pci_dev *dev)
 {
 	int ret;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	dhdpcie_info_t *pch = pci_get_drvdata(dev);
+	dhd_bus_t *bus = pch->bus;
+
+	if (bus->is_linkdown) {
+		DHD_ERROR(("%s: PCIe link is down\n", __FUNCTION__));
+		return BCME_ERROR;
+	}
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
 	DHD_TRACE_HW4(("%s: Enter\n", __FUNCTION__));
+	disable_irq(dev->irq);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
+	dhd_dpc_tasklet_kill(bus->dhd);
+	bus->pci_d3hot_done = 1;
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
 	pci_save_state(dev);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	pch->state = pci_store_saved_state(dev);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
 	pci_enable_wake(dev, PCI_D0, TRUE);
-	if (pci_is_enabled(dev)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 31))
+	if (pci_is_enabled(dev))
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 31)) */
 		pci_disable_device(dev);
-	}
+
 	ret = pci_set_power_state(dev, PCI_D3hot);
 	if (ret) {
 		DHD_ERROR(("%s: pci_set_power_state error %d\n",
 			__FUNCTION__, ret));
 	}
-	disable_irq(dev->irq);
+	dev->state_saved = FALSE;
 	return ret;
 }
 
@@ -261,9 +276,14 @@ static int dhdpcie_resume_dev(struct pci_dev *dev)
 	int err = 0;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	dhdpcie_info_t *pch = pci_get_drvdata(dev);
+	dhd_bus_t *bus = pch->bus;
 	pci_load_and_free_saved_state(dev, &pch->state);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
 	DHD_TRACE_HW4(("%s: Enter\n", __FUNCTION__));
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
+	bus->pci_d3hot_done = 0;
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
+	dev->state_saved = TRUE;
 	pci_restore_state(dev);
 	err = pci_enable_device(dev);
 	if (err) {
@@ -282,39 +302,77 @@ out:
 	return err;
 }
 
+static int dhdpcie_resume_host_dev(dhd_bus_t *bus)
+{
+	int bcmerror = 0;
+#ifdef USE_EXYNOS_PCIE_RC_PMPATCH
+#ifdef CONFIG_MACH_UNIVERSAL5433
+	exynos_pcie_pm_resume(EXYNOS_PCIE_CH_NUM);
+#else
+	bcmerror = exynos_pcie_pm_resume(EXYNOS_PCIE_CH_NUM);
+#endif /* CONFIG_MACH_UNIVERSAL5433 */
+#endif /* USE_EXYNOS_PCIE_RC_PMPATCH */
+#ifdef CONFIG_ARCH_MSM
+	bcmerror = dhdpcie_start_host_pcieclock(bus);
+#endif /* CONFIG_ARCH_MSM */
+	if (bcmerror < 0) {
+		DHD_ERROR(("%s: PCIe RC resume failed!!! (%d)\n",
+			__FUNCTION__, bcmerror));
+		bus->is_linkdown = 1;
+#ifdef CONFIG_ARCH_MSM
+		bus->no_cfg_restore = TRUE;
+#endif /* CONFIG_ARCH_MSM */
+	}
+
+	return bcmerror;
+}
+
+static int dhdpcie_suspend_host_dev(dhd_bus_t *bus)
+{
+	int bcmerror = 0;
+#ifdef USE_EXYNOS_PCIE_RC_PMPATCH
+	struct pci_dev *rc_pci_dev;
+	rc_pci_dev = pci_get_device(0x144d, EXYNOS_PCIE_DEVICE_ID, NULL);
+	if (rc_pci_dev) {
+		pci_save_state(rc_pci_dev);
+	}
+	exynos_pcie_pm_suspend(EXYNOS_PCIE_CH_NUM);
+#endif	/* USE_EXYNOS_PCIE_RC_PMPATCH */
+#ifdef CONFIG_ARCH_MSM
+	bcmerror = dhdpcie_stop_host_pcieclock(bus);
+#endif	/* CONFIG_ARCH_MSM */
+	return bcmerror;
+}
+
 int dhdpcie_pci_suspend_resume(dhd_bus_t *bus, bool state)
 {
 	int rc;
 	struct pci_dev *dev = bus->dev;
-#ifdef USE_EXYNOS_PCIE_RC_PMPATCH
-#ifdef CONFIG_MACH_UNIVERSAL7420
-	struct pci_dev *rc_pci_dev;
-#endif /* CONFIG_MACH_UNIVERSAL7420 */
-#endif /* USE_EXYNOS_PCIE_RC_PMPATCH */
 
 	if (state) {
+		if (bus->is_linkdown) {
+			DHD_ERROR(("%s: PCIe link was down\n", __FUNCTION__));
+			return BCME_ERROR;
+		}
 #ifndef BCMPCIE_OOB_HOST_WAKE
 		dhdpcie_pme_active(bus->osh, state);
 #endif /* BCMPCIE_OOB_HOST_WAKE */
 		rc = dhdpcie_suspend_dev(dev);
-#ifdef USE_EXYNOS_PCIE_RC_PMPATCH
 		if (!rc) {
-#ifdef CONFIG_MACH_UNIVERSAL7420
-			rc_pci_dev = pci_get_device(0x144d, EXYNOS_PCIE_DEVICE_ID, NULL);
-			pci_save_state(rc_pci_dev);
-#endif /* CONFIG_MACH_UNIVERSAL7420 */
-			exynos_pcie_pm_suspend(EXYNOS_PCIE_CH_NUM);
+			dhdpcie_suspend_host_dev(bus);
 		}
-#endif /* USE_EXYNOS_PCIE_RC_PMPATCH */
 	} else {
-#ifdef USE_EXYNOS_PCIE_RC_PMPATCH
-		exynos_pcie_pm_resume(EXYNOS_PCIE_CH_NUM);
-#endif /* USE_EXYNOS_PCIE_RC_PMPATCH */
-
+		dhdpcie_resume_host_dev(bus);
 		rc = dhdpcie_resume_dev(dev);
 #ifndef BCMPCIE_OOB_HOST_WAKE
 		dhdpcie_pme_active(bus->osh, state);
 #endif /* BCMPCIE_OOB_HOST_WAKE */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+		if (bus->is_linkdown) {
+			bus->dhd->hang_reason = HANG_REASON_PCIE_RC_LINK_UP_FAIL;
+			dhd_os_send_hang_message(bus->dhd);
+		}
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27) */
 	}
 	return rc;
 }
@@ -462,12 +520,18 @@ dhdpcie_request_irq(dhdpcie_info_t *dhdpcie_info)
 	dhd_bus_t *bus = dhdpcie_info->bus;
 	struct pci_dev *pdev = dhdpcie_info->bus->dev;
 
-	snprintf(dhdpcie_info->pciname, sizeof(dhdpcie_info->pciname),
-	    "dhdpcie:%s", pci_name(pdev));
-	if (request_irq(pdev->irq, dhdpcie_isr, IRQF_SHARED,
-	                dhdpcie_info->pciname, bus) < 0) {
+	if (!bus->irq_registered) {
+		snprintf(dhdpcie_info->pciname, sizeof(dhdpcie_info->pciname),
+			"dhdpcie:%s", pci_name(pdev));
+		if (request_irq(pdev->irq, dhdpcie_isr, IRQF_SHARED,
+			dhdpcie_info->pciname, bus) < 0) {
 			DHD_ERROR(("%s: request_irq() failed\n", __FUNCTION__));
 			return -1;
+		} else {
+			bus->irq_registered = TRUE;
+		}
+	} else {
+		DHD_ERROR(("%s: PCI IRQ is already registered\n", __FUNCTION__));
 	}
 
 	DHD_TRACE(("%s %s\n", __FUNCTION__, dhdpcie_info->pciname));
@@ -606,6 +670,7 @@ void dhdpcie_linkdown_cb(struct msm_pcie_notify *noti)
 						"due to PCIe linkdown\n",
 						__FUNCTION__));
 					bus->no_cfg_restore = TRUE;
+					bus->is_linkdown = 1;
 					DHD_OS_WAKE_LOCK(dhd);
 					dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
 					dhd_os_send_hang_message(dhd);
@@ -691,6 +756,11 @@ int dhdpcie_init(struct pci_dev *pdev)
 
 		dhdpcie_info->bus = bus;
 		dhdpcie_info->bus->dev = pdev;
+		bus->is_linkdown = 0;
+		bus->pci_d3hot_done = 0;
+#ifdef DONGLE_ENABLE_ISOLATION
+		bus->dhd->dongle_isolation = TRUE;
+#endif /* DONGLE_ENABLE_ISOLATION */
 
 #ifdef SUPPORT_LINKDOWN_RECOVERY
 #ifdef CONFIG_ARCH_MSM
@@ -702,6 +772,7 @@ int dhdpcie_init(struct pci_dev *pdev)
 		msm_pcie_register_event(&bus->pcie_event);
 		bus->no_cfg_restore = FALSE;
 #endif /* CONFIG_ARCH_MSM */
+		bus->read_shm_fail = false;
 #endif /* SUPPORT_LINKDOWN_RECOVERY */
 
 		if (bus->intr) {
@@ -782,9 +853,16 @@ dhdpcie_free_irq(dhd_bus_t *bus)
 	struct pci_dev *pdev = NULL;
 
 	DHD_TRACE(("%s: freeing up the IRQ\n", __FUNCTION__));
-	if (bus) {
+	if (!bus) {
+		return;
+	}
+
+	if (bus->irq_registered) {
 		pdev = bus->dev;
 		free_irq(pdev->irq, bus);
+		bus->irq_registered = FALSE;
+	} else {
+		DHD_ERROR(("%s: PCIe IRQ is not registered\n", __FUNCTION__));
 	}
 	DHD_TRACE(("%s: Exit\n", __FUNCTION__));
 	return;
@@ -905,11 +983,13 @@ done:
 int
 dhdpcie_disable_device(dhd_bus_t *bus)
 {
-	if (bus == NULL)
+	if (bus == NULL) {
 		return BCME_ERROR;
+	}
 
-	if (bus->dev == NULL)
+	if (bus->dev == NULL) {
 		return BCME_ERROR;
+	}
 
 	pci_disable_device(bus->dev);
 
@@ -920,50 +1000,46 @@ int
 dhdpcie_enable_device(dhd_bus_t *bus)
 {
 	int ret = BCME_ERROR;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	dhdpcie_info_t *pch;
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
 
 	DHD_TRACE(("%s Enter:\n", __FUNCTION__));
 
-	if (bus == NULL)
+	if (bus == NULL) {
 		return BCME_ERROR;
+	}
 
-	if (bus->dev == NULL)
+	if (bus->dev == NULL) {
 		return BCME_ERROR;
+	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	pch = pci_get_drvdata(bus->dev);
-	if (pch == NULL)
+	if (pch == NULL) {
 		return BCME_ERROR;
+	}
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)) && (LINUX_VERSION_CODE < \
+	KERNEL_VERSION(3, 19, 0)) && !defined(CONFIG_SOC_EXYNOS8890)
 	/* Updated with pci_load_and_free_saved_state to compatible
-	 * with kernel 3.14 or higher
+	 * with Kernel version 3.14.0 to 3.18.41.
 	 */
-	if (pci_load_and_free_saved_state(bus->dev, &pch->default_state)) {
+	pci_load_and_free_saved_state(bus->dev, &pch->default_state);
+	pch->default_state = pci_store_saved_state(bus->dev);
+#else
+	pci_load_saved_state(bus->dev, pch->default_state);
+#endif /* LINUX_VERSION >= 3.14.0 && LINUX_VERSION < 3.19.0 && !CONFIG_SOC_EXYNOS8890 */
+
+	pci_restore_state(bus->dev);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) */
+
+	ret = pci_enable_device(bus->dev);
+	if (ret) {
 		pci_disable_device(bus->dev);
 	} else {
-#elif ((LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) && \
-	(LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)))
-	if (pci_load_saved_state(bus->dev, pch->default_state))
-		pci_disable_device(bus->dev);
-	else {
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) and
-		* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) && \
-		* (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
-		*/
-
-		pci_restore_state(bus->dev);
-		ret = pci_enable_device(bus->dev);
-		if (!ret)
-			pci_set_master(bus->dev);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
+		pci_set_master(bus->dev);
 	}
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) and
-		* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) && \
-		* (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
-		*/
-
-	if (ret)
-		pci_disable_device(bus->dev);
 
 	return ret;
 }

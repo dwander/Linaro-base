@@ -23,6 +23,7 @@
 
 #define ENABLE 1
 #define DISABLE 0
+extern bool slate_mode_state;
 
 static enum power_supply_property max77843_charger_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -187,10 +188,6 @@ static int max77843_get_charging_health(struct max77843_charger_data *charger)
 	int retry_cnt;
 	u8 chg_dtls_00, chg_dtls, reg_data;
 	u8 chg_cnfg_00, chg_cnfg_01 ,chg_cnfg_02, chg_cnfg_04, chg_cnfg_09, chg_cnfg_12;
-
-        /* watchdog kick */
-        max77843_update_reg(charger->i2c, MAX77843_CHG_REG_CHG_CNFG_06,
-                            MAX77843_WDTCLR, CHG_CNFG_06_WDTCLR_MASK);
 
 	max77843_read_reg(charger->i2c,
 			  MAX77843_CHG_REG_CHG_DTLS_01, &reg_data);
@@ -389,7 +386,7 @@ static void max77843_set_buck(struct max77843_charger_data *charger,
 	max77843_read_reg(charger->i2c,
 		MAX77843_CHG_REG_CHG_CNFG_00, &reg_data);
 
-	if (enable)
+	if (enable && !slate_mode_state)
 		reg_data |= MAX77843_MODE_BUCK;
 	else
 		reg_data &= ~MAX77843_MODE_BUCK;
@@ -493,7 +490,6 @@ static void max77843_set_charge_current(struct max77843_charger_data *charger,
 {
 	int curr_step = 50;
 	u8 reg_data;
-        union power_supply_propval value;
 
 	max77843_read_reg(charger->i2c,
 			  MAX77843_CHG_REG_CHG_CNFG_02, &reg_data);
@@ -508,11 +504,6 @@ static void max77843_set_charge_current(struct max77843_charger_data *charger,
 		max77843_write_reg(charger->i2c,MAX77843_CHG_REG_CHG_CNFG_02, reg_data);
 	}
 
-        value.intval = fast_charging_current;
-        psy_do_property("battery", set,
-                        POWER_SUPPLY_PROP_CURRENT_AVG, value);
-
-
 	pr_info("[%s] REG(0x%02x) DATA(0x%02x), CURRENT(%d)\n",
 		__func__, MAX77843_CHG_REG_CHG_CNFG_02,
 		reg_data, fast_charging_current);
@@ -524,7 +515,6 @@ static void max77843_set_topoff_current(struct max77843_charger_data *charger,
 {
 	int curr_base, curr_step;
 	u8 reg_data;
-	union power_supply_propval value;
 
 	if (charger->pmic_ver >= 0x02) {
 		curr_base = 125;
@@ -551,10 +541,6 @@ static void max77843_set_topoff_current(struct max77843_charger_data *charger,
 
 	max77843_write_reg(charger->i2c,
 			   MAX77843_CHG_REG_CHG_CNFG_03, reg_data);
-
-	value.intval = termination_current;
-	psy_do_property("battery", set,
-		POWER_SUPPLY_PROP_ENERGY_FULL, value);
 
 }
 
@@ -816,10 +802,6 @@ static void max77843_charger_initialize(struct max77843_charger_data *charger)
 	max77843_read_reg(charger->i2c, MAX77843_CHG_REG_CHG_CNFG_04, &reg_data);
 	pr_info("%s: battery cv voltage 0x%x\n", __func__, reg_data);
 
-        /* Watchdog Enable */
-        max77843_update_reg(charger->i2c, MAX77843_CHG_REG_CHG_CNFG_00,
-                            MAX77843_WDTEN, MAX77843_WDTEN);
-
 	max77843_test_read(charger);
 }
 
@@ -836,17 +818,14 @@ static void max77843_set_float_voltage(struct max77843_charger_data *charger, in
 	pr_info("%s: battery cv voltage 0x%x\n", __func__, reg_data);
 }
 
-static int max77843_get_float_voltage(struct max77843_charger_data *charger)
+static u8 max77843_get_float_voltage(struct max77843_charger_data *charger)
 {
-	int float_voltage;
 	u8 reg_data = 0;
 
 	max77843_read_reg(charger->i2c, MAX77843_CHG_REG_CHG_CNFG_04, &reg_data);
 	reg_data &= 0x3F;
-        float_voltage = reg_data * 25 + 3650;
-	pr_info("%s: battery cv reg : 0x%x, float voltage val : %d\n",
-		__func__, reg_data, float_voltage);
-	return float_voltage;
+	pr_info("%s: battery cv voltage 0x%x\n", __func__, reg_data);
+	return reg_data;
 }
 #endif
 
@@ -1050,11 +1029,6 @@ static int max77843_chg_set_property(struct power_supply *psy,
 		pr_info("%s: float voltage(%d)\n", __func__, val->intval);
 		max77843_set_float_voltage(charger, val->intval);
 		break;
-        case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-                  pr_info("%s : charger enable(%d)\n", __func__, val->intval);
-                  max77843_set_charger_state(charger, val->intval);
-                  charger->is_charging = val->intval;
-                  break;
 #endif
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		charger->siop_level = val->intval;
@@ -1154,9 +1128,6 @@ static int max77843_chg_set_property(struct power_supply *psy,
 					     | CHG_CNFG_00_BOOST_MASK
 					     | CHG_CNFG_00_DIS_MUIC_CTRL_MASK));
 		}
-		break;
-	case POWER_SUPPLY_PROP_ENERGY_FULL:
-		max77843_set_topoff_current(charger, val->intval, (70 * 60));
 		break;
 	default:
 		return -EINVAL;
@@ -1784,10 +1755,6 @@ static int __devinit max77843_charger_probe(struct platform_device *pdev)
 	}
 
 	pr_info("%s: Max77843 Charger Driver Loaded\n", __func__);
-
-        /* watchdog kick */
-        max77843_update_reg(charger->i2c, MAX77843_CHG_REG_CHG_CNFG_06,
-                            MAX77843_WDTCLR, CHG_CNFG_06_WDTCLR_MASK);
 
 	return 0;
 

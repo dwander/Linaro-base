@@ -42,17 +42,12 @@ void *gsc_ion_init(struct gsc_dev *gsc)
 		VB2ION_CTX_VMCONTIG | VB2ION_CTX_IOMMU | VB2ION_CTX_UNCACHED);
 }
 
-static unsigned long gsc_vb2_plane_addr(struct vb2_buffer *vb, u32 plane_no,
-					bool need_phys)
+static unsigned long gsc_vb2_plane_addr(struct vb2_buffer *vb, u32 plane_no)
 {
 	void *cookie = vb2_plane_cookie(vb, plane_no);
 	dma_addr_t dva = 0;
 
-	if (need_phys) {
-		BUG_ON(vb2_ion_phys_address(cookie, &dva) != 0);
-	} else {
-		WARN_ON(vb2_ion_dma_address(cookie, &dva) != 0);
-	}
+	WARN_ON(vb2_ion_dma_address(cookie, &dva) != 0);
 
 	return dva;
 }

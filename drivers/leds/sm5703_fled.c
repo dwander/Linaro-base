@@ -22,7 +22,11 @@
 #include <linux/power_supply.h>
 #include <linux/version.h>
 #include <linux/of.h>
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../drivers/battery_v2/include/charger/sm5703_charger.h"
+#else
 #include <linux/battery/charger/sm5703_charger.h>
+#endif
 #ifdef CONFIG_SM5703_MUIC
 #include <linux/i2c/sm5703-muic.h>
 #endif
@@ -130,7 +134,9 @@ static ssize_t flash_store(struct device *dev, struct device_attribute *attr,
 {
 	int sel = 0;
 	sm_fled_info_t *fled_info = sm_fled_get_info_by_name(NULL);
+	sm5703_fled_info_t *info = (sm5703_fled_info_t *)fled_info;
 	int i, nValue=0;
+	int torch_current = 0;
 	struct pinctrl *pinctrl;
 
 	BUG_ON(fled_info == NULL);
@@ -154,30 +160,13 @@ static ssize_t flash_store(struct device *dev, struct device_attribute *attr,
 			sm5703_fled_flash(fled_info,TURN_WAY_GPIO);
 			sm5703_fled_notification(fled_info);
 
+			/* Set torch current */
+			sm5703_fled_set_movie_current_sel(fled_info, info->pdata->fled_movie_current);
 			pinctrl = devm_pinctrl_get_select(sm5703_dev, FLED_PINCTRL_STATE_SLEEP);
 			if (IS_ERR(pinctrl))
 				pr_err("%s: flash %s pins are not configured\n", __func__, FLED_PINCTRL_STATE_SLEEP);
 			else
 				rear_flash_status = 0;
-			break;
-
-		case 1:
-			pr_info("Torch ON\n");
-			assistive_light = true;
-			sel = sm5703_fled_set_movie_current_sel(fled_info, 2);
-			if(sel < 0){
-				pr_err("SM5703 fled current set fail \n");
-			}
-
-			pinctrl = devm_pinctrl_get_select(sm5703_dev, FLED_PINCTRL_STATE_DEFAULT);
-			if (IS_ERR(pinctrl))
-				pr_err("%s: flash %s pins are not configured\n", __func__, FLED_PINCTRL_STATE_DEFAULT);
-			else
-				rear_flash_status = 1;
-
-			sm5703_fled_set_mode(fled_info,FLASHLIGHT_MODE_TORCH);
-			sm5703_fled_notification(fled_info);
-			sm5703_fled_flash(fled_info,TURN_WAY_GPIO);
 			break;
 
 		case 99:
@@ -215,6 +204,47 @@ static ssize_t flash_store(struct device *dev, struct device_attribute *attr,
 			sm5703_fled_flash(fled_info,TURN_WAY_GPIO);
 			break;
 
+		case 1:
+		case 1001:
+		case 1002:
+		case 1004:
+		case 1006:
+		case 1009:
+			pr_info("Torch ON\n");
+			assistive_light = true;
+			if (1001 <= nValue && nValue <= 1010) {
+				/* (value) 1001, 1002, 1004, 1006, 1009 */
+				if (nValue <= 1001)
+					torch_current = 20;
+				else if (nValue <= 1002)
+					torch_current = 40;
+				else if (nValue <= 1004)
+					torch_current = 60;
+				else if (nValue <= 1006)
+					torch_current = 90;
+				else if (nValue <= 1009)
+					torch_current = 120;
+				else
+					torch_current = 60;
+			} else {
+				torch_current = 60;
+			}
+			sel = sm5703_fled_set_movie_current_sel(fled_info, SM5703_MOVIE_CURRENT(torch_current));
+			if(sel < 0){
+				pr_err("SM5703 fled current set fail \n");
+			}
+
+			pinctrl = devm_pinctrl_get_select(sm5703_dev, FLED_PINCTRL_STATE_DEFAULT);
+			if (IS_ERR(pinctrl))
+				pr_err("%s: flash %s pins are not configured\n", __func__, FLED_PINCTRL_STATE_DEFAULT);
+			else
+				rear_flash_status = 1;
+
+			sm5703_fled_set_mode(fled_info, FLASHLIGHT_MODE_TORCH);
+			sm5703_fled_notification(fled_info);
+			sm5703_fled_flash(fled_info, TURN_WAY_GPIO);
+			break;
+
 		default:
 			pr_err("Torch NC:%d\n", nValue);
 			break;
@@ -224,6 +254,7 @@ static ssize_t flash_store(struct device *dev, struct device_attribute *attr,
 }
 
 static DEVICE_ATTR(rear_flash, S_IWUSR|S_IWGRP, NULL, flash_store);
+static DEVICE_ATTR(rear_torch_flash, S_IWUSR|S_IWGRP, NULL, flash_store);
 
 int create_flash_sysfs(void)
 {
@@ -244,6 +275,12 @@ int create_flash_sysfs(void)
 	if (unlikely(err < 0)) {
 		pr_err("flash_sysfs: failed to create device file, %s\n",
 				dev_attr_rear_flash.attr.name);
+	}
+
+	err = device_create_file(flash_dev, &dev_attr_rear_torch_flash);
+	if (unlikely(err < 0)) {
+		pr_err("flash_sysfs: failed to create device file, %s\n",
+				dev_attr_rear_torch_flash.attr.name);
 	}
 	return 0;
 }
@@ -908,6 +945,16 @@ static int sm5703_fled_remove(struct platform_device *pdev)
 	platform_device_unregister(&sm_fled_pdev);
 	mutex_destroy(&fled_info->led_lock);
 	kfree(fled_info);
+
+	if(flash_dev) {
+		device_remove_file(flash_dev, &dev_attr_rear_flash);
+		device_remove_file(flash_dev, &dev_attr_rear_torch_flash);
+	}
+
+	if (camera_class && flash_dev) {
+		device_destroy(camera_class, flash_dev->devt);
+	}
+
 	return 0;
 }
 

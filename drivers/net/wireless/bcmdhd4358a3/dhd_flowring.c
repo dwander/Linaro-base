@@ -1,6 +1,6 @@
 /*
  * Broadcom Dongle Host Driver (DHD), Flow ring specific code at top level
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -336,13 +336,19 @@ dhd_flow_rings_ifindex2role(dhd_pub_t *dhdp, uint8 ifindex)
 #ifdef WLTDLS
 bool is_tdls_destination(dhd_pub_t *dhdp, uint8 *da)
 {
-	tdls_peer_node_t *cur = dhdp->peer_tbl.node;
+	unsigned long flags;
+	tdls_peer_node_t *cur = NULL;
+
+	DHD_TDLS_LOCK(&dhdp->tdls_lock, flags);
+	cur = dhdp->peer_tbl.node;
 	while (cur != NULL) {
 		if (!memcmp(da, cur->addr, ETHER_ADDR_LEN)) {
+			DHD_TDLS_UNLOCK(&dhdp->tdls_lock, flags);
 			return TRUE;
 		}
 		cur = cur->next;
 	}
+	DHD_TDLS_UNLOCK(&dhdp->tdls_lock, flags);
 	return FALSE;
 }
 #endif /* WLTDLS */

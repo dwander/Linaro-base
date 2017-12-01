@@ -80,14 +80,6 @@ config DECON_LCD
 	depends on DECON
 	bool "Select LCD panel driver"
 
-config DECON_LCD_S6E8AA0
-	depends on DECON_LCD && DECON_MIPI_DSI
-	tristate "S6E8AA0 AMOLED driver"
-
-config DECON_LCD_S6E3FA0
-	depends on DECON_LCD && DECON_MIPI_DSI
-	tristate "S6E8FA0 AMOLED driver"
-
 config DECON_LCD_S6E3FA2
 	depends on DECON_LCD && DECON_MIPI_DSI
 	tristate "S6E8FA2 AMOLED driver"

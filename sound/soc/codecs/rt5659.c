@@ -32,12 +32,12 @@
 
 #include "rt5659.h"
 
-#ifdef CONFIG_DYNAMIC_MICBIAS_CONTROL_RT5659
 static struct snd_soc_codec *registered_codec;
-#endif
 
 static struct class *codec_efs_class;
 static struct device *codec_efs_dev;
+
+u8 efs_mount_done = 0;
 
 /* Delay(ms) after powering on DMIC for avoiding pop */
 static int dmic_power_delay = 450;
@@ -73,6 +73,8 @@ static struct reg_default init_list[] = {
 	{RT5659_4BTN_IL_CMD_1,		0x000b},
 	{RT5659_MONO_DRE_CTRL_2, 	0x003a},
 	{RT5659_DUMMY_2, 		0x001d},
+	{RT5659_STO_DRE_CTRL_2, 	0x0041},
+	{RT5659_STO_DRE_CTRL_3, 	0x040c},	
 };
 #define RT5659_INIT_REG_LEN ARRAY_SIZE(init_list)
 
@@ -1516,6 +1518,24 @@ int rt5659_button_detect(struct snd_soc_codec *codec)
 	return btn_type;
 }
 EXPORT_SYMBOL(rt5659_button_detect);
+
+void rt5659_earmic_mute(int mute)
+{
+	static unsigned int reg1d;
+
+	if(mute)
+	{
+		reg1d = snd_soc_read(registered_codec, RT5659_MONO_ADC_DIG_VOL);
+		snd_soc_update_bits(registered_codec, RT5659_MONO_ADC_DIG_VOL,
+			RT5659_L_MUTE | RT5659_R_MUTE,
+			RT5659_L_MUTE | RT5659_R_MUTE);
+	}
+	else
+	{
+		snd_soc_update_bits(registered_codec, RT5659_MONO_ADC_DIG_VOL,
+		RT5659_L_MUTE | RT5659_R_MUTE, reg1d);
+	}
+}
 
 int rt5659_check_jd_status(struct snd_soc_codec *codec)
 {
@@ -3365,14 +3385,17 @@ static int rt5659_sto1_filter_event(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
-	static unsigned int sto_dac_mixer, mono_dac_mixer;
+	struct rt5659_priv *rt5659 = snd_soc_codec_get_drvdata(codec);
+
 
 	pr_debug("%s\n", __func__);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		sto_dac_mixer = snd_soc_read(codec, RT5659_STO_DAC_MIXER);
-		mono_dac_mixer = snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
+		rt5659->dac1_sto_dac_mixer =
+			snd_soc_read(codec, RT5659_STO_DAC_MIXER);
+		rt5659->dac1_mono_dac_mixer =
+			snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
 
 		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
 			RT5659_M_DAC_L1_STO_L | RT5659_M_DAC_R1_STO_L |
@@ -3387,14 +3410,10 @@ static int rt5659_sto1_filter_event(struct snd_soc_dapm_widget *w,
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
-		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
-			RT5659_M_DAC_L1_STO_L | RT5659_M_DAC_R1_STO_L |
-			RT5659_M_DAC_L1_STO_R | RT5659_M_DAC_R1_STO_R,
-			sto_dac_mixer);
-		snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
-			RT5659_M_DAC_L1_MONO_L | RT5659_M_DAC_R1_MONO_L |
-			RT5659_M_DAC_L1_MONO_R | RT5659_M_DAC_R1_MONO_R,
-			mono_dac_mixer);
+		if ((rt5659->dac1_sto_dac_mixer & 0xa0a0) != 0xa0a0 ||
+			(rt5659->dac1_mono_dac_mixer & 0xa0a0) != 0xa0a0)
+			schedule_delayed_work(&rt5659->dac1_depop_work,
+				msecs_to_jiffies(0));
 		break;
 
 	default:
@@ -3408,14 +3427,18 @@ static int rt5659_monol_filter_event(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
-	static unsigned int sto_dac_mixer, mono_dac_mixer;
+	struct rt5659_priv *rt5659 = snd_soc_codec_get_drvdata(codec);
+
 
 	pr_debug("%s\n", __func__);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		sto_dac_mixer = snd_soc_read(codec, RT5659_STO_DAC_MIXER);
-		mono_dac_mixer = snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
+		rt5659->dac2l_sto_dac_mixer =
+			snd_soc_read(codec, RT5659_STO_DAC_MIXER);
+		rt5659->dac2l_mono_dac_mixer =
+			snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
+
 
 		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
 			RT5659_M_DAC_L2_STO_L | RT5659_M_DAC_L2_STO_R,
@@ -3423,16 +3446,13 @@ static int rt5659_monol_filter_event(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
 			RT5659_M_DAC_L2_MONO_L | RT5659_M_DAC_L2_MONO_R,
 			RT5659_M_DAC_L2_MONO_L | RT5659_M_DAC_L2_MONO_R);
-
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
-		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
-			RT5659_M_DAC_L2_STO_L | RT5659_M_DAC_L2_STO_R,
-			sto_dac_mixer);
-		snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
-			RT5659_M_DAC_L2_MONO_L | RT5659_M_DAC_L2_MONO_R,
-			mono_dac_mixer);
+		if ((rt5659->dac2l_sto_dac_mixer & 0x0808) != 0x0808 ||
+			(rt5659->dac2l_mono_dac_mixer & 0x0808) != 0x0808)
+			schedule_delayed_work(&rt5659->dac2l_depop_work,
+				msecs_to_jiffies(0));
 		break;
 
 	default:
@@ -3446,14 +3466,17 @@ static int rt5659_monor_filter_event(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
-	static unsigned int sto_dac_mixer, mono_dac_mixer;
+	struct rt5659_priv *rt5659 = snd_soc_codec_get_drvdata(codec);
+
 
 	pr_debug("%s\n", __func__);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		sto_dac_mixer = snd_soc_read(codec, RT5659_STO_DAC_MIXER);
-		mono_dac_mixer = snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
+		rt5659->dac2r_sto_dac_mixer =
+			snd_soc_read(codec, RT5659_STO_DAC_MIXER);
+		rt5659->dac2r_mono_dac_mixer =
+			snd_soc_read(codec, RT5659_MONO_DAC_MIXER);
 
 		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
 			RT5659_M_DAC_R2_STO_L | RT5659_M_DAC_R2_STO_R,
@@ -3464,12 +3487,10 @@ static int rt5659_monor_filter_event(struct snd_soc_dapm_widget *w,
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
-		snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
-			RT5659_M_DAC_R2_STO_L | RT5659_M_DAC_R2_STO_R,
-			sto_dac_mixer);
-		snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
-			RT5659_M_DAC_R2_MONO_L | RT5659_M_DAC_R2_MONO_R,
-			mono_dac_mixer);
+		if ((rt5659->dac2r_sto_dac_mixer & 0x0202) != 0x0202 ||
+			(rt5659->dac2r_mono_dac_mixer & 0x0202) != 0x0202)
+			schedule_delayed_work(&rt5659->dac2r_depop_work,
+				msecs_to_jiffies(0));
 		break;
 
 	default:
@@ -4974,6 +4995,7 @@ static ssize_t rt5659_codec_efs_store(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct rt5659_priv *rt5659 = i2c_get_clientdata(client);
 
+	efs_mount_done = 1;
 	wake_up_interruptible(&rt5659->waitqueue_cal);
 
 	return count;
@@ -5045,6 +5067,26 @@ void rt5659_dynamic_control_micbias(int micb_out_val)
 }
 #endif
 
+void rt5659_micbias1_output(int on)
+{
+	if (on) {
+		snd_soc_update_bits(registered_codec, RT5659_PWR_ANLG_1,
+			RT5659_PWR_MB | RT5659_PWR_VREF1 | RT5659_PWR_VREF2,
+			RT5659_PWR_MB | RT5659_PWR_VREF1 | RT5659_PWR_VREF2);
+		snd_soc_update_bits(registered_codec, RT5659_PWR_ANLG_2,
+			RT5659_PWR_MB1, RT5659_PWR_MB1);
+	} else {
+		snd_soc_update_bits(registered_codec, RT5659_PWR_ANLG_2,
+			RT5659_PWR_MB1, 0);
+
+		if (registered_codec->dapm.bias_level == SND_SOC_BIAS_OFF)
+			snd_soc_update_bits(registered_codec, RT5659_PWR_ANLG_1,
+				RT5659_PWR_MB | RT5659_PWR_VREF1 |
+				RT5659_PWR_VREF2 | RT5659_PWR_FV1 |
+				RT5659_PWR_FV2, 0);
+	}
+}
+
 static int rt5659_reg_init(struct snd_soc_codec *codec)
 {
 	struct rt5659_priv *rt5659 = snd_soc_codec_get_drvdata(codec);
@@ -5055,6 +5097,16 @@ static int rt5659_reg_init(struct snd_soc_codec *codec)
 
 	return 0;
 }
+#if defined(CONFIG_SEC_DEV_JACK)|| defined(CONFIG_SEC_DEV_JACK_ANT)
+bool codec_probe_done = false;
+
+bool is_codec_probe_done(void)
+{
+	pr_info("start is_codec_probe_done %d\n", codec_probe_done);
+	return codec_probe_done;
+}
+EXPORT_SYMBOL(is_codec_probe_done);
+#endif /* defined(CONFIG_SEC_DEV_JACK)|| defined(CONFIG_SEC_DEV_JACK_ANT) */
 
 static int rt5659_probe(struct snd_soc_codec *codec)
 {
@@ -5064,9 +5116,7 @@ static int rt5659_probe(struct snd_soc_codec *codec)
 	pr_debug("%s\n", __func__);
 
 	rt5659->codec = codec;
-#ifdef CONFIG_DYNAMIC_MICBIAS_CONTROL_RT5659
 	registered_codec = codec;
-#endif
 
 	rt5659_reg_init(codec);
 	rt5659_set_bias_level(codec, SND_SOC_BIAS_OFF);
@@ -5103,6 +5153,9 @@ static int rt5659_probe(struct snd_soc_codec *codec)
 			"Failed to create codec_efs_mount sysfs files: %d\n", ret);
 		return ret;
 	}
+#if defined(CONFIG_SEC_DEV_JACK)|| defined(CONFIG_SEC_DEV_JACK_ANT)
+	codec_probe_done = true;
+#endif /* defined(CONFIG_SEC_DEV_JACK)|| defined(CONFIG_SEC_DEV_JACK_ANT) */
 
 	schedule_delayed_work(&rt5659->calibrate_work, msecs_to_jiffies(0));
 
@@ -5547,6 +5600,60 @@ static void rt5659_i2s_switch_slave_work_2(struct work_struct *work)
 		RT5659_I2S_MS_S);
 }
 
+static void rt5659_dac1_depop_work(struct work_struct *work)
+{
+	struct rt5659_priv *rt5659 =
+		container_of(work, struct rt5659_priv, dac1_depop_work.work);
+	struct snd_soc_codec *codec = rt5659->codec;
+
+	mutex_lock(&rt5659->codec->card->dapm_mutex);
+	usleep_range(10000, 10000);
+
+	snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
+		RT5659_M_DAC_L1_STO_L | RT5659_M_DAC_R1_STO_L |
+		RT5659_M_DAC_L1_STO_R | RT5659_M_DAC_R1_STO_R,
+		rt5659->dac1_sto_dac_mixer);
+	snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
+		RT5659_M_DAC_L1_MONO_L | RT5659_M_DAC_R1_MONO_L |
+		RT5659_M_DAC_L1_MONO_R | RT5659_M_DAC_R1_MONO_R,
+		rt5659->dac1_mono_dac_mixer);
+	mutex_unlock(&rt5659->codec->card->dapm_mutex);
+}
+
+static void rt5659_dac2l_depop_work(struct work_struct *work)
+{
+	struct rt5659_priv *rt5659 =
+		container_of(work, struct rt5659_priv, dac2l_depop_work.work);
+	struct snd_soc_codec *codec = rt5659->codec;
+
+	mutex_lock(&rt5659->codec->card->dapm_mutex);
+	usleep_range(10000, 10000);
+	snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
+		RT5659_M_DAC_L2_STO_L | RT5659_M_DAC_L2_STO_R,
+		rt5659->dac2l_sto_dac_mixer);
+	snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
+		RT5659_M_DAC_L2_MONO_L | RT5659_M_DAC_L2_MONO_R,
+		rt5659->dac2l_mono_dac_mixer);
+	mutex_unlock(&rt5659->codec->card->dapm_mutex);
+}
+
+static void rt5659_dac2r_depop_work(struct work_struct *work)
+{
+	struct rt5659_priv *rt5659 =
+		container_of(work, struct rt5659_priv, dac2r_depop_work.work);
+	struct snd_soc_codec *codec = rt5659->codec;
+
+	mutex_lock(&rt5659->codec->card->dapm_mutex);
+	usleep_range(10000, 10000);
+	snd_soc_update_bits(codec, RT5659_STO_DAC_MIXER,
+		RT5659_M_DAC_R2_STO_L | RT5659_M_DAC_R2_STO_R,
+		rt5659->dac2r_sto_dac_mixer);
+	snd_soc_update_bits(codec, RT5659_MONO_DAC_MIXER,
+		RT5659_M_DAC_R2_MONO_L | RT5659_M_DAC_R2_MONO_R,
+		rt5659->dac2r_mono_dac_mixer);
+	mutex_unlock(&rt5659->codec->card->dapm_mutex);
+}
+
 int rt5659_cal_data_write_efs(struct rt5659_cal_data *cal_data)
 {
 	struct file *fp = NULL;
@@ -5613,26 +5720,9 @@ int rt5659_cal_data_read_efs(struct rt5659_cal_data *cal_data)
 
 int rt5659_check_efs_mounted(void)
 {
-	struct file *fp = NULL;
-	mm_segment_t oldfs = {0};
-	int ret = 0;
+	pr_info("%s : efs_mount_done - %d\n", __func__, efs_mount_done);
 
-	oldfs = get_fs();
-	set_fs(get_ds());
-
-	fp = filp_open("/efs/", O_RDONLY, 0);
-
-	if (IS_ERR(fp)) {
-		pr_err("%s : efs is not mount yet\n", __func__);
-		ret = false;
-	} else {
-		pr_info("%s : efs is mounted\n", __func__);
-		filp_close(fp, NULL);
-		ret = true;
-	}
-
-	set_fs(oldfs);
-	return ret;
+	return efs_mount_done;
 }
 
 static void rt5659_calibrate_handler(struct work_struct *work)
@@ -5848,6 +5938,10 @@ static int rt5659_i2c_probe(struct i2c_client *i2c,
 		rt5659_i2s_switch_slave_work_1);
 	INIT_DELAYED_WORK(&rt5659->i2s_switch_slave_work[RT5659_AIF3],
 		rt5659_i2s_switch_slave_work_2);
+	INIT_DELAYED_WORK(&rt5659->dac1_depop_work, rt5659_dac1_depop_work);
+	INIT_DELAYED_WORK(&rt5659->dac2l_depop_work, rt5659_dac2l_depop_work);
+	INIT_DELAYED_WORK(&rt5659->dac2r_depop_work, rt5659_dac2r_depop_work);
+
 	INIT_DELAYED_WORK(&rt5659->calibrate_work,
 		rt5659_calibrate_handler);
 	init_waitqueue_head(&rt5659->waitqueue_cal);

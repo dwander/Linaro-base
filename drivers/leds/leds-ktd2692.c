@@ -138,6 +138,9 @@ ssize_t ktd2692_store(struct device *dev,
 
 			global_ktd2692data->mode_status = KTD2692_DISABLES_MOVIE_FLASH_MODE;
 			spin_lock_irqsave(&global_ktd2692data->int_lock, flags);
+			/* to make default movie current */
+			ktd2692_write_data(global_ktd2692data->movie_current_value|
+								KTD2692_ADDR_MOVIE_CURRENT_SETTING);
 			ktd2692_write_data(global_ktd2692data->mode_status|
 								KTD2692_ADDR_MOVIE_FLASHMODE_CONTROL);
 			spin_unlock_irqrestore(&global_ktd2692data->int_lock, flags);
@@ -160,6 +163,8 @@ ssize_t ktd2692_store(struct device *dev,
 		if (ret) {
 			LED_ERROR("Failed to requeset ktd2692_led_control\n");
 		} else {
+			int brightness_value = 0;
+			int torch_level_list[10] = {1, 2, 2, 3, 3, 4, 4, 4, 5, 5}; /* 25mA, 50mA, 75mA, 100mA, 125mA */
 			LED_INFO("KTD2692-TORCH ON. : E(%d)\n", value);
 
 			global_ktd2692data->mode_status = KTD2692_ENABLE_MOVIE_MODE;
@@ -170,7 +175,15 @@ ssize_t ktd2692_store(struct device *dev,
 			ktd2692_write_data(global_ktd2692data->flash_timeout|
 								KTD2692_ADDR_FLASH_TIMEOUT_SETTING);
 #endif
-			ktd2692_write_data(global_ktd2692data->movie_current_value|
+			if (value == 100)
+				brightness_value = KTD2692_MOVIE_CURRENT10; /* 250mA */
+			else if (value >= 1001 && value <= 1010)
+				/* Torch mode, step 1~5 value : 1001, 1002, 1004, 1006, 1009 */
+				brightness_value = torch_level_list[value - 1001];
+			else
+				brightness_value = KTD2692_MOVIE_CURRENT3; /* 75mA */
+
+			ktd2692_write_data(brightness_value|
 								KTD2692_ADDR_MOVIE_CURRENT_SETTING);
 			ktd2692_write_data(global_ktd2692data->mode_status|
 								KTD2692_ADDR_MOVIE_FLASHMODE_CONTROL);

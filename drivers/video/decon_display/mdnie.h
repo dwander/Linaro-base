@@ -34,7 +34,7 @@ enum SCENARIO {
 	HMT_16_MODE,
 	SCENARIO_MAX,
 	DMB_NORMAL_MODE = 20,
-	DMB_MODE_MAX,
+	DMB_MODE_MAX
 };
 
 enum BYPASS {
@@ -56,7 +56,16 @@ enum ACCESSIBILITY {
 enum HBM {
 	HBM_OFF,
 	HBM_ON,
-	HBM_MAX,
+	HBM_MAX
+};
+
+enum COLOR_OFFSET_FUNC {
+	COLOR_OFFSET_FUNC_NONE,
+	COLOR_OFFSET_FUNC_F1,
+	COLOR_OFFSET_FUNC_F2,
+	COLOR_OFFSET_FUNC_F3,
+	COLOR_OFFSET_FUNC_F4,
+	COLOR_OFFSET_FUNC_MAX
 };
 
 enum MDNIE_CMD {
@@ -120,6 +129,12 @@ typedef int (*mdnie_w)(unsigned int a, unsigned int v);
 typedef int (*mdnie_r)(unsigned int a);
 #endif
 
+struct rgb_info {
+	int r;
+	int g;
+	int b;
+};
+
 struct mdnie_info {
 	struct clk		*bus_clk;
 	struct clk		*clk;
@@ -138,7 +153,6 @@ struct mdnie_info {
 	unsigned int		tuning;
 	unsigned int		accessibility;
 	unsigned int		color_correction;
-	unsigned int		auto_brightness;
 
 	char			path[50];
 
@@ -148,16 +162,15 @@ struct mdnie_info {
 
 	struct notifier_block	fb_notif;
 
-	unsigned int white_r;
-	unsigned int white_g;
-	unsigned int white_b;
+	struct rgb_info		wrgb_current;
+
 	struct mdnie_table table_buffer;
 	mdnie_t sequence_buffer[256];
 };
 
-extern int mdnie_calibration(int *r);
 extern int mdnie_open_file(const char *path, char **fp);
 extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r);
-extern struct mdnie_table *mdnie_request_table(char *path, struct mdnie_table *s);
+extern ssize_t attr_store_for_each(struct class *cls, const char *name, const char *buf, size_t size);
+extern struct class *get_mdnie_class(void);
 
 #endif /* __MDNIE_H__ */

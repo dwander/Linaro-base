@@ -201,3 +201,11 @@ config CFG80211_REG_NOT_UPDATED
 	  Regulation should not updated even if device found other country
 	  Access Point Beacon once since device should find around other
 	  Access Points.
+
+config CFG80211_SUPPORT_VENDOR_COMMANDS
+	bool "Support vendor commands"
+	depends on CFG80211
+	default n
+	help
+	  There are no functions for support vendor commands in 3.10 kernel.
+	  Merge functions from 3.18 kernel.

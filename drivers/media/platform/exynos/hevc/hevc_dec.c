@@ -2505,7 +2505,44 @@ static int hevc_stop_streaming(struct vb2_queue *q)
 			hevc_debug(2, "Decoding can be started now\n");
 		}
 	} else if (q->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-		hevc_cleanup_queue(&ctx->src_queue, &ctx->vq_src);
+		while (!list_empty(&ctx->src_queue)) {
+			struct hevc_buf *src_buf;
+			int csd, condition = 0;
+
+			src_buf = list_entry(ctx->src_queue.next, struct hevc_buf, list);
+			csd = src_buf->vb.v4l2_buf.reserved2 & FLAG_CSD ? 1 : 0;
+
+			if (FW_HAS_SPECIAL_PARSING(dev) && csd) {
+				spin_unlock_irqrestore(&dev->irqlock, flags);
+				hevc_clean_ctx_int_flags(ctx);
+				if (need_to_special_parsing(ctx)) {
+					ctx->state = HEVCINST_SPECIAL_PARSING;
+					condition = HEVC_R2H_CMD_SEQ_DONE_RET;
+					hevc_info("try to special parsing! (before NAL_START)\n");
+				} else if (need_to_special_parsing_nal(ctx)) {
+					ctx->state = HEVCINST_SPECIAL_PARSING_NAL;
+					condition = HEVC_R2H_CMD_FRAME_DONE_RET;
+					hevc_info("try to special parsing! (after NAL_START)\n");
+				} else {
+					hevc_info("can't parsing CSD!, state = %d\n", ctx->state);
+				}
+				if (condition) {
+					spin_lock_irq(&dev->condlock);
+					set_bit(ctx->num, &dev->ctx_work_bits);
+					spin_unlock_irq(&dev->condlock);
+					hevc_try_run(dev);
+					if (hevc_wait_for_done_ctx(ctx, condition)) {
+						hevc_err("special parsing time out\n");
+						hevc_cleanup_timeout(ctx);
+					}
+				}
+				spin_lock_irqsave(&dev->irqlock, flags);
+			}
+			vb2_set_plane_payload(&src_buf->vb, 0, 0);
+			vb2_buffer_done(&src_buf->vb, VB2_BUF_STATE_ERROR);
+			list_del(&src_buf->list);
+		}
+
 		INIT_LIST_HEAD(&ctx->src_queue);
 		ctx->src_queue_cnt = 0;
 

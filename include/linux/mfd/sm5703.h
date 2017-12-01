@@ -36,8 +36,11 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/mfd/sm5703_irq.h>
-
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../drivers/battery_v2/include/sec_charging_common.h"
+#else
 #include <linux/battery/sec_charging_common.h>
+#endif
 
 #define SM5703_DRV_VER "0.0.1"
 
@@ -88,21 +91,41 @@ struct sm5703_regulator_data {
 };
 
 struct sm5703_fled_platform_data;
-
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+typedef struct sm5703_charger_platform_data {
+	sec_charging_current_t *charging_current;
+	int chg_float_voltage;
+	int chg_autostop;
+	int chg_autoset;
+	int chg_aiclen;
+	int chg_aiclth;
+	int fg_vol_val;
+	int fg_soc_val;
+	int fg_curr_avr_val;
+	char *charger_name;
+	int chgen_gpio; /* nCHGEN Pin */
+	sec_battery_full_charged_t full_check_type_2nd;
+} sm5703_charger_platform_data_t;
+#else
 typedef struct sm5703_charger_platform_data {
     sec_charging_current_t *charging_current_table;
     int chg_float_voltage;
+    int full_check_type;
+    int full_check_type_2nd;
     int chg_autostop;
     int chg_autoset;
     int chg_aiclen;
     int chg_aiclth;
 	int chg_vbuslimit;
+	int bst_iq3limit;
     int fg_vol_val;
     int fg_soc_val;
     int fg_curr_avr_val;
     char *charger_name;
     int chgen_gpio; //nCHGEN Pin
+	int otg_current;
 } sm5703_charger_platform_data_t;
+#endif
 
 struct sm5703_mfd_platform_data {
 	sm5703_regulator_platform_data_t *regulator_platform_data;

@@ -183,10 +183,17 @@ static const unsigned char SEQ_GPARAM_ELVSS[] = {
 	0x15
 };
 
+#ifdef CONFIG_SOC_EXYNOS5433
+static const unsigned char SEQ_SET_TE_LINE[] = {
+	0xB9,
+	0x02, 0x07, 0x82, 0x00, 0x09
+};
+#else
 static const unsigned char SEQ_SET_TE_LINE[] = {
 	0xB9,
 	0x02, 0x07, 0x7C, 0x07, 0x7E
 };
+#endif
 
 static const unsigned char SEQ_TE_ON[] = {
 	0x35,
@@ -263,6 +270,11 @@ static const unsigned char SEQ_ACL_ON_OPR_AVR[] = {
 static unsigned char SEQ_PARTIAL_AREA[] = {
 	0x30,
 	0x00, 0x00, 0x00, 0x00
+};
+
+static unsigned char SEQ_WA_PRE_DISP_AREA[] = {
+	0x30,
+	0x07, 0x7E, 0x07, 0x7F,
 };
 
 static const unsigned char SEQ_NORMAL_DISP[] = {

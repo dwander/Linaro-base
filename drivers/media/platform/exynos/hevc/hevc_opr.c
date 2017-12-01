@@ -447,6 +447,9 @@ int hevc_set_dec_stream_buffer(struct hevc_ctx *ctx, dma_addr_t buf_addr,
 	hevc_debug(2, "strm_size: 0x%08x cpb_buf_size: 0x%x\n",
 			 strm_size, cpb_buf_size);
 
+	if (strm_size == 0)
+		hevc_info("stream size is 0\n");
+
 	WRITEL(strm_size, HEVC_D_STREAM_DATA_SIZE);
 	WRITEL(buf_addr, HEVC_D_CPB_BUFFER_ADDR);
 	WRITEL(cpb_buf_size, HEVC_D_CPB_BUFFER_SIZE);
@@ -638,9 +641,12 @@ int hevc_init_decode(struct hevc_ctx *ctx)
 	if (ctx->dst_fmt->fourcc == V4L2_PIX_FMT_NV12MT_16X16)
 		reg |= (0x1 << HEVC_D_OPT_TILE_MODE_SHIFT);
 
+	/* Parsing all including PPS */
+	reg |= (0x1 << HEVC_D_OPT_SPECIAL_PARSING_SHIFT);
+
 	hevc_debug(2, "HEVC_D_DEC_OPTIONS : 0x%x\n", reg);
 
-	WRITEL(0x20, HEVC_D_DEC_OPTIONS);
+	WRITEL(reg, HEVC_D_DEC_OPTIONS);
 
 	switch (ctx->dst_fmt->fourcc) {
 	case V4L2_PIX_FMT_NV12M:
@@ -1093,6 +1099,7 @@ void hevc_try_run(struct hevc_dev *dev)
 			ret = hevc_run_dec_last_frames(ctx);
 			break;
 		case HEVCINST_RUNNING:
+		case HEVCINST_SPECIAL_PARSING_NAL:
 			ret = hevc_run_dec_frame(ctx);
 			break;
 		case HEVCINST_INIT:
@@ -1102,6 +1109,7 @@ void hevc_try_run(struct hevc_dev *dev)
 			ret = hevc_close_inst(ctx);
 			break;
 		case HEVCINST_GOT_INST:
+		case HEVCINST_SPECIAL_PARSING:
 			hevc_run_init_dec(ctx);
 			break;
 		case HEVCINST_HEAD_PARSED:

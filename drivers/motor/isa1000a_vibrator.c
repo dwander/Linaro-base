@@ -132,7 +132,7 @@ static void haptic_enable(struct timed_output_dev *tout_dev, int value)
 	schedule_work(&hap_data->work);
 	spin_lock_irqsave(&hap_data->lock, flags);
 	if (value > 0 ) {
-		pr_info("[VIB] %s : value %d\n", __func__, value);
+		pr_info("[VIB] %s : value %d %d\n", __func__, value, hap_data->duty);
 		if (value > hap_data->pdata->max_timeout)
 			value = hap_data->pdata->max_timeout;
 		hrtimer_start(timer, ns_to_ktime((u64)value * NSEC_PER_MSEC),

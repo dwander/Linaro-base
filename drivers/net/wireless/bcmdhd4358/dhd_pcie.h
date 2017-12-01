@@ -1,7 +1,7 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie.h 607278 2015-12-18 11:05:38Z $
+ * $Id: dhd_pcie.h 680234 2017-01-19 04:48:17Z $
  */
 
 
@@ -32,11 +32,11 @@
 #include <hnd_cons.h>
 #ifdef SUPPORT_LINKDOWN_RECOVERY
 #ifdef CONFIG_ARCH_MSM
-#ifdef CONFIG_ARCH_MSM8994
+#ifdef CONFIG_PCI_MSM
 #include <linux/msm_pcie.h>
 #else
 #include <mach/msm_pcie.h>
-#endif /* CONFIG_ARCH_MSM8994 */
+#endif /* CONFIG_PCI_MSM */
 #endif /* CONFIG_ARCH_MSM */
 #endif /* SUPPORT_LINKDOWN_RECOVERY */
 #ifdef DHD_USE_IDLECOUNT
@@ -183,6 +183,7 @@ typedef struct dhd_bus {
 	struct msm_pcie_register_event pcie_event;
 	bool no_cfg_restore;
 #endif /* CONFIG_ARCH_MSM */
+	bool read_shm_fail;
 #endif /* SUPPORT_LINKDOWN_RECOVERY */
 #ifdef DHD_USE_IDLECOUNT
 	int32 idlecount;		/* Activity timeout counter */
@@ -199,6 +200,9 @@ typedef struct dhd_bus {
 	uint32 d0_inform_in_use_cnt;
 	uint8 force_suspend;
 	uint32 d3_ack_war_cnt;
+	bool irq_registered;
+	uint8 is_linkdown;
+	uint8 pci_d3hot_done;
 } dhd_bus_t;
 
 /* function declarations */

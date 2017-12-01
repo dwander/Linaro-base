@@ -349,9 +349,11 @@ int mxr_hdmi_blank(struct mxr_device *mdev, int blank)
 	 * 1. cable out
 	 * 2. suspend (V4L2_CID_TV_BLANK is called at suspend)
 	 */
-	if (ctrl.value != (HDMI_STREAMING | HPD_LOW) && !blank)
-		mxr_warn(mdev, "invalid blank condition. ctrl(%#x), blank(%d)\n",
-				ctrl.value, blank);
+	if ((ctrl.value & HDMI_STREAMING) == 0) {
+ 		mxr_warn(mdev, "invalid blank condition. ctrl(%#x), blank(%d)\n",
+ 				ctrl.value, blank);
+		return ret;
+	}
 
 	ret = v4l2_subdev_call(to_outsd(mdev), video, s_stream, 0);
 	if (ret) {

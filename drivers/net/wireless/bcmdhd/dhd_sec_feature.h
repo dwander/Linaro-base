@@ -1,7 +1,7 @@
 /*
  * Customer HW 4 dependant file
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -80,6 +80,10 @@
 #define HW_OOB
 #endif /* CONFIG_MACH_SAMSUNG_ESPRESSO && CONFIG_MACH_SAMSUNG_ESPRESSO_10 */
 
+#if defined(CONFIG_ARCH_MDM9607) && defined(CONFIG_DOT)
+#undef SUPPORT_MULTIPLE_REVISION
+#endif /* CONFIG_ARCH_MDM9607 */
+
 #if defined(CONFIG_MACH_UNIVERSAL5430) && !defined(CONFIG_BCM43455)
 #undef CUSTOM_SET_CPUCORE
 #define PRIMARY_CPUCORE 0
@@ -121,6 +125,10 @@
 #define HW_OOB
 #define READ_MACADDR
 #endif /* CONFIG_ARCH_MSM7X30 */
+
+#ifdef CONFIG_MACH_A7LTE
+#undef HW_OOB
+#endif /* CONFIG_MACH_A7LTE */
 
 #if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_U1_NA_SPR) || \
 	defined(CONFIG_MACH_VIENNAEUR) || defined(CONFIG_MACH_LT03EUR) || \
@@ -164,6 +172,10 @@
 #endif /* CONFIG_WLAN_REGION_CODE == 150 */
 #endif /* CONFIG_WLAN_REGION_CODE >= 100 && CONFIG_WLAN_REGION_CODE < 200 */
 
+#if defined(CONFIG_WIFI_MULTIPLE_CHIP)
+#define MULTIPLE_CHIP_4345X
+#endif /* CONFIG_WIFI_MULTIPLE_CHIP */
+
 #if defined(CONFIG_V1A) || defined(CONFIG_V2A) || defined(CONFIG_MACH_VIENNAEUR)
 #define SUPPORT_MULTIPLE_CHIPS
 #endif /* CONFIG_V1A || CONFIG_V2A || CONFIG_MACH_VIENNAEUR */
@@ -201,7 +213,6 @@
 
 #if (CONFIG_WLAN_REGION_CODE == 202) /* KTT */
 #define VLAN_MODE_OFF
-#define CUSTOM_KEEP_ALIVE_SETTING	30000
 #define FULL_ROAMING_SCAN_PERIOD_60_SEC
 
 #ifdef CONFIG_MACH_UNIVERSAL5410

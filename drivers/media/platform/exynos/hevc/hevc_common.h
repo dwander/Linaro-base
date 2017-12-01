@@ -61,6 +61,7 @@
 #define STUFF_BYTE		4
 
 #define FLAG_LAST_FRAME		0x80000000
+#define FLAG_CSD		0x20000000
 
 /**
  * enum hevc_inst_type - The type of an HEVC device node.
@@ -100,6 +101,8 @@ enum hevc_inst_state {
 	HEVCINST_ABORT_INST,
 	HEVCINST_DPB_FLUSHING,
 	HEVCINST_VPS_PARSED_ONLY,
+	HEVCINST_SPECIAL_PARSING,
+	HEVCINST_SPECIAL_PARSING_NAL,
 };
 
 /**
@@ -596,12 +599,23 @@ static inline unsigned int hevc_version(struct hevc_dev *dev)
 #else
 #define FW_HAS_LAST_DISP_INFO(dev)	0
 #endif
+#define FW_HAS_SPECIAL_PARSING(dev)	(dev->fw.date >= 0x170228)
 
 #define HW_LOCK_CLEAR_MASK		(0xFFFFFFFF)
 
 /* Extra information for Decoder */
 #define	DEC_SET_DYNAMIC_DPB		(1 << 1)
 #define	DEC_SET_LAST_FRAME_INFO		(1 << 2)
+
+#define need_to_special_parsing(ctx)		\
+	((ctx->state == HEVCINST_GOT_INST) ||	\
+	 (ctx->state == HEVCINST_HEAD_PARSED))
+#define need_to_special_parsing_nal(ctx)	\
+	((ctx->state == HEVCINST_RUNNING) ||	\
+	 (ctx->state == HEVCINST_ABORT))
+
+
+
 
 struct hevc_fmt {
 	char *name;

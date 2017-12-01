@@ -1446,7 +1446,8 @@ int fimc_is_sec_readcal_otprom(struct device *dev, int position)
 		fimc_is_i2c_write(client, 0xA02, 0x03);
 		fimc_is_i2c_write(client, 0xA00, 0x01);
 	}
-	fimc_is_i2c_read(client, cal_map_version, 0xA22, 0x4);
+	fimc_is_i2c_read(client, finfo->cal_map_ver, 0xA22, FIMC_IS_CAL_MAP_VER_SIZE);
+	fimc_is_i2c_read(client, finfo->header_ver, 0xA15, FIMC_IS_HEADER_VER_SIZE);
 
 	fimc_is_i2c_write(client, 0xA00, 0x04);
 	fimc_is_i2c_write(client, 0xA00, 0x00);
@@ -1511,9 +1512,7 @@ crc_retry:
 	pr_info("---- OTPROM data info\n");
 
 	/* CRC check */
-	ret = fimc_is_sec_check_front_otp_crc32(buf);
-
-	if (!ret && (retry > 0)) {
+	if (!fimc_is_sec_check_front_otp_crc32(buf) && (retry > 0)) {
 		retry--;
 		goto crc_retry;
 	}

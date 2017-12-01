@@ -112,6 +112,9 @@ static enum power_supply_property sec_charger_props[] = {
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CHARGE_OTG_CONTROL,
+#if defined(CONFIG_BATTERY_SWELLING)
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+#endif
 #ifdef WPC_CHECK_CVPRM_FEATURE
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 #endif
@@ -333,8 +336,12 @@ static void max77804_set_input_current(struct max77804_charger_data *charger,
 		max77804_set_buck(charger, ENABLE);
 
 	set_current_reg = cur / charger->input_curr_limit_step;
-	if (charger->cable_type == POWER_SUPPLY_TYPE_BATTERY)
-		goto set_input_current;
+	if (charger->cable_type == POWER_SUPPLY_TYPE_BATTERY) {
+		if (charger->status != POWER_SUPPLY_STATUS_CHARGING)
+			goto set_input_current;
+		else
+			goto exit;
+	}
 
 	max77804_read_reg(charger->max77804->i2c,
 		set_reg, &reg_data);
@@ -756,6 +763,48 @@ static int max77804_get_health_state(struct max77804_charger_data *charger)
 	return state;
 }
 
+static u8 max77804_get_float_voltage_data(
+					int float_voltage)
+{
+	u8 data = 0x16;
+
+	if (float_voltage >= 4400)
+		data = 0x1f;
+	else if (float_voltage >= 4375)
+		data = 0x1e;
+	else if (float_voltage >= 4350)
+		data = 0x1d;
+	else if (float_voltage >= 4340)
+		data = 0x1c;
+	else
+		data = (float_voltage - 3650) / 25;
+	return data;
+}
+
+#if defined(CONFIG_BATTERY_SWELLING)
+static void max77804_set_float_voltage(struct max77804_charger_data *charger, int float_voltage)
+{
+	u8 reg_data = 0;
+
+	reg_data = max77804_get_float_voltage_data(float_voltage);
+	max77804_update_reg(charger->max77804->i2c, MAX77804_CHG_REG_CHG_CNFG_04,
+			(reg_data << CHG_CNFG_04_CHG_CV_PRM_SHIFT),
+			CHG_CNFG_04_CHG_CV_PRM_MASK);
+	max77804_read_reg(charger->max77804->i2c, MAX77804_CHG_REG_CHG_CNFG_04, &reg_data);
+	pr_info("%s: battery cv voltage 0x%x\n", __func__, reg_data);
+}
+
+static u8 max77804_get_float_voltage(struct max77804_charger_data *charger)
+{
+	u8 reg_data = 0;
+
+	max77804_read_reg(charger->max77804->i2c, MAX77804_CHG_REG_CHG_CNFG_04, &reg_data);
+	reg_data &= 0x1F;
+	pr_info("%s: battery cv voltage 0x%x\n", __func__, reg_data);
+	return reg_data;
+}
+#endif
+
 static int sec_chg_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -808,6 +857,11 @@ static int sec_chg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		break;
+#if defined(CONFIG_BATTERY_SWELLING)
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = max77804_get_float_voltage(charger);
+		break;
+#endif
 #ifdef WPC_CHECK_CVPRM_FEATURE
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = max77804_get_charge_votage(charger);
@@ -928,6 +982,31 @@ static int sec_chg_set_property(struct power_supply *psy,
 				}
 			}
 		}
+
+		if (charger->pdata->full_check_type_2nd == SEC_BATTERY_FULLCHARGED_CHGPSY) {
+			union power_supply_propval chg_mode;
+			psy_do_property("battery", get, POWER_SUPPLY_PROP_CHARGE_NOW, chg_mode);
+
+			if (chg_mode.intval == SEC_BATTERY_CHARGING_2ND) {
+				max77804_set_charger_state(charger, 0);
+				max77804_set_topoff_current(charger,
+							    charger->pdata->charging_current[
+								    charger->cable_type].full_check_current_2nd,
+							    (70 * 60));
+			} else {
+				max77804_set_topoff_current(charger,
+							    charger->pdata->charging_current[
+								    charger->cable_type].full_check_current_1st,
+							    (70 * 60));
+			}
+		} else {
+			max77804_set_topoff_current(charger,
+				charger->pdata->charging_current[
+				val->intval].full_check_current_1st,
+				charger->pdata->charging_current[
+				val->intval].full_check_current_2nd);
+		}
+
 		max77804_set_charger_state(charger, charger->is_charging);
 		/* if battery full, only disable charging  */
 		if ((charger->status == POWER_SUPPLY_STATUS_CHARGING) ||
@@ -946,11 +1025,6 @@ static int sec_chg_set_property(struct power_supply *psy,
 			else
 				max77804_set_input_current(charger,
 					set_charging_current_max);
-			max77804_set_topoff_current(charger,
-				charger->pdata->charging_current[
-				val->intval].full_check_current_1st,
-				charger->pdata->charging_current[
-				val->intval].full_check_current_2nd);
 		}
 		break;
 	/* val->intval : input charging current */
@@ -967,6 +1041,12 @@ static int sec_chg_set_property(struct power_supply *psy,
 		max77804_set_input_current(charger,
 				val->intval);
 		break;
+#if defined(CONFIG_BATTERY_SWELLING)
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		pr_info("%s: float voltage(%d)\n", __func__, val->intval);
+		max77804_set_float_voltage(charger, val->intval);
+		break;
+#endif
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		charger->siop_level = val->intval;
 		if (charger->is_charging) {
@@ -1075,24 +1155,6 @@ static int sec_chg_set_property(struct power_supply *psy,
 	}
 
 	return 0;
-}
-
-static u8 max77804_get_float_voltage_data(
-					int float_voltage)
-{
-	u8 data = 0x16;
-
-	if (float_voltage >= 4400)
-		data = 0x1f;
-	else if (float_voltage >= 4375)
-		data = 0x1e;
-	else if (float_voltage >= 4350)
-		data = 0x1d;
-	else if (float_voltage >= 4340)
-		data = 0x1c;
-	else
-		data = (float_voltage - 3650) / 25;
-	return data;
 }
 
 static void max77804_charger_initialize(struct max77804_charger_data *charger)
@@ -1599,6 +1661,11 @@ static int sec_charger_parse_dt(struct max77804_charger_data *charger)
 	if (!np) {
 		pr_err("%s np NULL\n", __func__);
 	} else {
+		ret = of_property_read_u32(np, "battery,full_check_type_2nd",
+					&pdata->full_check_type_2nd);
+		if (ret)
+			pr_info("%s : Full check type 2nd is Empty\n", __func__);
+
 		p = of_get_property(np, "battery,input_current_limit", &len);
 
 		len = len / sizeof(u32);

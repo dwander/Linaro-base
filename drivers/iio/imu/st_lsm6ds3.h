@@ -161,6 +161,7 @@ struct lsm6ds3_data {
 	u8 odr;
 	bool skip_gyro_data;
 	int skip_gyro_cnt;
+	int states;
 };
 
 struct lsm6ds3_sensor_data {
@@ -194,6 +195,7 @@ void st_lsm6ds3_common_shutdown(struct lsm6ds3_data *cdata);
 int st_lsm6ds3_set_enable(struct lsm6ds3_sensor_data *sdata, bool enable);
 int st_lsm6ds3_set_axis_enable(struct lsm6ds3_sensor_data *sdata, u8 value);
 int st_lsm6ds3_set_drdy_irq(struct lsm6ds3_sensor_data *sdata, bool state);
+void st_lsm6ds3_set_irq(struct lsm6ds3_data *cdata, bool enable);
 
 #ifdef CONFIG_IIO_BUFFER
 int st_lsm6ds3_allocate_rings(struct lsm6ds3_data *cdata);

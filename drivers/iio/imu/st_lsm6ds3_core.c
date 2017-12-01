@@ -689,12 +689,37 @@ int st_lsm6ds3_reg_read(struct lsm6ds3_data *cdata, u8 reg_addr, int len, u8 *da
 }
 
 
+void st_lsm6ds3_set_irq (struct lsm6ds3_data *cdata, bool enable)
+{
+
+	if (enable) {	
+		cdata->states++;
+		dev_info(cdata->dev, "%s enable state count:(%d)...\n", __func__, cdata->states);
+		if(cdata->states == 1) {
+			dev_info(cdata->dev, "%s enable irq come (%d)...\n", __func__, cdata->irq);
+			enable_irq(cdata->irq);
+			enable_irq_wake(cdata->irq);
+		}
+	} else if (cdata->states != 0 && enable == 0) {
+		if(cdata->states == 1) {
+			disable_irq_wake(cdata->irq);
+			disable_irq_nosync(cdata->irq);
+			dev_info(cdata->dev, "%s disable irq come:(%d)...\n", __func__, cdata->states);
+			cdata->states = 0;
+		}
+		else 
+			cdata->states--;
+		dev_info(cdata->dev, "%s disable state count:(%d)...\n", __func__, cdata->states);
+	}
+}
+	
 int st_lsm6ds3_set_drdy_irq(struct lsm6ds3_sensor_data *sdata, bool state)
 {
 	u8 reg_addr, mask, value;
 #if (LSM6DS3_HRTIMER_TRIGGER > 0)
 	struct lsm6ds3_sensor_data *sd;
 #endif
+	dev_info(sdata->cdata->dev, "%s start (%d)...\n", __func__, state);
 
 	if (state)
 		value = ST_LSM6DS3_EN_BIT;
@@ -774,12 +799,10 @@ int st_lsm6ds3_set_drdy_irq(struct lsm6ds3_sensor_data *sdata, bool state)
 	dev_info(sdata->cdata->dev, "%s sensors_enabled %d (%x)...\n", __func__, sdata->sindex, sdata->cdata->sensors_enabled);
 	switch (sdata->sindex) {
 	case ST_INDIO_DEV_ACCEL:
-	case ST_INDIO_DEV_SIGN_MOTION:
 	case ST_INDIO_DEV_STEP_COUNTER:
 	case ST_INDIO_DEV_STEP_DETECTOR:
 	case ST_INDIO_DEV_TILT:
-		mask = (1 << ST_INDIO_DEV_ACCEL) | (1 << ST_INDIO_DEV_SIGN_MOTION)
-					| (1 << ST_INDIO_DEV_STEP_COUNTER) | (1 << ST_INDIO_DEV_STEP_DETECTOR)
+		mask = (1 << ST_INDIO_DEV_ACCEL) | (1 << ST_INDIO_DEV_STEP_COUNTER) | (1 << ST_INDIO_DEV_STEP_DETECTOR)
 					| (1 << ST_INDIO_DEV_TILT);
 		sd = iio_priv(sdata->cdata->indio_dev[ST_INDIO_DEV_ACCEL]);
 		if (state) {
@@ -814,6 +837,17 @@ int st_lsm6ds3_set_drdy_irq(struct lsm6ds3_sensor_data *sdata, bool state)
 			}
 		}
 		break;
+	case ST_INDIO_DEV_SIGN_MOTION:
+		if(state) {
+			dev_info(sdata->cdata->dev, "%s ST_INDIO_DEV_SIGN_MOTION enable irq come...\n", __func__);
+			st_lsm6ds3_set_irq(sdata->cdata, 1);
+		} else if(sdata->cdata->sa_flag == 0) {
+			dev_info(sdata->cdata->dev, "%s ST_INDIO_DEV_SIGN_MOTION disable irq come ...\n", __func__);
+			st_lsm6ds3_set_irq(sdata->cdata, 0);
+		}
+		return st_lsm6ds3_write_data_with_mask(sdata->cdata,
+				reg_addr, mask, value);
+		
 	default:
 		return -EINVAL;
 	}
@@ -1186,6 +1220,8 @@ static int st_lsm6ds3_set_odr(struct lsm6ds3_sensor_data *sdata,
 		if (st_lsm6ds3_odr_table.odr_avl[i].hz == odr)
 			break;
 	}
+	pr_info("%s odr = %d, index=%d", __func__, odr, i);
+  
 	if (i == ST_LSM6DS3_ODR_LIST_NUM)
 		return -EINVAL;
 
@@ -1453,18 +1489,6 @@ static void st_lsm6ds3_sa_irq_work(struct work_struct *work)
 	}
 }
 
-static irqreturn_t st_lsm6ds3_sa_isr(int irq, void *private)
-{
-	struct lsm6ds3_data *cdata = (struct lsm6ds3_data *)private;
-
-	pr_info("%s - ########### smart alert irq ############\n", __func__);
-
-	cdata->sa_irq_state = 1;
-	wake_lock_timeout(&cdata->sa_wake_lock, msecs_to_jiffies(3000));
-	schedule_delayed_work(&cdata->sa_irq_work, msecs_to_jiffies(100));
-
-	return IRQ_HANDLED;
-}
 #endif
 
 static int st_lsm6ds3_gyro_selftest_parameters(struct lsm6ds3_data *cdata)
@@ -2838,7 +2862,7 @@ static ssize_t st_lsm6ds3_sysfs_set_smart_alert(struct device *dev,
 			dev_info(cdata->dev, "fs= %d, thr= %d[mg] -> %d\n",
 				fs, ST_LSM6DS3_SA_DYNAMIC_THRESHOLD, threshold);
 
-			odr |= 0x10;
+			odr |= 0x20;
 			dur = 0x40;
 		}
 
@@ -2867,13 +2891,10 @@ static ssize_t st_lsm6ds3_sysfs_set_smart_alert(struct device *dev,
 		mdelay(100);
 		st_lsm6ds3_reg_read(cdata, ST_LSM6DS3_WU_SRC_ADDR, 1, &val);
 		dev_info(cdata->dev, "%s - src= %x\n", __func__, val);
-
-		enable_irq_wake(cdata->irq);
-		enable_irq(cdata->irq);
+		st_lsm6ds3_set_irq(cdata, 1);
 		dev_info(cdata->dev, "%s - smart alert is on!\n", __func__);
 	} else if ((enable == 0) && (cdata->sa_flag == 1)) {
-		disable_irq_wake(cdata->irq);
-		disable_irq_nosync(cdata->irq);
+		st_lsm6ds3_set_irq(cdata, 0);
 		cdata->sa_flag = 0;
 
 		if (cdata->drdy_int_pin == 1)
@@ -2896,6 +2917,9 @@ static ssize_t st_lsm6ds3_sysfs_set_smart_alert(struct device *dev,
 		val &= ~ST_LSM6DS3_ACCEL_ODR_MASK;
 		if (cdata->sensors_enabled & (1 << ST_INDIO_DEV_ACCEL))
 			val |= 0x50;
+		else if (cdata->sensors_enabled & (1 << ST_INDIO_DEV_SIGN_MOTION))
+			val |= 0x20;
+
 		st_lsm6ds3_reg_write(cdata, ST_LSM6DS3_CTRL1_ADDR, 1, &val);
 
 		pr_info("%s - smart alert is off! irq = %d, odr 0x%x\n",
@@ -3362,7 +3386,7 @@ static ssize_t st_lsm6ds3_vendor_temperature(struct device *dev,
 		pr_err("%s - st_lsm6ds3_i2c_read_dev failed ret = %d\n",
 			__func__, ret);
 
-	temp = (data[0] | (data[1] << 8)) / 16 + 25;
+	temp = (s16)(data[0] | (data[1] << 8)) / 16 + 25;
 
 	/*pr_err("%s %x,%x, %d\n", __func__, data[0], data[1], temp);*/
 
@@ -3504,7 +3528,7 @@ int st_lsm6ds3_common_probe(struct lsm6ds3_data *cdata, int irq)
 	struct lsm6ds3_sensor_data *sdata;
 
 	cdata->err_count = 0;
-
+	cdata->states = 0;
 	err = cdata->tf->read(&cdata->tb, cdata->dev,
 					ST_LSM6DS3_WAI_ADDRESS, 1, &wai);
 	if (err < 0) {
@@ -3653,13 +3677,6 @@ int st_lsm6ds3_common_probe(struct lsm6ds3_data *cdata, int irq)
 	if (cdata->irq > 0) {
 		wake_lock_init(&cdata->sa_wake_lock, WAKE_LOCK_SUSPEND,
 		       LSM6DS3_DEV_NAME "_sa_wake_lock");
-		err = request_irq(irq, st_lsm6ds3_sa_isr,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-					cdata->name, cdata);
-		if (err < 0) {
-			dev_err(cdata->dev, "%s - can't allocate irq.\n", __func__);
-			goto sa_request_irq;
-		}
 		disable_irq(cdata->irq);
 
 		INIT_DELAYED_WORK(&cdata->sa_irq_work, st_lsm6ds3_sa_irq_work);
@@ -3669,10 +3686,6 @@ int st_lsm6ds3_common_probe(struct lsm6ds3_data *cdata, int irq)
 #endif
 
 	return 0;
-#if (LSM6DS3_SMART_ALERT > 0)
-sa_request_irq:
-	wake_lock_destroy(&cdata->sa_wake_lock);
-#endif
 err_accel_sensor_register_failed:
 	sensors_unregister(cdata->dev, gyro_sensor_attrs);
 err_gyro_sensor_register_failed:
@@ -3754,8 +3767,8 @@ int st_lsm6ds3_common_suspend(struct lsm6ds3_data *cdata)
 	for (i = 0; i < ST_INDIO_DEV_NUM; i++) {
 		sdata = iio_priv(cdata->indio_dev[i]);
 		if ((1 << sdata->sindex) & cdata->sensors_enabled) {
-			if (!((sdata->sindex == ST_INDIO_DEV_ACCEL)
-				&& (cdata->sa_flag))) {
+			if (!((sdata->sindex == ST_INDIO_DEV_ACCEL && (cdata->sa_flag))
+					 || sdata->sindex == ST_INDIO_DEV_SIGN_MOTION )) {
 				err = st_lsm6ds3_set_enable(sdata, false);
 				if (err < 0)
 					return err;
@@ -3785,8 +3798,8 @@ int st_lsm6ds3_common_resume(struct lsm6ds3_data *cdata)
 		sdata = iio_priv(cdata->indio_dev[i]);
 
 		if ((1 << sdata->sindex) & tmp_sensors_enabled) {
-			if (!((sdata->sindex == ST_INDIO_DEV_ACCEL)
-					&& (cdata->sa_flag))) {
+			if (!((sdata->sindex == ST_INDIO_DEV_ACCEL && (cdata->sa_flag))
+					|| sdata->sindex == ST_INDIO_DEV_SIGN_MOTION )) {
 				err = st_lsm6ds3_set_enable(sdata, true);
 				if (err < 0)
 					return err;

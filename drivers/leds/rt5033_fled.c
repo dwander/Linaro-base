@@ -171,6 +171,7 @@ static ssize_t flash_store(struct device *dev, struct device_attribute *attr,
 }
 
 static DEVICE_ATTR(rear_flash, S_IWUSR|S_IWGRP, NULL, flash_store);
+static DEVICE_ATTR(rear_torch_flash, S_IWUSR|S_IWGRP, NULL, flash_store);
 
 int create_flash_sysfs(void)
 {
@@ -193,6 +194,11 @@ int create_flash_sysfs(void)
 	if (unlikely(err < 0)) {
 		pr_err("flash_sysfs: failed to create device file, %s\n",
 				dev_attr_rear_flash.attr.name);
+	}
+	err = device_create_file(flash_dev, &dev_attr_rear_torch_flash);
+	if (unlikely(err < 0)) {
+		pr_err("flash_sysfs: failed to create device file, %s\n",
+			dev_attr_rear_torch_flash.attr.name);
 	}
 	return 0;
 }

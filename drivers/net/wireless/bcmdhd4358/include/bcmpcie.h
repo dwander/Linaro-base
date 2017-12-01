@@ -2,7 +2,7 @@
  * Broadcom PCIE
  * Software-specific definitions shared between device and host side
  * Explains the shared area between host and dongle
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmpcie.h 533992 2015-02-12 06:55:52Z $
+ * $Id: bcmpcie.h 633120 2016-04-21 13:26:05Z $
  */
 
 #ifndef	_bcmpcie_h_
@@ -218,6 +218,7 @@ extern pciedev_shared_t pciedev_shared;
 #define	 HOST_RING_BASE(x)	((x)->ring_base.va)
 #define	 HOST_RING_END(x)	((uint8 *)HOST_RING_BASE((x)) + \
 			 ((RING_MAX_ITEM((x))-1)*RING_LEN_ITEMS((x))))
+#define  HOST_RING_BASE_PHY(x)	((x)->ring_base.pa)
 
 #define WRITE_SPACE_AVAIL_CONTINUOUS(r, w, d)		((w >= r) ? (d - w) : (r - w))
 #define WRITE_SPACE_AVAIL(r, w, d)	(d - (NTXPACTIVE(r, w, d)) - 1)

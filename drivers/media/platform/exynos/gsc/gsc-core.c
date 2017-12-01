@@ -1116,7 +1116,6 @@ int gsc_prepare_addr(struct gsc_ctx *ctx, struct vb2_buffer *vb,
 {
 	struct gsc_dev *gsc = ctx->gsc_dev;
 	int ret = 0;
-	bool need_phys = gsc_ctx_protected_content(ctx);
 	u32 pix_size;
 
 	if (IS_ERR(vb) || IS_ERR(frame)) {
@@ -1129,7 +1128,7 @@ int gsc_prepare_addr(struct gsc_ctx *ctx, struct vb2_buffer *vb,
 	gsc_dbg("num_planes= %d, nr_comp= %d, pix_size= %d",
 		frame->fmt->num_planes, frame->fmt->nr_comp, pix_size);
 
-	addr->y = gsc->vb2->plane_addr(vb, 0, need_phys);
+	addr->y = gsc->vb2->plane_addr(vb, 0);
 
 	if (frame->fmt->num_planes == 1) {
 		switch (frame->fmt->nr_comp) {
@@ -1158,9 +1157,9 @@ int gsc_prepare_addr(struct gsc_ctx *ctx, struct vb2_buffer *vb,
 		}
 	} else {
 		if (frame->fmt->num_planes >= 2)
-			addr->cb = gsc->vb2->plane_addr(vb, 1, need_phys);
+			addr->cb = gsc->vb2->plane_addr(vb, 1);
 		if (frame->fmt->num_planes == 3)
-			addr->cr = gsc->vb2->plane_addr(vb, 2, need_phys);
+			addr->cr = gsc->vb2->plane_addr(vb, 2);
 	}
 
 	if (frame->fmt->pixelformat == V4L2_PIX_FMT_YVU420 ||
@@ -1180,7 +1179,6 @@ static irqreturn_t gsc_irq_handler(int irq, void *priv)
 {
 	struct gsc_dev *gsc = priv;
 	int gsc_irq;
-	irqreturn_t irqret = IRQ_HANDLED;
 
 	gsc->pending_isr_time = sched_clock();
 	if (test_bit(ST_OUTPUT_OPEN, &gsc->state)) {
@@ -1213,10 +1211,40 @@ static irqreturn_t gsc_irq_handler(int irq, void *priv)
 	}
 
 	if (test_and_clear_bit(ST_M2M_RUN, &gsc->state)) {
+		struct vb2_buffer *src_vb, *dst_vb;
+		struct gsc_ctx *ctx =
+			v4l2_m2m_get_curr_priv(gsc->m2m.m2m_dev);
+
 		del_timer(&gsc->op_timer);
 
-		irqret = IRQ_WAKE_THREAD;
-		goto isr_unlock;
+		if (!ctx || !ctx->m2m_ctx) {
+			gsc_err("ctx : 0x%p", ctx);
+			goto isr_unlock;
+		}
+
+		src_vb = v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
+		dst_vb = v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
+		if (src_vb && dst_vb) {
+			v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
+			v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
+			/* wake_up job_abort, stop_streaming */
+			spin_lock(&ctx->slock);
+			if (ctx->state & GSC_CTX_STOP_REQ) {
+				ctx->state &= ~GSC_CTX_STOP_REQ;
+				wake_up(&gsc->irq_queue);
+			}
+			spin_unlock(&ctx->slock);
+
+			if (test_and_clear_bit(ST_STOP_REQ, &gsc->state))
+				wake_up(&gsc->irq_queue);
+			else
+				v4l2_m2m_job_finish(gsc->m2m.m2m_dev, ctx->m2m_ctx);
+		}
+#if defined(CONFIG_VIDEO_EXYNOS_GSCALER_DEBUG)
+		gsc->m2m.isr_time[gsc->m2m.isr_cnt % 50] = sched_clock();
+		gsc->m2m.isr_cnt++;
+#endif /* CONFIG_VIDEO_EXYNOS_GSCALER_DEBUG */
+		pm_runtime_put(&gsc->pdev->dev);
 	} else if (test_bit(ST_OUTPUT_STREAMON, &gsc->state) &&
 			gsc->out.vbq.streaming) {
 		if (!list_empty(&gsc->out.active_buf_q)) {
@@ -1244,7 +1272,7 @@ static irqreturn_t gsc_irq_handler(int irq, void *priv)
 
 isr_unlock:
 	spin_unlock(&gsc->slock);
-	return irqret;
+	return IRQ_HANDLED;
 }
 
 static int gsc_get_media_info(struct device *dev, void *p)
@@ -1664,8 +1692,8 @@ static int gsc_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = devm_request_threaded_irq(dev, res->start, gsc_irq_handler,
-				gsc_m2m_irq_handler, IRQF_ONESHOT, pdev->name, gsc);
+	ret = devm_request_irq(dev, res->start, gsc_irq_handler,
+				0, pdev->name, gsc);
 	if (ret) {
 		dev_err(dev, "failed to install irq (%d)\n", ret);
 		goto err_clk_put;

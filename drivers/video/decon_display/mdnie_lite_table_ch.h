@@ -41,6 +41,23 @@ static unsigned char coordinate_data[][3] = {
 	{0xfb, 0xff, 0xff}, /* Tune_9 */
 };
 
+static inline int get_hbm_index(int idx)
+{
+	int i = 0;
+	int idx_list[] = {
+		40000	/* idx < 40000: HBM_OFF */
+				/* idx >= 40000: HBM_ON */
+	};
+
+	while (i < ARRAY_SIZE(idx_list)) {
+		if (idx < idx_list[i])
+			break;
+		i++;
+	}
+
+	return i;
+}
+
 ////////////////// UI /// /////////////////////
 static unsigned char SCREEN_CURTAIN_1[] = {
 	/* start */
@@ -134,9 +151,9 @@ static unsigned char SCREEN_CURTAIN_2[] = {
 	0x05, // ascr_strength 00000  ascr_on 1  skin_cb 01
 	0x9e, // skin_cb 100111  skin_cr 10
 	0xa4, // skin_cr 101001  up_distance 00
-	0x30, // up_distance 001100  down_distance 00                                       
-	0x30, // down_distance 001100  right_distance 00                                    
-	0x30, // right_distance 001100  left_distance 00                                    
+	0x30, // up_distance 001100  down_distance 00
+	0x30, // down_distance 001100  right_distance 00
+	0x30, // right_distance 001100  left_distance 00
 	0x30, // left_distance 001100  up_divided_distance 00
 	0x2a, // up_divided_distance 00101010
 	0xaa, // up_divided_distance 10101010

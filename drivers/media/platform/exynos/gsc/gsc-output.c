@@ -739,6 +739,80 @@ static int gsc_out_start_streaming(struct vb2_queue *q, unsigned int count)
 	return 0;
 }
 
+struct gsc_deferred_stop_data {
+	struct completion okay;
+	struct gsc_dev *gsc;
+};
+
+/*
+ * gsc_out_deferred_stop - OTF completion waiter
+ *
+ * Invoked by gsc_out_stop_streaming if wait_event_timeout() in it is timed out.
+ * Occasionally DECON does not stop GSC OTF in 2 seconds that is the limit of
+ * the patience of GSC driver for waiting OTF to be ended because the driver
+ * should respond in a finite time to the user that wanted to finish working
+ * of the GScaler driver.
+ *
+ * Gscaler driver should release every reference to buffers queued from the
+ * user on reqbufs(0) and close(). However releasing references causes GScaler
+ * to access freed buffer if OTF is not stoped by DECON driver.
+ * gsc_out_deferred_stop() is the final and desperate try to prevent the invalid
+ * buffer access by GScaler.
+ *
+ * This logic relies on ION's lazy unmapping that unmaps all mappings of a
+ * buffer from System MMU page tables when the buffer is finally freed.
+ */
+static int gsc_out_deferred_stop(void *p)
+{
+	struct gsc_deferred_stop_data *data = p;
+	struct gsc_dev *gsc = data->gsc;
+	struct gsc_input_buf *active_buf;
+	/*
+	 * allocate buffers for YUV semiplanar images. It is okay to allocate
+	 * 32 * 2 array because the kernel stack is much larger and the call
+	 * depth is not such deep.
+	 */
+	struct dma_buf *dmabufs[VIDEO_MAX_FRAME * 2];
+	int cnt = 0;
+
+	list_for_each_entry(active_buf, &gsc->out.active_buf_q, list) {
+		int i;
+
+		for (i = 0; i < active_buf->vb.num_planes; i++) {
+			if (active_buf->vb.planes[i].dbuf) {
+				dmabufs[cnt] = active_buf->vb.planes[i].dbuf;
+				get_dma_buf(dmabufs[cnt++]);
+			} else {
+				/* all valid output buffers should be dmabuf */
+				BUG();
+			}
+		}
+	}
+
+	/*
+	 * After the call to complete() below, this function should not reference
+	 * @data because it is a local variable of gsc_out_stop_streaming() that
+	 * invokes this kthread function. gsc_out_stop_streaming() returns after
+	 * the call to complete() below, and @data becomes invalid.
+	 */
+	complete(&data->okay);
+
+	/*
+	 * Wait until the irq_queue to be signaled undefinitely. DECON driver
+	 * therefore should call s_stream(false) to disable OTF of GScaler
+	 * someday. Otherwise, the buffers referenced here are not freed and
+	 * no furthre OTF will start until DECON driver dsiables OTF.
+	 */
+	wait_event(gsc->irq_queue, !test_bit(ST_OUTPUT_STREAMON, &gsc->state));
+
+	while (cnt-- > 0)
+		dma_buf_put(dmabufs[cnt]);
+
+	gsc_info("Completed deferred OTF stop");
+
+	return 0;
+}
+
 static int gsc_out_stop_streaming(struct vb2_queue *q)
 {
 	struct gsc_ctx *ctx = q->drv_priv;
@@ -749,8 +823,18 @@ static int gsc_out_stop_streaming(struct vb2_queue *q)
 	ret = wait_event_timeout(gsc->irq_queue,
 		!test_bit(ST_OUTPUT_STREAMON, &gsc->state),
 		msecs_to_jiffies(2000));
-	if (ret == 0)
-		gsc_warn("wait timeout");
+	if (ret == 0) {
+		struct gsc_deferred_stop_data data;
+
+		gsc_warn("wait timeout: deferring OTF wait..");
+		init_completion(&data.okay);
+		data.gsc = gsc;
+
+		kthread_run(gsc_out_deferred_stop, &data,
+				"gsc_out_deferred_stop");
+
+		wait_for_completion(&data.okay);
+	}
 
 	spin_lock_irqsave(&gsc->slock, flags);
 	while(!list_empty(&gsc->out.active_buf_q)) {
@@ -939,11 +1023,17 @@ static int gsc_output_open(struct file *file)
 	if (ret)
 		return ret;
 
+	if (test_bit(ST_OUTPUT_STREAMON, &gsc->state)) {
+		gsc_err("Previous OTF is not ended.");
+		ret = -EBUSY;
+		goto err_otf;
+	}
+
 	gsc_dbg("pid: %d, state: 0x%lx", task_pid_nr(current), gsc->state);
 	ret = pm_runtime_get_sync(&gsc->pdev->dev);
 	if (ret < 0) {
 		gsc_err("fail to pm_runtime_get_sync()");
-		return ret;
+		goto err_pm;
 	}
 
 	/* Return if the corresponding mem2mem/output/capture video node
@@ -951,12 +1041,14 @@ static int gsc_output_open(struct file *file)
 	if (gsc_m2m_opened(gsc) || gsc_cap_opened(gsc) || gsc_out_opened(gsc)) {
 		gsc_err("G-Scaler%d has been opened already, state : 0x%lx",
 				gsc->id, gsc->state);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto err_exist;
 	}
 
 	if (WARN_ON(gsc->out.ctx == NULL)) {
 		gsc_err("G-Scaler output context is NULL");
-		return -ENXIO;
+		ret = -ENXIO;
+		goto err_exist;
 	}
 
 	set_bit(ST_OUTPUT_OPEN, &gsc->state);
@@ -964,11 +1056,8 @@ static int gsc_output_open(struct file *file)
 	gsc->out.ctx->out_path = GSC_FIMD;
 
 	ret = gsc_ctrls_create(gsc->out.ctx);
-	if (ret < 0) {
-		v4l2_fh_release(file);
-		clear_bit(ST_OUTPUT_OPEN, &gsc->state);
-		return ret;
-	}
+	if (ret < 0)
+		goto err_ctrl;
 
 	iovmm_set_fault_handler(&gsc->pdev->dev,
 			gsc_sysmmu_output_fault_handler, &gsc->out);
@@ -979,6 +1068,15 @@ static int gsc_output_open(struct file *file)
 	gsc->out.real_isr_cnt = 0;
 	gsc->out.ctx->scaler.main_hratio = 0;
 	gsc->out.ctx->scaler.main_vratio = 0;
+
+	return ret;
+err_ctrl:
+	clear_bit(ST_OUTPUT_OPEN, &gsc->state);
+err_exist:
+	pm_runtime_put(&gsc->pdev->dev);
+err_pm:
+err_otf:
+	v4l2_fh_release(file);
 
 	return ret;
 }
@@ -1013,13 +1111,6 @@ static int gsc_output_close(struct file *file)
 
 	if (q->streaming)
 		gsc_out_stop_streaming(q);
-
-	ret = wait_event_timeout(gsc->irq_queue,
-		!test_bit(ST_OUTPUT_STREAMON, &gsc->state),
-		msecs_to_jiffies(1000));
-
-	if (ret == 0)
-		gsc_warn("wait timeout");
 
 	vb2_queue_release(q);
 	gsc_ctrls_delete(gsc->out.ctx);

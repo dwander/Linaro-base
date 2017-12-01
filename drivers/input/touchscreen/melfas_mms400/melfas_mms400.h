@@ -336,9 +336,7 @@ void mms_register_callback(struct tsp_callbacks *cb);
 void mms_set_tsp_info(struct mms_ts_info *tsp_data);
 void set_charger_config(struct mms_ts_info *tsp_data);
 #endif
-#ifdef CONFIG_SAMSUNG_LPM_MODE
 extern int lpcharge;
-#endif
 extern int get_lcd_attached(char *mode);
 
 #endif /* __MELFAS_MMS400_H */

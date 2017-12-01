@@ -1,7 +1,7 @@
 /*
  * Common function shared by Linux WEXT, cfg80211 and p2p drivers
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wldev_common.c 585466 2015-09-10 12:51:45Z $
+ * $Id: wldev_common.c 698063 2017-05-08 02:44:57Z $
  */
 
 #include <osl.h>
@@ -398,6 +398,7 @@ int wldev_set_country(
 {
 	int error = -1;
 	wl_country_t cspec = {{0}, 0, {0}};
+	wl_country_t cur_cspec = {{0}, 0, {0}};	/* current ccode */
 	scb_val_t scbval;
 	char smbuf[WLC_IOCTL_SMLEN];
 
@@ -405,14 +406,22 @@ int wldev_set_country(
 		return error;
 
 	bzero(&scbval, sizeof(scb_val_t));
-	error = wldev_iovar_getbuf(dev, "country", NULL, 0, &cspec, sizeof(cspec), NULL);
+	error = wldev_iovar_getbuf(dev, "country", NULL, 0, &cur_cspec, sizeof(wl_country_t), NULL);
 	if (error < 0) {
 		WLDEV_ERROR(("%s: get country failed = %d\n", __FUNCTION__, error));
 		return error;
 	}
 
+	cspec.rev = -1;
+	memcpy(cspec.country_abbrev, country_code, WLC_CNTRY_BUF_SZ);
+	memcpy(cspec.ccode, country_code, WLC_CNTRY_BUF_SZ);
+	dhd_get_customized_country_code(dev, (char *)&cspec.country_abbrev, &cspec);
+
+	WLDEV_INFO(("%s: Current country %s rev %d\n",
+		__FUNCTION__, cur_cspec.ccode, cur_cspec.rev));
+
 	if ((error < 0) ||
-	    (strncmp(country_code, cspec.ccode, WLC_CNTRY_BUF_SZ) != 0)) {
+	    (strncmp(cspec.ccode, cur_cspec.ccode, WLC_CNTRY_BUF_SZ) != 0)) {
 
 		if (user_enforced) {
 			bzero(&scbval, sizeof(scb_val_t));
@@ -425,10 +434,6 @@ int wldev_set_country(
 			}
 		}
 
-		cspec.rev = -1;
-		memcpy(cspec.country_abbrev, country_code, WLC_CNTRY_BUF_SZ);
-		memcpy(cspec.ccode, country_code, WLC_CNTRY_BUF_SZ);
-		dhd_get_customized_country_code(dev, (char *)&cspec.country_abbrev, &cspec);
 		error = wldev_iovar_setbuf(dev, "country", &cspec, sizeof(cspec),
 			smbuf, sizeof(smbuf), NULL);
 		if (error < 0) {

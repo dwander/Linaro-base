@@ -24,9 +24,15 @@
 
 #include <linux/i2c.h>
 
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../drivers/battery_v2/include/sec_charging_common.h"
+#include "../../drivers/battery_v2/include/charger/max77843_charger.h"
+#include "../../drivers/battery_v2/include/fuelgauge/max77843_fuelgauge.h"
+#else
 #if defined(CONFIG_CHARGER_MAX77843) && defined(CONFIG_FUELGAUGE_MAX77843)
 #include <linux/battery/sec_charger.h>
 #include <linux/battery/sec_fuelgauge.h>
+#endif
 #endif
 
 #define MAX77843_I2C_ADDR		(0x92)
@@ -62,6 +68,30 @@ enum max77843_reg {
 	/* Haptic motor driver Registers */
 	MAX77843_PMIC_REG_MCONFIG			= 0x10,
 
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	MAX77843_CHG_REG_INT			= 0xB0,
+	MAX77843_CHG_REG_INT_MASK			= 0xB1,
+	MAX77843_CHG_REG_INT_OK			= 0xB2,
+	MAX77843_CHG_REG_DETAILS_00			= 0xB3,
+	MAX77843_CHG_REG_DETAILS_01			= 0xB4,
+	MAX77843_CHG_REG_DETAILS_02			= 0xB5,
+	MAX77843_CHG_REG_DTLS_03			= 0xB6,
+	MAX77843_CHG_REG_CNFG_00			= 0xB7,
+	MAX77843_CHG_REG_CNFG_01			= 0xB8,
+	MAX77843_CHG_REG_CNFG_02			= 0xB9,
+	MAX77843_CHG_REG_CNFG_03			= 0xBA,
+	MAX77843_CHG_REG_CNFG_04			= 0xBB,
+	MAX77843_CHG_REG_CNFG_05			= 0xBC,
+	MAX77843_CHG_REG_CNFG_06			= 0xBD,
+	MAX77843_CHG_REG_CNFG_07			= 0xBE,
+	MAX77843_CHG_REG_CNFG_08			= 0xBF,
+	MAX77843_CHG_REG_CNFG_09			= 0xC0,
+	MAX77843_CHG_REG_CNFG_10			= 0xC1,
+	MAX77843_CHG_REG_CNFG_11			= 0xC2,
+	MAX77843_CHG_REG_CNFG_12			= 0xC3,
+	MAX77843_CHG_REG_CNFG_13			= 0xC4,
+	MAX77843_CHG_REG_CNFG_14			= 0xC5,
+#else
 	MAX77843_CHG_REG_CHG_INT			= 0xB0,
 	MAX77843_CHG_REG_CHG_INT_MASK			= 0xB1,
 	MAX77843_CHG_REG_CHG_INT_OK			= 0xB2,
@@ -84,6 +114,7 @@ enum max77843_reg {
 	MAX77843_CHG_REG_CHG_CNFG_12			= 0xC3,
 	MAX77843_CHG_REG_CHG_CNFG_13			= 0xC4,
 	MAX77843_CHG_REG_CHG_CNFG_14			= 0xC5,
+#endif
 	MAX77843_CHG_REG_SAFEOUT_CTRL			= 0xC6,
 
 	MAX77843_PMIC_REG_END,
@@ -99,6 +130,7 @@ enum max77843_fuelgauge_reg {
 	SOCREP_REG                                   = 0x06,
 	TEMPERATURE_REG                              = 0x08,
 	VCELL_REG                                    = 0x09,
+	TIME_TO_EMPTY_REG                            = 0x11,
 	FULLSOCTHR_REG                               = 0x13,
 	CURRENT_REG                                  = 0x0A,
 	AVG_CURRENT_REG                              = 0x0B,
@@ -106,6 +138,7 @@ enum max77843_fuelgauge_reg {
 	SOCAV_REG                                    = 0x0E,
 	REMCAP_MIX_REG                               = 0x0F,
 	FULLCAP_REG                                  = 0x10,
+	QRTABLE00_REG                                = 0x12,
 	RFAST_REG                                    = 0x15,
 	AVR_TEMPERATURE_REG                          = 0x16,
 	CYCLES_REG                                   = 0x17,
@@ -114,10 +147,16 @@ enum max77843_fuelgauge_reg {
 	CONFIG_REG                                   = 0x1D,
 	ICHGTERM_REG                                 = 0x1E,
 	REMCAP_AV_REG                                = 0x1F,
+	TIME_TO_FULL_REG                             = 0x20,
+	QRTABLE10_REG                                = 0x22,
 	FULLCAP_NOM_REG                              = 0x23,
+	FILTER_CFG_REG                               = 0x29,
 	MISCCFG_REG                                  = 0x2B,
 	QRTABLE20_REG                                = 0x32,
+	FULLCAPREP_REG                               = 0x35,
 	RCOMP_REG                                    = 0x38,
+	TEMPCO_REG                                   = 0x39,
+	VEMPTY_REG                                   = 0x3A,
 	FSTAT_REG                                    = 0x3D,
 	QRTABLE30_REG                                = 0x42,
 	DQACC_REG                                    = 0x45,
@@ -200,6 +239,9 @@ enum max77843_irq {
 	MAX77843_CHG_IRQ_CHG_I,
 	MAX77843_CHG_IRQ_WCIN_I,
 	MAX77843_CHG_IRQ_CHGIN_I,
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	MAX77843_CHG_IRQ_AICL_I,
+#endif
 
 	/* Fuelgauge */
 	MAX77843_FG_IRQ_ALERT,

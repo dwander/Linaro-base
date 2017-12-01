@@ -39,60 +39,17 @@
 
 #include <linux/sec_batt.h>
 
-#define SEC_BAT_CURRENT_EVENT_NONE			0x0000
-#define SEC_BAT_CURRENT_EVENT_AFC			0x0001
-#define SEC_BAT_CURRENT_EVENT_LOW_TEMP_SWELLING		0x0010
-#define SEC_BAT_CURRENT_EVENT_HIGH_TEMP_SWELLING	0x0020
-#define SEC_BAT_CURRENT_EVENT_LOW_TEMP			0x0080
-
-#define SEC_BAT_CURRENT_EVENT_NONE			0x0000
-#define SEC_BAT_CURRENT_EVENT_AFC			0x0001
-#define SEC_BAT_CURRENT_EVENT_LOW_TEMP_SWELLING		0x0010
-#define SEC_BAT_CURRENT_EVENT_HIGH_TEMP_SWELLING	0x0020
-#define SEC_BAT_CURRENT_EVENT_LOW_TEMP			0x0080
-
 #if defined(CONFIG_BATTERY_SWELLING)
-#if defined(CONFIG_SEC_TRLTE_PROJECT)
-#define BATT_SWELLING_HIGH_TEMP_BLOCK		410
-#define BATT_SWELLING_HIGH_TEMP_RECOV		360
-#define BATT_SWELLING_LOW_TEMP_BLOCK_1ST		150
-#define BATT_SWELLING_LOW_TEMP_RECOV_1ST		200
-#define BATT_SWELLING_LOW_TEMP_BLOCK_2ND	50
-#define BATT_SWELLING_LOW_TEMP_RECOV_2ND		100
-#define BATT_SWELLING_HIGH_CHG_CURRENT			0
-#define BATT_SWELLING_LOW_CHG_CURRENT			1500
-#define BATT_SWELLING_TOPOFF_CURRENT			200
-#define BATT_SWELLING_DROP_FLOAT_VOLTAGE		4150
-#define BATT_SWELLING_HIGH_RECHG_VOLTAGE		4000
-#define BATT_SWELLING_LOW_RECHG_VOLTAGE			4000
-#else
-#define BATT_SWELLING_HIGH_TEMP_BLOCK		500
-#define BATT_SWELLING_HIGH_TEMP_RECOV		450
-#define BATT_SWELLING_LOW_TEMP_BLOCK		50
-#define BATT_SWELLING_LOW_TEMP_RECOV		100
-#define BATT_SWELLING_LOW_TEMP_BLOCK_1ST		150
-#define BATT_SWELLING_LOW_TEMP_RECOV_1ST		200
-#define BATT_SWELLING_LOW_TEMP_BLOCK_2ND	50
-#define BATT_SWELLING_LOW_TEMP_RECOV_2ND		100
-#define BATT_SWELLING_HIGH_CHG_CURRENT			0
-#define BATT_SWELLING_LOW_CHG_CURRENT			1500
-#define BATT_SWELLING_TOPOFF_CURRENT			200
-#define BATT_SWELLING_DROP_FLOAT_VOLTAGE		4200
+#define BATT_SWELLING_HIGH_TEMP_BLOCK			500
+#define BATT_SWELLING_HIGH_TEMP_RECOV			450
+#define BATT_SWELLING_LOW_TEMP_BLOCK			50
+#define BATT_SWELLING_LOW_TEMP_RECOV			100
+#define BATT_SWELLING_CHG_CURRENT				1400
+#define BATT_SWELLING_NORMAL_VOLTAGE			4400
 #define BATT_SWELLING_HIGH_RECHG_VOLTAGE		4150
 #define BATT_SWELLING_LOW_RECHG_VOLTAGE			4050
-#endif
-
-#define SEC_INPUT_VOLTAGE_0V	0
-#define SEC_INPUT_VOLTAGE_5V	5
-#define SEC_INPUT_VOLTAGE_9V	9
-#define SEC_INPUT_VOLTAGE_10V	10
-#define SEC_INPUT_VOLTAGE_12V	12
-
-enum swelling_mode_state {
-	SWELLING_MODE_NONE = 0,
-	SWELLING_MODE_CHARGING,
-	SWELLING_MODE_FULL,
-};
+#define BATT_SWELLING_DROP_VOLTAGE				4200
+#define BATT_SWELLING_BLOCK_TIME		10 * 60 /* 10 min */
 #endif
 
 #if defined(CONFIG_CHARGING_VZWCONCEPT)
@@ -127,9 +84,6 @@ struct sec_battery_info {
 
 	struct notifier_block batt_nb;
 
-	bool safety_timer_set;
-	bool lcd_status;
-
 	int status;
 	int health;
 	bool present;
@@ -142,12 +96,10 @@ struct sec_battery_info {
 	int current_avg;		/* average current (mA) */
 	int current_max;		/* input current limit (mA) */
 	int current_adc;
-	unsigned int current_event;
-	unsigned int input_voltage;		/* CHGIN/WCIN input voltage (V) */
+
 	unsigned int capacity;			/* SOC (%) */
 
 	struct mutex adclock;
-	struct mutex current_eventlock;
 	struct adc_sample_info	adc_sample[ADC_CH_COUNT];
 
 	/* keep awake until monitor is done */
@@ -179,8 +131,6 @@ struct sec_battery_info {
 	/* ADC check */
 	unsigned int check_adc_count;
 	unsigned int check_adc_value;
-
-    unsigned int topoff_current;
 
 	/* time check */
 	unsigned long charging_start_time;
@@ -214,8 +164,6 @@ struct sec_battery_info {
 	/* charging */
 	unsigned int charging_mode;
 	bool is_recharging;
-        int wdt_kick_disable;
-
 	bool is_jig_on;
 	int cable_type;
 	int muic_cable_type;
@@ -232,7 +180,6 @@ struct sec_battery_info {
 
 	int wire_status;
 
-	int charging_current;
 	/* wearable charging */
 	int ps_enable;
 	int ps_status;
@@ -250,11 +197,6 @@ struct sec_battery_info {
 	int stability_test;
 	int eng_not_full_status;
 #endif
-
-	bool stop_timer;
-	unsigned long prev_safety_time;
-	unsigned long expired_time;
-	unsigned long cal_safety_time;
 
 	bool charging_block;
 #if defined(CONFIG_BATTERY_SWELLING)
@@ -336,6 +278,7 @@ enum {
 	FG_REG_DUMP,
 	FG_RESET_CAP,
 	FG_CAPACITY,
+	FG_ASOC,
 	AUTH,
 	CHG_CURRENT_ADC,
 	WC_ADC,
@@ -374,7 +317,6 @@ enum {
 #endif
 	BATT_CAPACITY_MAX,
 	BATT_INBAT_VOLTAGE,
-        BATT_WDT_CONTROL,
 #if defined(CONFIG_BATTERY_SWELLING_SELF_DISCHARGING)
 	BATT_DISCHARGING_CHECK,
 	BATT_DISCHARGING_CHECK_ADC,

@@ -44,11 +44,14 @@
 
 #define CHECK_PR_NUMBER
 #define REPORT_2D_W
+#define TSP_SUPPROT_MULTIMEDIA
 
 #ifdef CONFIG_SEC_FACTORY
 #define REPORT_2D_Z		/* only for CONFIG_SEC_FACTORY */
+#undef TSP_SUPPROT_MULTIMEDIA
 #endif
-#ifdef REPORT_2D_Z
+
+#if defined(TSP_SUPPROT_MULTIMEDIA) || defined(REPORT_2D_Z)
 #define DSX_PRESSURE_MAX	255
 #endif
 
@@ -261,7 +264,9 @@
 #define JIG_COMMAND_EN	(1 << 1)
 #define DEAD_ZONE_EN	(1 << 2)
 #define EN_GHOST_FINGER_STATUS_REPORT	(1 << 3)
-//#define RESERVED		(1 << 4)
+#ifdef TSP_SUPPROT_MULTIMEDIA
+#define BOOST_UP_EN		(1 << 4)
+#endif
 #define EDGE_SWIPE_EN	(1 << 5)
 //#define RESERVED		(1 << 6)
 //#define RESERVED		(1 << 7)
@@ -579,7 +584,7 @@ struct synaptics_finger {
 	int y;
 	int wx;
 	int wy;
-#ifdef REPORT_2D_Z
+#if defined(TSP_SUPPROT_MULTIMEDIA) || defined(REPORT_2D_Z)
 	int z;
 #endif
 	unsigned char tool_type;
@@ -1445,6 +1450,11 @@ struct synaptics_rmi4_data {
 	unsigned char sidekey_data;
 #endif
 	bool use_stylus;
+#ifdef TSP_SUPPROT_MULTIMEDIA
+	bool use_brush;
+	bool use_velocity;
+#endif
+
 #ifdef SYNAPTICS_RMI_INFORM_CHARGER
 	int ta_status;
 	void (*register_cb)(struct synaptics_rmi_callbacks *);

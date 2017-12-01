@@ -1,7 +1,7 @@
 /*
  * DHD Bus Module for SDIO
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_sdio.c 593074 2015-10-15 08:38:56Z $
+ * $Id: dhd_sdio.c 698065 2017-05-08 02:47:42Z $
  */
 
 #include <typedefs.h>
@@ -2207,6 +2207,10 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 	uint datalen = 0;
 	dhd_pub_t *dhd = bus->dhd;
 	sdpcmd_regs_t *regs = bus->regs;
+#ifdef DHD_LOSSLESS_ROAMING
+	uint8 *pktdata;
+	struct ether_header *eh;
+#endif /* DHD_LOSSLESS_ROAMING */
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
@@ -2219,7 +2223,7 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 	tx_prec_map = ~bus->flowcontrol;
 #ifdef DHD_LOSSLESS_ROAMING
 	tx_prec_map &= dhd->dequeue_prec_map;
-#endif
+#endif /* DHD_LOSSLESS_ROAMING */
 	for (cnt = 0; (cnt < maxframes) && DATAOK(bus);) {
 		int i;
 		int num_pkt = 1;
@@ -2240,6 +2244,22 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 				ASSERT(0);
 				break;
 			}
+#ifdef DHD_LOSSLESS_ROAMING
+			pktdata = (uint8 *)PKTDATA(osh, pkts[i]);
+#ifdef BDC
+			/* Skip BDC header */
+			pktdata += BDC_HEADER_LEN + ((struct bdc_header *)pktdata)->dataOffset;
+#endif
+			eh = (struct ether_header *)pktdata;
+			if (eh->ether_type == hton16(ETHER_TYPE_802_1X)) {
+				uint8 prio = (uint8)PKTPRIO(pkts[i]);
+
+				/* Restore to original priority for 802.1X packet */
+				if (prio == PRIO_8021D_NC) {
+					PKTSETPRIO(pkts[i], dhd->prio_8021x);
+				}
+			}
+#endif /* DHD_LOSSLESS_ROAMING */
 			PKTORPHAN(pkts[i]);
 			datalen += PKTLEN(osh, pkts[i]);
 		}
@@ -7948,6 +7968,10 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 		return BCME_BADARG;
 	}
 #endif /* SUPPORT_MULTIPLE_REVISION */
+
+#if defined(DHD_BLOB_EXISTENCE_CHECK)
+	dhd_set_blob_support(bus->dhd, bus->fw_path);
+#endif /* DHD_BLOB_EXISTENCE_CHECK */
 
 	DHD_TRACE_HW4(("%s: firmware path=%s, nvram path=%s\n",
 		__FUNCTION__, bus->fw_path, bus->nv_path));

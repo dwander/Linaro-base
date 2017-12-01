@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver - Android related functions
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_android.c 602973 2015-11-30 12:36:21Z $
+ * $Id: wl_android.c 698063 2017-05-08 02:44:57Z $
  */
 
 #include <linux/module.h>
@@ -76,6 +76,7 @@
 #define CMD_BTCOEXMODE		"BTCOEXMODE"
 #define CMD_SETSUSPENDOPT	"SETSUSPENDOPT"
 #define CMD_SETSUSPENDMODE      "SETSUSPENDMODE"
+#define CMD_MAXDTIM_IN_SUSPEND  "MAX_DTIM_IN_SUSPEND"
 #define CMD_P2P_DEV_ADDR	"P2P_DEV_ADDR"
 #define CMD_SETFWPATH		"SETFWPATH"
 #define CMD_SETBAND		"SETBAND"
@@ -167,6 +168,11 @@
 #define CMD_COUNTRYREV_SET "SETCOUNTRYREV"
 #define CMD_COUNTRYREV_GET "GETCOUNTRYREV"
 #endif /* ROAM_API */
+
+#if defined(SUPPORT_RANDOM_MAC_SCAN)
+#define ENABLE_RANDOM_MAC "ENABLE_RANDOM_MAC"
+#define DISABLE_RANDOM_MAC "DISABLE_RANDOM_MAC"
+#endif /* SUPPORT_RANDOM_MAC_SCAN */
 
 #ifdef WES_SUPPORT
 #define CMD_GETROAMSCANCONTROL "GETROAMSCANCONTROL"
@@ -300,7 +306,9 @@ static u8 miracast_cur_mode;
 #ifdef DHD_LOG_DUMP
 #define CMD_NEW_DEBUG_PRINT_DUMP			"DEBUG_DUMP"
 extern void dhd_schedule_log_dump(dhd_pub_t *dhdp);
+#ifdef DHD_DEBUG
 extern int dhd_bus_mem_dump(dhd_pub_t *dhd);
+#endif /* DHD_DEBUG */
 #endif /* DHD_LOG_DUMP */
 #ifdef DHD_TRACE_WAKE_LOCK
 extern void dhd_wk_lock_stats_dump(dhd_pub_t *dhdp);
@@ -554,6 +562,23 @@ static int wl_android_set_suspendmode(struct net_device *dev, char *command, int
 	else
 		DHD_ERROR(("%s: failed %d\n", __FUNCTION__, ret));
 #endif
+
+	return ret;
+}
+
+static int wl_android_set_max_dtim(struct net_device *dev, char *command, int total_len)
+{
+	int ret = 0;
+	int dtim_flag;
+
+	dtim_flag = *(command + strlen(CMD_MAXDTIM_IN_SUSPEND) + 1) - '0';
+
+	if (!(ret = net_os_set_max_dtim_enable(dev, dtim_flag))) {
+		DHD_TRACE(("%s: use Max bcn_li_dtim in suspend %s\n",
+			__FUNCTION__, (dtim_flag ? "Enable" : "Disable")));
+	} else {
+		DHD_ERROR(("%s: failed %d\n", __FUNCTION__, ret));
+	}
 
 	return ret;
 }
@@ -883,7 +908,9 @@ int wl_android_set_scan_channel_time(struct net_device *dev, char *command, int 
 		DHD_ERROR(("%s: Failed to get Parameter\n", __FUNCTION__));
 		return -1;
 	}
-
+#ifdef CUSTOMER_SCAN_TIMEOUT_SETTING
+	wl_cfg80211_custom_scan_time(WL_CUSTOM_SCAN_CHANNEL_TIME, time);
+#endif /* CUSTOMER_SCAN_TIMEOUT_SETTING */
 	error = wldev_ioctl_set(dev, WLC_SET_SCAN_CHANNEL_TIME, &time, sizeof(time));
 	if (error) {
 		DHD_ERROR(("%s: Failed to set Scan Channel Time %d, error = %d\n",
@@ -920,6 +947,9 @@ int wl_android_set_scan_home_time(struct net_device *dev, char *command, int tot
 		DHD_ERROR(("%s: Failed to get Parameter\n", __FUNCTION__));
 		return -1;
 	}
+#ifdef CUSTOMER_SCAN_TIMEOUT_SETTING
+	wl_cfg80211_custom_scan_time(WL_CUSTOM_SCAN_HOME_TIME, time);
+#endif /* CUSTOMER_SCAN_TIMEOUT_SETTING */
 
 	error = wldev_ioctl_set(dev, WLC_SET_SCAN_HOME_TIME, &time, sizeof(time));
 	if (error) {
@@ -958,6 +988,9 @@ int wl_android_set_scan_home_away_time(struct net_device *dev, char *command, in
 		DHD_ERROR(("%s: Failed to get Parameter\n", __FUNCTION__));
 		return -1;
 	}
+#ifdef CUSTOMER_SCAN_TIMEOUT_SETTING
+	wl_cfg80211_custom_scan_time(WL_CUSTOM_SCAN_HOME_AWAY_TIME, time);
+#endif /* CUSTOMER_SCAN_TIMEOUT_SETTING */
 
 	error = wldev_iovar_setint(dev, "scan_home_away_time", time);
 	if (error) {
@@ -1070,7 +1103,7 @@ wl_android_set_join_prefer(struct net_device *dev, char *command, int total_len)
 	char *pcmd;
 	int total_len_left;
 	int i;
-	char hex[2];
+	char hex[] = "XX";
 
 	pcmd = command + strlen(CMD_SETJOINPREFER) + 1;
 	total_len_left = strlen(pcmd);
@@ -2630,17 +2663,8 @@ int wl_android_set_ibss_beacon_ouidata(struct net_device *dev, char *command, in
 		return -EINVAL;
 	}
 
-	if (total_len < (strlen(CMD_SETIBSSBEACONOUIDATA) + 1)) {
-		WL_ERR(("error. total_len:%d\n", total_len));
-		return -EINVAL;
-	}
-
 	pcmd = command + strlen(CMD_SETIBSSBEACONOUIDATA) + 1;
 	for (idx = 0; idx < DOT11_OUI_LEN; idx++) {
-		if (*pcmd == '\0') {
-			WL_ERR(("error while parsing OUI.\n"));
-			return -EINVAL;
-		}
 		hex[0] = *pcmd++;
 		hex[1] = *pcmd++;
 		ie_buf[idx] =  (uint8)simple_strtoul(hex, NULL, 16);
@@ -2652,12 +2676,6 @@ int wl_android_set_ibss_beacon_ouidata(struct net_device *dev, char *command, in
 		ie_buf[idx++] =  (uint8)simple_strtoul(hex, NULL, 16);
 		datalen++;
 	}
-
-	if (datalen <= 0) {
-		WL_ERR(("error. vndr ie len:%d\n", datalen));
-		return -EINVAL;
-	}
-
 	tot_len = sizeof(vndr_ie_setbuf_t) + (datalen - 1);
 	vndr_ie = (vndr_ie_setbuf_t *) kzalloc(tot_len, kflags);
 	if (!vndr_ie) {
@@ -3807,6 +3825,9 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	else if (strnicmp(command, CMD_SETSUSPENDMODE, strlen(CMD_SETSUSPENDMODE)) == 0) {
 		bytes_written = wl_android_set_suspendmode(net, command, priv_cmd.total_len);
 	}
+	else if (strnicmp(command, CMD_MAXDTIM_IN_SUSPEND, strlen(CMD_MAXDTIM_IN_SUSPEND)) == 0) {
+		bytes_written = wl_android_set_max_dtim(net, command, priv_cmd.total_len);
+	}
 	else if (strnicmp(command, CMD_SETBAND, strlen(CMD_SETBAND)) == 0) {
 		uint band = *(command + strlen(CMD_SETBAND) + 1) - '0';
 #ifdef WL_HOST_BAND_MGMT
@@ -3838,6 +3859,13 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	/* CUSTOMER_SET_COUNTRY feature is define for only GGSM model */
 	else if (strnicmp(command, CMD_COUNTRY, strlen(CMD_COUNTRY)) == 0) {
 		char *country_code = command + strlen(CMD_COUNTRY) + 1;
+		struct wireless_dev *wdev = ndev_to_wdev(net);
+		struct wiphy *wiphy = wdev->wiphy;
+
+		if (wl_check_dongle_idle(wiphy) != TRUE) {
+			DHD_ERROR(("FW is busy to check dongle idle\n"));
+			goto exit;
+		}
 		bytes_written = wldev_set_country(net, country_code, true, true);
 #ifdef FCC_PWR_LIMIT_2G
 		if (wldev_iovar_setint(net, "fccpwrlimit2g", FALSE)) {
@@ -4248,6 +4276,13 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 				priv_cmd.total_len);
 	}
 #endif /* DHD_ENABLE_BIGDATA_LOGGING */
+#if defined(SUPPORT_RANDOM_MAC_SCAN)
+	else if (strnicmp(command, ENABLE_RANDOM_MAC, strlen(ENABLE_RANDOM_MAC)) == 0) {
+		bytes_written = wl_cfg80211_set_random_mac(TRUE);
+	} else if (strnicmp(command, DISABLE_RANDOM_MAC, strlen(DISABLE_RANDOM_MAC)) == 0) {
+		bytes_written = wl_cfg80211_set_random_mac(FALSE);
+	}
+#endif /* SUPPORT_RANDOM_MAC_SCAN */
 #ifdef DHD_LOG_DUMP
 	else if (strnicmp(command, CMD_NEW_DEBUG_PRINT_DUMP,
 		strlen(CMD_NEW_DEBUG_PRINT_DUMP)) == 0) {

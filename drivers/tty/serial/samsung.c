@@ -1047,12 +1047,17 @@ static void s3c24xx_serial_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	/* todo - possibly remove AFC and do manual CTS */
 #if defined(CONFIG_GPS_BCMxxxxx) && !defined(CONFIG_GPS_BCM4773)
-	unsigned int umcon = rd_regl(port, S3C2410_UMCON);
+	unsigned int umcon;
+	struct s3c24xx_uart_port *ourport = to_ourport(port);
+	clk_prepare_enable(ourport->clk);
+	umcon = rd_regl(port, S3C2410_UMCON);
 
 	if (port->line == CONFIG_GPS_S3C_UART)
 		umcon |= S3C2410_UMCOM_AFC;
 
 	wr_regl(port, S3C2410_UMCON, umcon);
+	clk_disable_unprepare(ourport->clk);
+
 #endif
 }
 

@@ -107,6 +107,7 @@ void s5p_mfc_enc_calc_src_size(struct s5p_mfc_ctx *ctx);
 #define s5p_mfc_get_mvc_num_views()	-1
 #define s5p_mfc_get_mvc_disp_view_id()	-1
 #define s5p_mfc_get_enc_dpb_count()	-1
+#define s5p_mfc_get_enc_scratch_size()	0
 
 #define mfc_get_disp_first_addr()	-1
 #define mfc_get_dec_first_addr()	-1

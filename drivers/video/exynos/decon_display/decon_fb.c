@@ -3149,7 +3149,7 @@ static ssize_t s3c_fb_read(struct fb_info *info, char __user *buf,
 	return 0;
 }
 
-static ssize_t s3c_fb_write(struct fb_info *info, char const __user *buf,
+static ssize_t s3c_fb_write(struct fb_info *info, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	return 0;
@@ -5248,7 +5248,7 @@ int decon_hibernation_power_on(struct display_driver *dispdrv)
 	decon_reg_blend_alpha_bits(BLENDCON_NEW_8BIT_ALPHA_VALUE);
 	decon_reg_set_vidout(sfb->psr_mode, 1);
 	decon_reg_set_crc(1);
-
+	decon_reg_set_sys_reg();
 	if (sfb->psr_mode == S3C_FB_MIPI_COMMAND_MODE)
 		decon_reg_set_fixvclk(DECON_VCLK_RUN_VDEN_DISABLE);
 	else

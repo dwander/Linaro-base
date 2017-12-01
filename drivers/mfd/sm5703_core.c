@@ -13,7 +13,11 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/sm5703.h>
 #include <linux/mfd/sm5703_irq.h>
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../drivers/battery_v2/include/charger/sm5703_charger.h"
+#else
 #include <linux/battery/charger/sm5703_charger.h>
+#endif
 #include <linux/errno.h>
 #include <linux/version.h>
 #include <linux/device.h>

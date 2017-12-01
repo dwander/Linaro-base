@@ -112,6 +112,13 @@ config MUIC_MAX77843_RESET_WA
 	help
 	  If you say yes here you will get support for the MAX77843 MUIC RESET WA.
 
+config MUIC_MAX77843_UNSUPPORTED_MHL
+	bool "Using MAX77843 MUIC UNSUPPORTED MHL"
+	depends on MUIC_MAX77843
+	default n
+	help
+	  If you say yes here you will get support for the MAX77843 MUIC UNSUPPORTED MHL.
+
 config MUIC_MAX77849
 	bool "Using MAX77849 MUIC"
 	depends on MFD_MAX77849 && USE_MUIC
@@ -188,3 +195,10 @@ config MUIC_UNIVERSAL_MAX77849
 	default n
 	help
 	  If you say yes here you will get support for the MAX77849 MUIC chip.
+
+config MUIC_HV_FORCE_LIMIT
+    bool "Force limit AFC QC MAX CHG VOLTAGE"
+    depends on HV_MUIC_MAX77843_AFC
+    default n
+    help
+      If you say yes here you will add function of limit afc charging volatage.

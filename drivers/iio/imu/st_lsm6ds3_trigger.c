@@ -18,6 +18,8 @@
 
 #include "st_lsm6ds3.h"
 
+
+#define ST_LSM6DS3_SRC_WAKE_UP_REG		0x1b
 #define ST_LSM6DS3_SRC_ACCEL_GYRO_REG		0x1e
 #define ST_LSM6DS3_SRC_FUNC_REG			0x53
 
@@ -26,6 +28,8 @@
 #define ST_LSM6DS3_SRC_SIGN_MOTION_DATA_AVL	0x40
 #define ST_LSM6DS3_SRC_STEP_COUNTER_DATA_AVL	0x10
 #define ST_LSM6DS3_SRC_TILT_DATA_AVL		0x20
+#define ST_LSM6DS3_SRC_WU_AVL			0x0f
+
 
 static struct workqueue_struct *st_lsm6ds3_wq = NULL;
 
@@ -150,7 +154,7 @@ static void st_lsm6ds3_irq_management(struct work_struct *data_work)
 {
 	int err;
 	struct lsm6ds3_data *cdata;
-	u8 src_value_reg1 = 0x00, src_value_reg2 = 0x00;
+	u8 src_value_reg1 = 0x00, src_value_reg2 = 0x00, src_wake_up = 0x00;
 
 	cdata = container_of((struct work_struct *)data_work,
 						struct lsm6ds3_data, data_work);
@@ -165,6 +169,22 @@ static void st_lsm6ds3_irq_management(struct work_struct *data_work)
 	if (err < 0)
 		goto st_lsm6ds3_irq_enable_irq;
 
+	err = cdata->tf->read(&cdata->tb, cdata->dev,
+        	ST_LSM6DS3_SRC_WAKE_UP_REG, 1, &src_wake_up);
+	if (err < 0) {
+        	goto st_lsm6ds3_irq_enable_irq;
+	}
+
+        pr_info("%s - ########### INT(%02x) ############\n", __func__, src_value_reg2);	
+	if(src_wake_up & ST_LSM6DS3_SRC_WU_AVL) {
+        	pr_info("%s - ########### smart alert irq ############\n", __func__);
+      
+		cdata->sa_irq_state = 1;
+		wake_lock_timeout(&cdata->sa_wake_lock, msecs_to_jiffies(3000));
+		schedule_delayed_work(&cdata->sa_irq_work, msecs_to_jiffies(100));
+    	}
+
+
 	if (src_value_reg1 & ST_LSM6DS3_SRC_ACCEL_DATA_AVL)
 		iio_trigger_poll_chained(cdata->trig[ST_INDIO_DEV_ACCEL], 0);
 
@@ -173,10 +193,12 @@ static void st_lsm6ds3_irq_management(struct work_struct *data_work)
 
 	if (cdata->patch_feature) {
 	if (src_value_reg2 & ST_LSM6DS3_SRC_SIGN_MOTION_DATA_AVL) {
+			pr_info("%s - ########### SMD1 ############\n", __func__);
 		iio_push_event(cdata->indio_dev[ST_INDIO_DEV_SIGN_MOTION],
 				IIO_UNMOD_EVENT_CODE(IIO_SIGN_MOTION,
 				0, IIO_EV_TYPE_THRESH, IIO_EV_DIR_EITHER),
 				cdata->timestamp);
+			wake_lock_timeout(&cdata->sa_wake_lock, msecs_to_jiffies(3000));
 		}
 	}
 
@@ -187,13 +209,13 @@ static void st_lsm6ds3_irq_management(struct work_struct *data_work)
 				IIO_UNMOD_EVENT_CODE(IIO_STEP_DETECTOR,
 				0, IIO_EV_TYPE_THRESH, IIO_EV_DIR_EITHER),
 				cdata->timestamp);
-
+		pr_info("%s - ########### SMD2 ############\n", __func__);
 		if ((cdata->sign_motion_event_ready) && (!cdata->patch_feature)) {
 			iio_push_event(cdata->indio_dev[ST_INDIO_DEV_SIGN_MOTION],
 					IIO_UNMOD_EVENT_CODE(IIO_SIGN_MOTION,
 					0, IIO_EV_TYPE_THRESH, IIO_EV_DIR_EITHER),
 					cdata->timestamp);
-
+			wake_lock_timeout(&cdata->sa_wake_lock, msecs_to_jiffies(3000));
 			cdata->sign_motion_event_ready = false;
 		}
 	}
@@ -215,31 +237,6 @@ int st_lsm6ds3_allocate_triggers(struct lsm6ds3_data *cdata,
 {
 	int err, i, n;
 
-#if (LSM6DS3_HRTIMER_TRIGGER > 0)
-	for (i = 0; i < ST_INDIO_DEV_NUM; i++) {
-		cdata->trig[i] = iio_trigger_alloc("%s-trigger-%d",
-				cdata->indio_dev[i]->name, cdata->dev->id);
-				//cdata->indio_dev[i]->name, i);
-		if (!cdata->trig[i]) {
-			dev_err(cdata->dev, "failed to allocate iio trigger.\n");
-			err = -ENOMEM;
-			goto deallocate_trigger;
-		}
-		iio_trigger_set_drvdata(cdata->trig[i], cdata->indio_dev[i]);
-		cdata->trig[i]->ops = trigger_ops;
-		cdata->trig[i]->dev.parent = cdata->dev;
-	}
-	for (n = 0; n < ST_INDIO_DEV_NUM; n++) {
-		err = iio_trigger_register(cdata->trig[n]);
-		if (err < 0) {
-			dev_err(cdata->dev, "failed to register iio trigger.\n");
-			goto unregister_trigger;
-		}
-		cdata->indio_dev[n]->trig = cdata->trig[n];
-	}
-
-	return 0;
-#endif
 
 	if (irq <= 0) {
 		return 0;
@@ -286,9 +283,6 @@ int st_lsm6ds3_allocate_triggers(struct lsm6ds3_data *cdata,
 
 free_irq:
 	free_irq(irq, cdata);
-#if (LSM6DS3_HRTIMER_TRIGGER > 0)
-unregister_trigger:
-#endif
 	for (n--; n >= 0; n--)
 		iio_trigger_unregister(cdata->trig[n]);
 deallocate_trigger:

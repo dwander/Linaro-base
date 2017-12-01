@@ -73,7 +73,7 @@ static void max77804_haptic_i2c(struct max77804_haptic_data *hap_data, bool en)
 	u8 value = hap_data->pdata->reg2;
 	u8 lscnfg_val = 0x00;
 
-	pr_debug("[VIB] %s %d\n", __func__, en);
+	pr_info("[VIB] %s %d\n", __func__, en);
 
 	if (en) {
 		value |= MOTOR_EN;
@@ -173,7 +173,7 @@ static void haptic_enable(struct timed_output_dev *tout_dev, int value)
 			hap_data->running = true;
 		}
 		spin_lock_irqsave(&hap_data->lock, flags);
-		pr_debug("%s value %d\n", __func__, value);
+		pr_info("%s value %d %d\n", __func__, value, hap_data->duty);
 		value = min(value, (int)hap_data->pdata->max_timeout);
 		hrtimer_start(timer, ns_to_ktime((u64)value * NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);

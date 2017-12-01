@@ -1,7 +1,7 @@
 /*
  * bcmevent read-only data shared by kernel or app layers
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmevent.c 517450 2014-11-25 10:23:13Z $
+ * $Id: bcmevent.c 694772 2017-04-17 04:43:43Z $
  */
 
 #include <typedefs.h>
@@ -30,7 +30,6 @@
 #include <proto/bcmeth.h>
 #include <proto/bcmevent.h>
 #include <proto/802.11.h>
-
 
 /* Table of event name strings for UIs and debugging dumps */
 typedef struct {
@@ -163,6 +162,7 @@ static const bcmevent_name_str_t bcmevent_names[] = {
 #endif /* WLAIBSS */
 #ifdef GSCAN_SUPPORT
 	BCMEVENT_NAME(WLC_E_PFN_GSCAN_FULL_RESULT),
+	BCMEVENT_NAME(WLC_E_PFN_SWC),
 #endif /* GSCAN_SUPPORT */
 #ifdef WLBSSLOAD_REPORT
 	BCMEVENT_NAME(WLC_E_BSS_LOAD),
@@ -249,7 +249,7 @@ is_wlc_event_frame(void *pktdata, uint pktlen, uint16 exp_usr_subtype,
 	 */
 	evlen = (uint16)(pktend - (uint8 *)&bcm_event->bcm_hdr.version);
 	evend = (uint8 *)&bcm_event->bcm_hdr.version + evlen;
-	if (evend != pktend) {
+	if (evend > pktend) {
 		err = BCME_BADLEN;
 		goto done;
 	}
@@ -277,10 +277,9 @@ is_wlc_event_frame(void *pktdata, uint pktlen, uint16 exp_usr_subtype,
 			goto done;
 		}
 
-		/* check data length in event */
+		/* ensure data length in event is not beyond the packet. */
 		data_len = ntoh32_ua((void *)&bcm_event->event.datalen);
-		if ((sizeof(bcm_event_t) + data_len +
-			BCMILCP_BCM_SUBTYPE_EVENT_DATA_PAD) != pktlen) {
+		if (data_len > (pktlen - sizeof(bcm_event_t))) {
 			err = BCME_BADLEN;
 			goto done;
 		}
@@ -305,10 +304,9 @@ is_wlc_event_frame(void *pktdata, uint pktlen, uint16 exp_usr_subtype,
 			goto done;
 		}
 
-		/* check data length in event */
+		/* ensure data length in event is not beyond the packet. */
 		data_len = ntoh16_ua((void *)&((bcm_dngl_event_t *)pktdata)->dngl_event.datalen);
-		if ((sizeof(bcm_dngl_event_t) + data_len +
-			BCMILCP_BCM_SUBTYPE_EVENT_DATA_PAD) != pktlen) {
+		if (data_len > (pktlen - sizeof(bcm_dngl_event_t))) {
 			err = BCME_BADLEN;
 			goto done;
 		}

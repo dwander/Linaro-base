@@ -4,7 +4,7 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_proto.h 601938 2015-11-24 14:40:22Z $
+ * $Id: dhd_proto.h 633981 2016-04-26 09:33:48Z $
  */
 
 #ifndef _dhd_proto_h_
@@ -129,7 +129,7 @@ extern int dhd_prot_ringupd_dump(dhd_pub_t *dhd, struct bcmstrbuf *b);
 extern uint32 dhd_prot_metadatalen_set(dhd_pub_t *dhd, uint32 val, bool rx);
 extern uint32 dhd_prot_metadatalen_get(dhd_pub_t *dhd, bool rx);
 extern void dhd_prot_print_flow_ring(dhd_pub_t *dhd, void *msgbuf_flow_info,
-	struct bcmstrbuf *strbuf);
+	struct bcmstrbuf *strbuf, const char *fmt);
 extern void dhd_prot_print_info(dhd_pub_t *dhd, struct bcmstrbuf *strbuf);
 extern void dhd_prot_update_txflowring(dhd_pub_t *dhdp, uint16 flow_id, void *msgring_info);
 extern void dhd_prot_txdata_write_flush(dhd_pub_t *dhd, uint16 flow_id, bool in_lock);

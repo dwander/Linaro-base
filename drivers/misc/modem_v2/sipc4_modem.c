@@ -344,6 +344,7 @@ static struct platform_driver modem_driver = {
 	.driver = {
 		.name = "modem_if",
 		.pm   = &modem_pm_ops,
+		.suppress_bind_attrs = true,
 	},
 };
 

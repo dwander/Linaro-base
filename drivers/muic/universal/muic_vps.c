@@ -129,7 +129,7 @@ static struct vps_cfg cfg_JIG_USB_ON = {
 };
 static struct vps_cfg cfg_DESKDOCK = {
 	.name = "Deskdock",
-	.attr = MATTR(VCOM_OPEN, VB_CHK),
+	.attr = MATTR(VCOM_OPEN, VB_ANY),
 };
 static struct vps_cfg cfg_TYPE2_CHG = {
 	.name = "TYPE2 Charger",
@@ -300,6 +300,21 @@ static bool vps_is_vbvolt(vps_data_t *pmsr, struct vps_tbl_data *pvps)
 		return true;
 
 	 return false;
+}
+
+/* Check it the resolved device type is treated as a different one
+ * when VBUS also comes along.
+ */
+int resolve_twin_mdev(int mdev, bool vbus)
+{
+	if (vbus) {
+		if (mdev == MDEV(DESKDOCK)) {
+			pr_info("%s: mdev:%d vbus:%d\n",__func__, mdev, vbus);
+			return MDEV(DESKDOCK_VB);
+		}
+	}
+
+	return 0;
 }
 
 int resolve_dev_based_on_adc_chgtype(muic_data_t *pmuic, vps_data_t *pmsr)
@@ -505,6 +520,7 @@ static int resolve_dedicated_dev(muic_data_t *pmuic, muic_attached_dev_t *pdev, 
 	muic_attached_dev_t new_dev = ATTACHED_DEV_UNKNOWN_MUIC;
 	int intr = MUIC_INTR_DETACH;
 	int vbvolt = 0;
+	int twin_mdev = 0;
 	int val1, val2, val3, adc;
 
 	val1 = pmuic->vps.s.val1;
@@ -709,9 +725,13 @@ static int resolve_dedicated_dev(muic_data_t *pmuic, muic_attached_dev_t *pdev, 
 
 	/* Check if the cable type is supported.
 	  */
-	if (vps_is_supported_dev(new_dev))
-		pr_info("%s:Supported.\n", __func__);
-	else if(vbvolt && (intr == MUIC_INTR_ATTACH)) {
+	if (vps_is_supported_dev(new_dev)) {
+		if ((twin_mdev = resolve_twin_mdev(new_dev, vbvolt))) {
+			new_dev = twin_mdev;
+			pr_info("%s:Supported twin mdev-> %d\n", __func__, twin_mdev);
+		} else
+			pr_info("%s:Supported.\n", __func__);
+	} else if(vbvolt && (intr == MUIC_INTR_ATTACH)) {
 		new_dev = ATTACHED_DEV_UNDEFINED_CHARGING_MUIC;
 		pr_info("%s:Unsupported->UNDEFINED_CHARGING\n", __func__);
 	} else {

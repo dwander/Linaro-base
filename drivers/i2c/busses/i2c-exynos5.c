@@ -500,32 +500,50 @@ static irqreturn_t exynos5_i2c_irq_chkdone(int irqno, void *dev_id)
 	struct exynos5_i2c *i2c = dev_id;
 	unsigned long reg_val;
 	unsigned char byte;
+	unsigned long timeout;
+	int ret = -EBUSY;
 
 	if (i2c->msg->flags & I2C_M_RD) {
-		while ((readl(i2c->regs + HSI2C_FIFO_STATUS) &
-			0x1000000) == 0) {
-			byte = (unsigned char)readl(i2c->regs + HSI2C_RX_DATA);
-			i2c->msg->buf[i2c->msg_ptr++] = byte;
-		}
+		timeout = jiffies + EXYNOS5_I2C_TIMEOUT;
+		while (time_before(jiffies, timeout)) {
+			if ((readl(i2c->regs + HSI2C_FIFO_STATUS) &
+				0x1000000) == 0) {
+				byte = (unsigned char)readl(i2c->regs + HSI2C_RX_DATA);
+				i2c->msg->buf[i2c->msg_ptr++] = byte;
+			}
 
-		if (i2c->msg_ptr >= i2c->msg->len) {
-			reg_val = readl(i2c->regs + HSI2C_INT_ENABLE);
-			reg_val &= ~(HSI2C_INT_RX_ALMOSTFULL_EN);
-			writel(reg_val, i2c->regs + HSI2C_INT_ENABLE);
-			exynos5_i2c_stop(i2c);
-		}
-	} else {
-		while ((readl(i2c->regs + HSI2C_FIFO_STATUS) &
-			0x80) == 0) {
 			if (i2c->msg_ptr >= i2c->msg->len) {
 				reg_val = readl(i2c->regs + HSI2C_INT_ENABLE);
-				reg_val &= ~(HSI2C_INT_TX_ALMOSTEMPTY_EN);
+				reg_val &= ~(HSI2C_INT_RX_ALMOSTFULL_EN);
 				writel(reg_val, i2c->regs + HSI2C_INT_ENABLE);
+				exynos5_i2c_stop(i2c);
+				ret = 0;
 				break;
 			}
-			byte = i2c->msg->buf[i2c->msg_ptr++];
-			writel(byte, i2c->regs + HSI2C_TX_DATA);
 		}
+
+		if (ret == -EBUSY)
+			dev_err(i2c->dev, "rx timeout in HSI2C interrupt handler\n");
+
+	} else {
+		timeout = jiffies + EXYNOS5_I2C_TIMEOUT;
+		while (time_before(jiffies, timeout)) {
+			if ((readl(i2c->regs + HSI2C_FIFO_STATUS) &
+				0x80) == 0) {
+				if (i2c->msg_ptr >= i2c->msg->len) {
+					reg_val = readl(i2c->regs + HSI2C_INT_ENABLE);
+					reg_val &= ~(HSI2C_INT_TX_ALMOSTEMPTY_EN);
+					writel(reg_val, i2c->regs + HSI2C_INT_ENABLE);
+					ret = 0;
+					break;
+				}
+				byte = i2c->msg->buf[i2c->msg_ptr++];
+				writel(byte, i2c->regs + HSI2C_TX_DATA);
+			}
+		}
+
+		if (ret == -EBUSY)
+			dev_err(i2c->dev, "tx timeout in HSI2C interrupt handler\n");
 	}
 
 	reg_val = readl(i2c->regs + HSI2C_INT_STATUS);
@@ -1014,7 +1032,11 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 	i2c->bus_id = of_alias_get_id(i2c->adap.dev.of_node, "hsi2c");
 
 	exynos5_i2c_init(i2c);
+	
 
+#ifdef CONFIG_FIX_I2C_BUS_NUM
+	if (of_property_read_u32(np, "samsung,i2c-bus-num", &i2c->adap.nr))
+#endif
 	i2c->adap.nr = -1;
 	ret = i2c_add_numbered_adapter(&i2c->adap);
 	if (ret < 0) {

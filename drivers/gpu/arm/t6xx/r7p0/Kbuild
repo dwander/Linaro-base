@@ -35,7 +35,7 @@ MALI_MOCK_TEST ?= 0
 MALI_COVERAGE ?= 0
 MALI_INSTRUMENTATION_LEVEL ?= 0
 # MALI_SEC_SECURE_RENDERING
-MALI_SUPPORT_ASP_SECURE ?= 1
+MALI_SUPPORT_ASP_SECURE ?= 0
 # This workaround is for what seems to be a compiler bug we observed in
 # GCC 4.7 on AOSP 4.3.  The bug caused an intermittent failure compiling
 # the "_Pragma" syntax, where an error message is returned:
@@ -147,10 +147,10 @@ ifeq ($(CONFIG_MALI_PLATFORM_THIRDPARTY),y)
 platform_name := $(shell echo $(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME))
 MALI_PLATFORM_THIRDPARTY_DIR := platform/exynos
 ccflags-y += -I$(src)/$(MALI_PLATFORM_THIRDPARTY_DIR)
-ifeq ($(CONFIG_MALI_R7P0_T6XX),m)
+ifeq ($(CONFIG_MALI_T6XX_R7P0),m)
 include  $(src)/platform/$(platform_name)/Kbuild
-else ifeq ($(CONFIG_MALI_R7P0_T6XX),y)
-obj-$(CONFIG_MALI_R7P0_T6XX) += platform/
+else ifeq ($(CONFIG_MALI_T6XX_R7P0),y)
+obj-$(CONFIG_MALI_T6XX_R7P0) += platform/
 endif
 endif
 
@@ -161,7 +161,7 @@ ifeq ($(CONFIG_MALI_PLATFORM_DEVICETREE),y)
 endif
 
 # Tell the Linux build system from which .o file to create the kernel module
-obj-$(CONFIG_MALI_R7P0_T6XX) += mali_kbase.o
+obj-$(CONFIG_MALI_T6XX_R7P0) += mali_kbase.o
 
 # Tell the Linux build system to enable building of our .c files
 mali_kbase-y := $(SRC:.c=.o)

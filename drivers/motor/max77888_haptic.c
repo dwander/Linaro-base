@@ -56,7 +56,7 @@ static void max77888_haptic_i2c(struct max77888_haptic_data *hap_data, bool en)
 	u8 value = hap_data->pdata->reg2;
 	u8 lscnfg_val = 0x00;
 
-	pr_debug("[VIB] %s %d\n", __func__, en);
+	pr_info("[VIB] %s %d\n", __func__, en);
 
 	if (en) {
 		value |= MOTOR_EN;
@@ -149,7 +149,7 @@ static void haptic_enable(struct timed_output_dev *tout_dev, int value)
 	queue_work(hap_data->workqueue, &hap_data->work);
 	spin_lock_irqsave(&hap_data->lock, flags);
 	if (value > 0 && value != TEST_MODE_TIME) {
-		pr_debug("%s value %d\n", __func__, value);
+		pr_info("%s value %d %d\n", __func__, value, hap_data->duty);
 		value = min(value, (int)hap_data->pdata->max_timeout);
 		hrtimer_start(timer, ns_to_ktime((u64)value * NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);
@@ -173,7 +173,7 @@ static void haptic_work(struct work_struct *work)
 		= container_of(work, struct max77888_haptic_data, work);
 	int ret;
 
-	pr_debug("[VIB] %s\n", __func__);
+	pr_info("[VIB] %s\n", __func__);
 	if (hap_data->timeout > 0 && hap_data->intensity) {
 		if (hap_data->running)
 			return;
@@ -385,6 +385,20 @@ static int __devexit max77888_haptic_remove(struct platform_device *pdev)
 static int max77888_haptic_suspend(struct platform_device *pdev,
 			pm_message_t state)
 {
+	struct max77888_haptic_data *data = platform_get_drvdata(pdev);
+
+	cancel_work_sync(&data->work);
+	hrtimer_cancel(&data->timer);
+	if (data->running) {
+		if (data->pdata->motor_en)
+			data->pdata->motor_en(false);
+		else
+			regulator_disable(data->regulator);
+		pwm_disable(data->pwm);
+		max77888_haptic_i2c(data, false);
+		data->running = false;
+	}
+
 	return 0;
 }
 static int max77888_haptic_resume(struct platform_device *pdev)

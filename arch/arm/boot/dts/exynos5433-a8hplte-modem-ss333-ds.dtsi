@@ -26,7 +26,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&cp_on &cp_reset &pda_active &phone_active &ap2cp_wakeup &ap2cp_status
 							&cp2ap_wakeup &cp2ap_status &gpio_ipc_int2cp
-							&ap_dump_int &gpio_cp_dump_int>;
+							&ap_dump_int>;
 
 		mif,gpio_cp_on = <&gpg2 0 0x1>;
 
@@ -63,7 +63,7 @@
 		};
 	};
 
-	pinctrl@11090000 {
+	pinctrl@10580000 {
 		ap2cp_wakeup: ap2cp_wakeup {
 			samsung,pins = "gpf4-3";
 			samsung,pin-function = <1>;
@@ -90,19 +90,11 @@
 		cp_reset: cp_reset {
 			samsung,pins = "gpa1-1";
 			samsung,pin-function = <1>;
-			samsung,pin-con-pdn = <3>;
-			samsung,pin-pud-pdn = <0>;
+			samsung,pin-pud = <0>;
 		};
 
 		cp2ap_status: cp2ap_status {
 			samsung,pins = "gpa2-3";
-			samsung,pin-function = <0xf>;
-			samsung,pin-pud = <0>;
-			samsung,pin-drv = <0>;
-		};
-
-		gpio_cp_dump_int: gpio_cp_dump_int {
-			samsung,pins = "gpa1-2";
 			samsung,pin-function = <0xf>;
 			samsung,pin-pud = <0>;
 			samsung,pin-drv = <0>;
@@ -158,28 +150,4 @@
 		};
 	};
 };
-
-
-/* On EXYNOS BSP, gpio slepp state registers will be
-   overwritten by gpio sleep tables, pinctrl_#.
-   So additional configurations are required,
-   except for ALIVE blocks - GPA0, GPA1, GPA2, GPA3. */
-
-&pinctrl_5 {
-	initial5: initial-state {
-		PIN_SET_FN_SPI(gpc3-4);		/* cp boot spi */
-		PIN_SET_FN_SPI(gpc3-5);
-		PIN_SET_FN_SPI(gpc3-6);
-		PIN_SET_FN_SPI(gpc3-7);
-	};
-
-	sleep5: sleep-state {
-		PIN_SLP(gpg2-0, PREV, NONE);	/* CP_ON */
-		PIN_SLP(gpg2-1, PREV, NONE);	/* PDA_ACTIVE */
-		PIN_SLP(gpf4-3, PREV, NONE);	/* AP2CP_WAKEUP */
-		PIN_SLP(gpf4-6, PREV, NONE);	/* AP2CP_STATUS */
-		PIN_SLP(gpf4-4, OUT0, NONE);	/* AP_DUMPT_INT */
-	};
-};
-
 

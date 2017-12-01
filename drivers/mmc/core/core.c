@@ -1942,6 +1942,7 @@ static inline void mmc_bus_put(struct mmc_host *host)
 int mmc_resume_bus(struct mmc_host *host)
 {
 	unsigned long flags;
+	int err = 0;
 
 	if (!mmc_bus_needs_resume(host))
 		return -EINVAL;
@@ -1956,11 +1957,11 @@ int mmc_resume_bus(struct mmc_host *host)
 	if (host->bus_ops && !host->bus_dead) {
 		mmc_power_up(host);
 		BUG_ON(!host->bus_ops->resume);
-		host->bus_ops->resume(host);
+		err = host->bus_ops->resume(host);
 	}
 
 	mmc_bus_put(host);
-	printk("%s: Deferred resume completed\n", mmc_hostname(host));
+	printk("%s: Deferred resume completed, err : %d\n", mmc_hostname(host), err);
 	return 0;
 }
 

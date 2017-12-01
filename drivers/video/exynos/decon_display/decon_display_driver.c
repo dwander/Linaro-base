@@ -276,6 +276,7 @@ static struct platform_driver s5p_decon_disp_driver = {
 		.owner = THIS_MODULE,
 		.pm = &s5p_decon_disp_ops,
 		.of_match_table = of_match_ptr(decon_disp_device_table),
+		.suppress_bind_attrs = true,
 	},
 };
 

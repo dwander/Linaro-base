@@ -43,6 +43,19 @@ static struct device_attribute power_supply_attrs[];
 static ssize_t power_supply_show_property(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf) {
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	static char *type_text[] = {
+		"Unknown", "Battery", "UPS", "Mains", "USB",
+		"USB_DCP", "USB_CDP", "USB_ACA", "BMS", "MISC",
+		"Wireless", "HV_Wireless", "PMA_Wireless", "CARDOCK", "UARTOFF", "OTG", "LAN_HUB",
+		"MHL_500", "MHL_900", "MHL_1500", "MHL_USB",
+		"SMART_OTG", "SMART_NOTG", "POWER_SHARING",
+		"HV_Mains", "HV_Mains_12V", "HV_Prepare_Mains", "HV_ERR", "MHL_USB_100", "MHL_2000",
+		"HV_Unknown", "MDOCK_TA", "HMT_CONNECTED", "HMT_CHARGE", 
+		"Wireless_Pack", "Wireless_Pack_TA",
+		"Wireless_Stand", "HV_Wireless_Stand", "PDIC", "HV_Mains_CHG_LIMIT", "HV_QC20", "HV_QC30"
+	};
+#else
 	static char *type_text[] = {
 		"Unknown", "Battery", "UPS", "Mains", "USB",
 		"USB_DCP", "USB_CDP", "USB_ACA", "BMS", "MISC",
@@ -52,17 +65,27 @@ static ssize_t power_supply_show_property(struct device *dev,
 		"HV_Mains", "HV_Prepare_Mains", "HV_ERR", "MHL_USB_100", "MHL_2000",
 		"HV_Unknown", "MDOCK_TA", "MDOCK_USB", "WIRELESS REMOVE"
 	};
+#endif
 	static char *status_text[] = {
 		"Unknown", "Charging", "Discharging", "Not charging", "Full"
 	};
 	static char *charge_type[] = {
 		"Unknown", "N/A", "Trickle", "Fast", "Slow"
 	};
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	static char *health_text[] = {
+		"Unknown", "Good", "Overheat", "Warm", "Dead", "Over voltage",
+		"Unspecified failure", "Cold", "Cool",
+		"Watchdog timer expire", "Safety timer expire",
+		"Under voltage", "OverheatLimit"
+	};
+#else
 	static char *health_text[] = {
 		"Unknown", "Good", "Overheat", "Warm", "Dead", "Over voltage",
 		"Unspecified failure", "Cold", "Cool", "Watchdog timer expire",
 		"Safety timer expire", "Under voltage", "OverheatLimit"
 	};
+#endif
 	static char *technology_text[] = {
 		"Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd",
 		"LiMn"
@@ -210,6 +233,18 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(manufacturer),
 	POWER_SUPPLY_ATTR(serial_number),
 	POWER_SUPPLY_ATTR(afc_charger_mode),
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	POWER_SUPPLY_ATTR(power_design),
+	POWER_SUPPLY_ATTR(filter_cfg),
+	POWER_SUPPLY_ATTR(charge_uno_control),
+	POWER_SUPPLY_ATTR(usb_otg),
+	POWER_SUPPLY_ATTR(charge_enabled),
+	POWER_SUPPLY_ATTR(charge_counter_ext),
+	POWER_SUPPLY_ATTR(usb_hc),
+	POWER_SUPPLY_ATTR(fuelgauge_factory),
+	POWER_SUPPLY_ATTR(current_measure),
+	POWER_SUPPLY_ATTR(factory_voltage_regulation),
+#endif
 };
 
 static struct attribute *

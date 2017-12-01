@@ -32,7 +32,11 @@
 static const u8 max77843_mask_reg[] = {
 	/* TODO: Need to check other INTMASK */
 	[SYS_INT] = MAX77843_PMIC_REG_SYSTEM_INT_MASK,
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	[CHG_INT] = MAX77843_CHG_REG_INT_MASK,
+#else
 	[CHG_INT] = MAX77843_CHG_REG_CHG_INT_MASK,
+#endif
 	[MUIC_INT1] = MAX77843_MUIC_REG_INTMASK1,
 	[MUIC_INT2] = MAX77843_MUIC_REG_INTMASK2,
 	[MUIC_INT3] = MAX77843_MUIC_REG_INTMASK3,
@@ -74,6 +78,9 @@ static const struct max77843_irq_data max77843_irqs[] = {
 	DECLARE_IRQ(MAX77843_CHG_IRQ_CHG_I,	CHG_INT, 1 << 4),
 	DECLARE_IRQ(MAX77843_CHG_IRQ_WCIN_I,	CHG_INT, 1 << 5),
 	DECLARE_IRQ(MAX77843_CHG_IRQ_CHGIN_I,	CHG_INT, 1 << 6),
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	DECLARE_IRQ(MAX77843_CHG_IRQ_AICL_I,	CHG_INT, 1 << 7),
+#endif
 
 	DECLARE_IRQ(MAX77843_FG_IRQ_ALERT, FUEL_INT, 1 << 1),
 
@@ -160,6 +167,13 @@ static void max77843_irq_unmask(struct irq_data *data)
 	else
 		max77843->irq_masks_cur[irq_data->group] &= ~irq_data->mask;
 }
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+
+static void max77843_irq_disable(struct irq_data *data)
+{
+	max77843_irq_mask(data);
+}
+#endif
 
 static struct irq_chip max77843_irq_chip = {
 	.name			= MFD_DEV_NAME,
@@ -167,6 +181,9 @@ static struct irq_chip max77843_irq_chip = {
 	.irq_bus_sync_unlock	= max77843_irq_sync_unlock,
 	.irq_mask		= max77843_irq_mask,
 	.irq_unmask		= max77843_irq_unmask,
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	.irq_disable		= max77843_irq_disable,
+#endif
 };
 
 static irqreturn_t max77843_irq_thread(int irq, void *data)
@@ -196,8 +213,13 @@ static irqreturn_t max77843_irq_thread(int irq, void *data)
 
 	if (irq_src & MAX77843_IRQSRC_CHG) {
 		/* CHG_INT */
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+		ret = max77843_read_reg(max77843->charger, MAX77843_CHG_REG_INT,
+					&irq_reg[CHG_INT]);
+#else
 		ret = max77843_read_reg(max77843->charger, MAX77843_CHG_REG_CHG_INT,
 				&irq_reg[CHG_INT]);
+#endif
 		pr_info("%s: charger interrupt(0x%02x)\n",
 				__func__, irq_reg[CHG_INT]);
 		/* mask chgin to prevent chgin infinite interrupt
@@ -206,11 +228,19 @@ static irqreturn_t max77843_irq_thread(int irq, void *data)
 		if (irq_reg[CHG_INT] &
 				max77843_irqs[MAX77843_CHG_IRQ_CHGIN_I].mask) {
 			u8 reg_data;
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+			max77843_read_reg(max77843->charger,
+				MAX77843_CHG_REG_INT_MASK, &reg_data);
+			reg_data |= (1 << 6);
+			max77843_write_reg(max77843->charger,
+				MAX77843_CHG_REG_INT_MASK, reg_data);
+#else
 			max77843_read_reg(max77843->charger,
 				MAX77843_CHG_REG_CHG_INT_MASK, &reg_data);
 			reg_data |= (1 << 6);
 			max77843_write_reg(max77843->charger,
 				MAX77843_CHG_REG_CHG_INT_MASK, reg_data);
+#endif
 		}
 	}
 

@@ -146,7 +146,13 @@ static void muic_handle_attach(muic_data_t *pmuic,
 		break;
 	case ATTACHED_DEV_DESKDOCK_MUIC:
 	case ATTACHED_DEV_DESKDOCK_VB_MUIC:
-		if (new_dev != pmuic->attached_dev) {
+		if (new_dev == ATTACHED_DEV_DESKDOCK_MUIC || 
+				new_dev == ATTACHED_DEV_DESKDOCK_VB_MUIC) {
+			pr_warn("%s:%s new(%d)!=attached(%d), assume same device\n",
+					MUIC_DEV_NAME, __func__, new_dev,
+					pmuic->attached_dev);
+			noti_f = false;
+		} else if (new_dev != pmuic->attached_dev) {
 			pr_warn("%s:%s new(%d)!=attached(%d), assume detach\n",
 					MUIC_DEV_NAME, __func__, new_dev,
 					pmuic->attached_dev);
@@ -221,8 +227,7 @@ static void muic_handle_attach(muic_data_t *pmuic,
 		ret = attach_mhl(pmuic);
 		break;
 	case ATTACHED_DEV_DESKDOCK_MUIC:
-		if (vbvolt)
-			new_dev = ATTACHED_DEV_DESKDOCK_VB_MUIC;
+	case ATTACHED_DEV_DESKDOCK_VB_MUIC:
 		ret = attach_deskdock(pmuic, new_dev);
 		break;
 	case ATTACHED_DEV_UNIVERSAL_MMDOCK_MUIC:

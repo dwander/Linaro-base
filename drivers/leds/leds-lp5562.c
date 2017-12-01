@@ -693,11 +693,16 @@ static ssize_t lp5562_store_blink(struct device *dev,
 	sscanf(buf, "0x%08x %d %d", &rgb, &on, &off);
 	pr_info("%s: 0x%08x %d %d\n", __func__, rgb, on, off);
 
-	if (on == 0 || off == 0) {
-		pr_info("%s: wrong on/off time. on: %d, off: %d\n",
-			__func__, on, off);
-		return len;
-	}
+	if (on == 0) {
+        pr_info("%s: wrong on/off time. on: %d, off: %d\n",
+            __func__, on, off);
+        return len;
+    }
+    if (off == 0) {
+        pr_info("%s: off time. on: %d, off: %d\n",
+            __func__, on, off);
+
+    }
 
 	lp5562_stop_engine(chip);
 

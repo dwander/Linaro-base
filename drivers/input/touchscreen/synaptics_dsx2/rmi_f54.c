@@ -519,6 +519,10 @@ static void report_rate(void *dev_data);
 #ifdef USE_STYLUS
 static void stylus_enable(void *dev_data);
 #endif
+#ifdef TSP_SUPPROT_MULTIMEDIA
+static void brush_enable(void *dev_data);
+static void velocity_enable(void *dev_data);
+#endif
 
 static void not_support_cmd(void *dev_data);
 
@@ -578,6 +582,10 @@ static struct ft_cmd ft_cmds[] = {
 #endif
 #ifdef USE_STYLUS
 	{FT_CMD("stylus_enable", stylus_enable),},
+#endif
+#ifdef TSP_SUPPROT_MULTIMEDIA
+	{FT_CMD("brush_enable", brush_enable),},
+	{FT_CMD("velocity_enable", velocity_enable),},	
 #endif
 	{FT_CMD("not_support_cmd", not_support_cmd),},
 };
@@ -4008,6 +4016,149 @@ success:
 out:
 	set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
 
+	mutex_lock(&data->cmd_lock);
+	data->cmd_is_running = false;
+	mutex_unlock(&data->cmd_lock);
+
+	data->cmd_state = CMD_STATUS_WAITING;
+}
+#endif
+#ifdef TSP_SUPPROT_MULTIMEDIA
+static void brush_enable(void *dev_data)
+{
+	struct synaptics_rmi4_data *rmi4_data = (struct synaptics_rmi4_data *)dev_data;
+	struct factory_data *data = rmi4_data->f54->factory_data;
+
+	int retval = 0;
+	unsigned char boost_up_en = 0;
+
+	set_default_result(data);
+
+	if (data->cmd_param[0] < 0 || data->cmd_param[0] > 2) {
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+
+	if (rmi4_data->use_brush != (data->cmd_param[0] ? true : false)) {
+		rmi4_data->use_brush = data->cmd_param[0] ? true : false;
+		synpatics_rmi4_release_all_event(rmi4_data, RELEASE_TYPE_FINGER);
+	}
+
+	if (rmi4_data->touch_stopped) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: Touch is stopped & Set flag[%d]\n",
+			__func__, data->cmd_param[0]);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "OK");
+		data->cmd_state = CMD_STATUS_OK;
+		goto out;
+	}
+
+	retval = rmi4_data->i2c_read(rmi4_data,
+	rmi4_data->f51->general_control_addr, &boost_up_en, sizeof(boost_up_en));
+
+	if (retval <= 0) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: fail to read no_sleep[ret:%d]\n",
+		__func__, retval);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+
+	/* 0: Default   , 1: Enable Boost Up 1phi */
+	if (data->cmd_param[0])
+		boost_up_en |= BOOST_UP_EN;
+	else
+		boost_up_en &= ~(BOOST_UP_EN);
+
+	retval = rmi4_data->i2c_write(rmi4_data,
+	rmi4_data->f51->general_control_addr, &boost_up_en, sizeof(boost_up_en));
+
+	if (retval < 0) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: Failed to write.\n",
+					__func__);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+
+	snprintf(data->cmd_buff, sizeof(data->cmd_buff), "OK");
+	data->cmd_state = CMD_STATUS_OK;
+
+out:
+	set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
+	mutex_lock(&data->cmd_lock);
+	data->cmd_is_running = false;
+	mutex_unlock(&data->cmd_lock);
+
+	data->cmd_state = CMD_STATUS_WAITING;
+}
+
+static void velocity_enable(void *dev_data)
+{
+	struct synaptics_rmi4_data *rmi4_data = (struct synaptics_rmi4_data *)dev_data;
+	struct factory_data *data = rmi4_data->f54->factory_data;
+
+#ifdef MM_MODE_CHANGE
+	int retval = 0;
+	unsigned char boost_up_en = 0;
+#endif
+
+	set_default_result(data);
+
+	if (data->cmd_param[0] < 0 || data->cmd_param[0] > 2) {
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+
+	if (rmi4_data->use_velocity != (data->cmd_param[0] ? true : false)) {
+		rmi4_data->use_velocity = data->cmd_param[0] ? true : false;
+		synpatics_rmi4_release_all_event(rmi4_data, RELEASE_TYPE_FINGER);
+	}
+
+#ifdef MM_MODE_CHANGE
+	if (rmi4_data->touch_stopped) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: Touch is stopped & Set flag[%d]\n",
+			__func__, data->cmd_param[0]);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "OK");
+		data->cmd_state = CMD_STATUS_OK;
+		goto out;
+	}
+
+	retval = rmi4_data->i2c_read(rmi4_data,
+	rmi4_data->f51->general_control_addr, &boost_up_en, sizeof(boost_up_en));
+
+	if (retval <= 0) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: fail to read no_sleep[ret:%d]\n",
+						__func__, retval);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+
+	/* 0: Default   , 1: Enable Boost Up 1phi */
+	if (data->cmd_param[0])
+		boost_up_en |= BOOST_UP_EN;
+	else
+		boost_up_en &= ~(BOOST_UP_EN);
+
+	retval = rmi4_data->i2c_write(rmi4_data,
+	rmi4_data->f51->general_control_addr, &boost_up_en, sizeof(boost_up_en));
+
+	if (retval < 0) {
+		tsp_debug_err(true, &rmi4_data->i2c_client->dev, "%s: Failed to write.\n",
+						__func__);
+		snprintf(data->cmd_buff, sizeof(data->cmd_buff), "NG");
+		data->cmd_state = CMD_STATUS_FAIL;
+		goto out;
+	}
+#endif
+
+	snprintf(data->cmd_buff, sizeof(data->cmd_buff), "OK");
+	data->cmd_state = CMD_STATUS_OK;
+
+out:
+	set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
 	mutex_lock(&data->cmd_lock);
 	data->cmd_is_running = false;
 	mutex_unlock(&data->cmd_lock);

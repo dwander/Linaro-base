@@ -129,12 +129,6 @@ config BCMDHD_PCIE
 	---help---
 	  Enable PCI Express I/F Support
 
-config WIFI_BROADCOM_COB
-	bool "BROADCOM COB type chip is enabled"
-	depends on (BCM4330 || BCM4334 || BCM4335 || BCM4339 || BCM4354 || BCM43241 || BCM4358 || BCM4358_A3)
-	---help---
-	  This is a configuration for COB type feature.
-
 config BCMDHD_DEBUG_PAGEALLOC
 	bool "Enable Memory Pagealloc Debugging Support"
 	depends on (BCM4354 || BCM4358)
@@ -146,3 +140,15 @@ config BCMDHD_PREALLOC_MEMDUMP
 	depends on BROADCOM_WIFI_RESERVED_MEM
 	---help---
 	  Preallocated memory support for dongle memory dump
+
+config WIFI_BROADCOM_COB
+        bool "BROADCOM COB type chip is enabled"
+        depends on BROADCOM_WIFI
+        ---help---
+          This is a configuration for broadcom WIFI COB type.
+
+config SPLIT_ARGOS_SET
+	bool "Support argos table"
+	depends on BROADCOM_WIFI
+	---help---
+	To support SPLIT_ARGOS_SET 

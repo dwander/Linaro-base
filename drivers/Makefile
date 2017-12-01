@@ -54,6 +54,7 @@ obj-$(CONFIG_CONNECTOR)		+= connector/
 obj-$(CONFIG_FB_I810)           += video/i810/
 obj-$(CONFIG_FB_INTEL)          += video/intelfb/
 
+obj-$(CONFIG_VBUS_NOTIFIER)	+= staging/samsung/sec_notifier/
 obj-$(CONFIG_USE_MUIC)		+= muic/
 
 obj-$(CONFIG_PARPORT)		+= parport/
@@ -151,7 +152,11 @@ obj-$(CONFIG_VIRT_DRIVERS)	+= virt/
 obj-$(CONFIG_HYPERV)		+= hv/
 
 obj-$(CONFIG_PM_DEVFREQ)	+= devfreq/
-obj-$(CONFIG_BATTERY_SAMSUNG)	+= battery/
+ifeq ($(CONFIG_BATTERY_SAMSUNG_V2), y)
+  obj-$(CONFIG_BATTERY_SAMSUNG)   += battery_v2/
+else
+  obj-$(CONFIG_BATTERY_SAMSUNG)   += battery/
+endif
 obj-y		+= motor/
 obj-$(CONFIG_EXTCON)		+= extcon/
 obj-$(CONFIG_MEMORY)		+= memory/

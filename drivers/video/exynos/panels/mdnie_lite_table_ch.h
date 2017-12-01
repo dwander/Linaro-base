@@ -41,6 +41,23 @@ static unsigned char coordinate_data[][3] = {
 	{0xfb, 0xff, 0xff}, /* Tune_9 */
 };
 
+static inline int get_hbm_index(int idx)
+{
+	int i = 0;
+	int idx_list[] = {
+		40000	/* idx < 40000: HBM_OFF */
+				/* idx >= 40000: HBM_ON */
+	};
+
+	while (i < ARRAY_SIZE(idx_list)) {
+		if (idx < idx_list[i])
+			break;
+		i++;
+	}
+
+	return i;
+}
+
 static unsigned char GRAYSCALE_1[] = {
 	/* start */
 	0xBA, // Start offset 0x0982, base B1h

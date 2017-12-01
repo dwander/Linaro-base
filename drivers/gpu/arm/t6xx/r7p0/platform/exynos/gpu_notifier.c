@@ -96,7 +96,7 @@ static int gpu_tmu_notifier(struct notifier_block *notifier,
 	if (!platform->tmu_status)
 		return NOTIFY_OK;
 
-	platform->voltage_margin = 0;
+	platform->voltage_margin = platform->gpu_default_vol_margin;
 	index = *(unsigned long*)v;
 
 	if (event == GPU_COLD) {
@@ -253,15 +253,18 @@ static int pm_callback_change_dvfs_level(struct kbase_device *kbdev)
 
 static int pm_callback_runtime_on(struct kbase_device *kbdev)
 {
+	unsigned long flags;
 	struct exynos_context *platform = (struct exynos_context *) kbdev->platform_context;
 	if (!platform)
 		return -ENODEV;
 
 	GPU_LOG(DVFS_INFO, LSI_GPU_ON, 0u, 0u, "runtime on callback\n");
 
+	spin_lock_irqsave(&platform->power_status_spinlock, flags);
+	platform->power_status = true;
+	spin_unlock_irqrestore(&platform->power_status_spinlock, flags);
 	gpu_control_enable_clock(kbdev);
 	gpu_dvfs_start_env_data_gathering(kbdev);
-	platform->power_status = true;
 #ifdef CONFIG_MALI_DVFS
 	if (platform->dvfs_status && platform->wakeup_lock)
 		gpu_set_target_clk_vol(platform->gpu_dvfs_start_clock, false);
@@ -278,6 +281,7 @@ static int pm_callback_runtime_on(struct kbase_device *kbdev)
 extern void preload_balance_setup(struct kbase_device *kbdev);
 static void pm_callback_runtime_off(struct kbase_device *kbdev)
 {
+	unsigned long flags;
 	struct exynos_context *platform = (struct exynos_context *) kbdev->platform_context;
 	if (!platform)
 		return;
@@ -288,7 +292,9 @@ static void pm_callback_runtime_off(struct kbase_device *kbdev)
 	gpu_dvfs_notify_poweroff();
 #endif
 
+	spin_lock_irqsave(&platform->power_status_spinlock, flags);
 	platform->power_status = false;
+	spin_unlock_irqrestore(&platform->power_status_spinlock, flags);
 
 	mutex_lock(&platform->gpu_clock_lock);
 	gpu_disable_dvs(platform);
@@ -349,6 +355,7 @@ static struct notifier_block gpu_noc_nb = {
 
 int gpu_notifier_init(struct kbase_device *kbdev)
 {
+	unsigned long flags;
 	struct exynos_context *platform = (struct exynos_context *)kbdev->platform_context;
 	if (!platform)
 		return -ENODEV;
@@ -368,7 +375,9 @@ int gpu_notifier_init(struct kbase_device *kbdev)
 #endif
 	pm_runtime_enable(kbdev->dev);
 
+	spin_lock_irqsave(&platform->power_status_spinlock, flags);
 	platform->power_status = true;
+	spin_unlock_irqrestore(&platform->power_status_spinlock, flags);
 
 	return 0;
 }

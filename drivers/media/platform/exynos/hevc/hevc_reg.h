@@ -85,6 +85,8 @@
 #define HEVC_DEC_DECODE_GEN_CRC_MASK	0x1
 #define HEVC_DEC_DECODE_GEN_CRC_SHFT	0x5
 
+#define HEVC_D_OPT_SPECIAL_PARSING_SHIFT	15
+
 #define _HEVC_SET_REG(target, val)	hevc_write_reg(val, HEVC_##target##_ADDR)
 #define HEVC_SET_REG(target, val, shadow)					\
 	do {									\

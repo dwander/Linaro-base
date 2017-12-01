@@ -1,7 +1,7 @@
 /*
  * Customer HW 4 dependant file
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -81,9 +81,12 @@
 #define SUPPORT_MULTIPLE_BOARD_REV
 #endif /* CONFIG_SEC_TRLTE_PROJECT  || defined(CONFIG_SEC_TBLTE_PROJECT) */
 
-#if defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_ARCH_MSM8994)
+#if defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_ARCH_MSM8994) || \
+	defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_SOC_EXYNOS8890)
 #define SUPPORT_MULTIPLE_MODULE_CIS
-#endif /* defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_ARCH_MSM8994) */
+#endif /* defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_ARCH_MSM8994) ||
+		* defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_SOC_EXYNOS8890)
+		*/
 
 /* PROJECTS START */
 
@@ -91,9 +94,10 @@
 #define READ_MACADDR
 #define HW_OOB
 #endif /* CONFIG_MACH_SAMSUNG_ESPRESSO && CONFIG_MACH_SAMSUNG_ESPRESSO_10 */
-#if defined(CONFIG_MACH_UNIVERSAL7420)
+
+#if defined(CONFIG_MACH_UNIVERSAL5433) || defined(CONFIG_MACH_UNIVERSAL7420)
 #define USE_EXYNOS_PCIE_RC_PMPATCH
-#endif /* CONFIG_MACH_UNIVERSAL7420 */
+#endif /* CONFIG_MACH_UNIVERSAL5433 || CONFIG_MACH_UNIVERSAL7420 */
 
 #if defined(CONFIG_MACH_UNIVERSAL5433) || defined(CONFIG_MACH_UNIVERSAL7420)
 #undef CUSTOM_SET_CPUCORE
@@ -218,7 +222,6 @@
 
 #if (CONFIG_WLAN_REGION_CODE == 202) /* KTT */
 #define VLAN_MODE_OFF
-#define CUSTOM_KEEP_ALIVE_SETTING	30000
 #define FULL_ROAMING_SCAN_PERIOD_60_SEC
 
 #ifdef CONFIG_MACH_UNIVERSAL5410
@@ -241,8 +244,6 @@
 #define BCMWAPI_WAI
 #endif /* CONFIG_WLAN_REGION_CODE >= 300 && CONFIG_WLAN_REGION_CODE < 400 */
 
-/* TX Power control when Calling by Broadcom */
-#define SARLIMIT_TX_CONTROL_NVRAM
 /* REGION CODE END */
 
 #if !defined(READ_MACADDR) && !defined(WRITE_MACADDR)

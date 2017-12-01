@@ -1,7 +1,7 @@
 /*
  * Misc system wide definitions
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmdefs.h 474209 2014-04-30 12:16:47Z $
+ * $Id: bcmdefs.h 632785 2016-04-20 12:20:03Z $
  */
 
 #ifndef	_bcmdefs_h_
@@ -171,6 +171,10 @@ typedef dma64addr_t dmaaddr_t;
 #define PHYSADDRHISET(_pa, _val) PHYSADDR64HISET(_pa, _val)
 #define PHYSADDRLO(_pa)  PHYSADDR64LO(_pa)
 #define PHYSADDRLOSET(_pa, _val) PHYSADDR64LOSET(_pa, _val)
+#define PHYSADDRTOULONG(_pa, _ulong) \
+	do { \
+		_ulong = ((unsigned long)(_pa).hiaddr << 32) | ((_pa).loaddr); \
+	} while (0)
 
 #else
 typedef unsigned long dmaaddr_t;

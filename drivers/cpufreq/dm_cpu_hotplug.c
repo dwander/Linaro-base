@@ -430,11 +430,18 @@ static struct notifier_block fb_block = {
 	.notifier_call = fb_state_change,
 };
 
+#if defined(CONFIG_SENSORS_FP_LOCKSCREEN_MODE)
+extern bool fp_lockscreen_mode;
+#else
+static bool fp_lockscreen_mode = false;
+#endif
+
 static int __ref __cpu_hotplug(bool out_flag, enum hotplug_cmd cmd)
 {
 	int i = 0;
 	int ret = 0;
 	int hotplug_out_limit = 0;
+	int tmp_nr_sleep_prepare_cpus = 0;
 
 	if (exynos_dm_hotplug_disabled())
 		return 0;
@@ -445,14 +452,22 @@ static int __ref __cpu_hotplug(bool out_flag, enum hotplug_cmd cmd)
 			goto blk_out;
 
 		if (cmd == CMD_SLEEP_PREPARE) {
-			for (i = setup_max_cpus - 1; i >= NR_CA7; i--) {
+			if(fp_lockscreen_mode)
+				/* for finger-print boosting */
+				tmp_nr_sleep_prepare_cpus = nr_sleep_prepare_cpus + 1;
+			else
+				tmp_nr_sleep_prepare_cpus = nr_sleep_prepare_cpus;
+			printk(KERN_INFO "nr_sleep_prepare_cpus : %d, tmp_nr_sleep_prepare_cpus : %d\n", 
+				nr_sleep_prepare_cpus, tmp_nr_sleep_prepare_cpus);
+
+			for (i = setup_max_cpus - 1; i >= tmp_nr_sleep_prepare_cpus; i--) {
 				if (cpu_online(i)) {
 					ret = cpu_down(i);
 					if (ret)
 						goto blk_out;
 				}
 			}
-			for (i = 1; i < nr_sleep_prepare_cpus; i++) {
+			for (i = 1; i < tmp_nr_sleep_prepare_cpus; i++) {
 				if (!cpu_online(i)) {
 					ret = cpu_up(i);
 					if (ret)

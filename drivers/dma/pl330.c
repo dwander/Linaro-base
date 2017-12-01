@@ -632,6 +632,9 @@ struct dma_pl330_dmac {
 
 	/* Peripheral channels connected to this DMAC */
 	struct dma_pl330_chan *peripherals; /* keep at end */
+
+	bool multi_irq;
+	int irqnum_having_multi;
 };
 
 struct dma_pl330_desc {
@@ -657,6 +660,10 @@ struct dma_pl330_filter_args {
 	struct dma_pl330_dmac *pdmac;
 	unsigned int chan_id;
 };
+
+#if defined(CONFIG_SCHED_HMP)
+extern struct cpumask hmp_slow_cpu_mask;
+#endif
 
 static inline void _callback(struct pl330_req *r, enum pl330_op_err err)
 {
@@ -1346,10 +1353,11 @@ static inline int _ldst_devtomem(unsigned dry_run, u8 buf[],
 		const struct _xfer_spec *pxs, int cyc)
 {
 	int off = 0;
+	enum pl330_cond cond = (pxs->r->cfg->brst_len == 1) ? SINGLE : BURST;
 
 	while (cyc--) {
-		off += _emit_WFP(dry_run, &buf[off], SINGLE, pxs->r->peri);
-		off += _emit_LDP(dry_run, &buf[off], SINGLE, pxs->r->peri);
+		off += _emit_WFP(dry_run, &buf[off], cond, pxs->r->peri);
+		off += _emit_LDP(dry_run, &buf[off], cond, pxs->r->peri);
 		off += _emit_ST(dry_run, &buf[off], ALWAYS);
 		off += _emit_FLUSHP(dry_run, &buf[off], pxs->r->peri);
 	}
@@ -1361,11 +1369,12 @@ static inline int _ldst_memtodev(unsigned dry_run, u8 buf[],
 		const struct _xfer_spec *pxs, int cyc)
 {
 	int off = 0;
+	enum pl330_cond cond = (pxs->r->cfg->brst_len == 1) ? SINGLE : BURST;
 
 	while (cyc--) {
-		off += _emit_WFP(dry_run, &buf[off], SINGLE, pxs->r->peri);
+		off += _emit_WFP(dry_run, &buf[off], cond, pxs->r->peri);
 		off += _emit_LD(dry_run, &buf[off], ALWAYS);
-		off += _emit_STP(dry_run, &buf[off], SINGLE, pxs->r->peri);
+		off += _emit_STP(dry_run, &buf[off], cond, pxs->r->peri);
 		off += _emit_FLUSHP(dry_run, &buf[off], pxs->r->peri);
 	}
 
@@ -3177,7 +3186,7 @@ pl330_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		}
 
 		desc->rqcfg.brst_size = pch->burst_sz;
-		desc->rqcfg.brst_len = 1;
+		desc->rqcfg.brst_len = pch->burst_len;
 	}
 
 	/* Return the last desc in the chain */
@@ -3223,6 +3232,29 @@ int pl330_dma_getposition(struct dma_chan *chan,
 }
 EXPORT_SYMBOL(pl330_dma_getposition);
 
+static int pl330_resume(struct device *dev)
+{
+	struct dma_pl330_dmac *pdmac;
+
+	pdmac = (struct dma_pl330_dmac *)dev_get_drvdata(dev);
+
+	if (pdmac->multi_irq) {
+		int irq = pdmac->irqnum_having_multi;
+		if (irq)
+#if defined(CONFIG_SCHED_HMP)
+			irq_set_affinity(irq, &hmp_slow_cpu_mask);
+#else
+			irq_set_affinity(irq, cpu_all_mask);
+#endif
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops pl330_pm_ops = {
+        .resume         = pl330_resume,
+};
+
 static int
 pl330_probe(struct amba_device *adev, const struct amba_id *id)
 {
@@ -3234,6 +3266,7 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
 	struct resource *res;
 	int i, ret, irq;
 	int num_chan;
+	int irq_flags = 0;
 
 	pdat = adev->dev.platform_data;
 
@@ -3256,11 +3289,26 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
 
 	amba_set_drvdata(adev, pdmac);
 
+	if (adev->dev.of_node) {
+		pdmac->multi_irq = of_dma_multi_irq(adev->dev.of_node);
+		if (pdmac->multi_irq)
+			irq_flags = IRQF_GIC_MULTI_TARGET;
+	}
+
 	irq = adev->irq[0];
-	ret = request_irq(irq, pl330_irq_handler, 0,
+	ret = request_irq(irq, pl330_irq_handler, irq_flags,
 			dev_name(&adev->dev), pi);
 	if (ret)
 		return ret;
+
+	if (pdmac->multi_irq) {
+#if defined(CONFIG_SCHED_HMP)
+		irq_set_affinity(irq, &hmp_slow_cpu_mask);
+#else
+		irq_set_affinity(irq, cpu_all_mask);
+#endif
+		pdmac->irqnum_having_multi = irq;
+	}
 
 	ret = pl330_add(pi);
 	if (ret)
@@ -3428,6 +3476,7 @@ MODULE_DEVICE_TABLE(amba, pl330_ids);
 static struct amba_driver pl330_driver = {
 	.drv = {
 		.owner = THIS_MODULE,
+		.pm = &pl330_pm_ops,
 		.name = "dma-pl330",
 	},
 	.id_table = pl330_ids,

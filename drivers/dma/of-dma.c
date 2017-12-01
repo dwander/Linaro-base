@@ -267,3 +267,16 @@ struct dma_chan *of_dma_simple_xlate(struct of_phandle_args *dma_spec,
 			&dma_spec->args[0]);
 }
 EXPORT_SYMBOL_GPL(of_dma_simple_xlate);
+
+bool of_dma_multi_irq(struct device_node *np)
+{
+	bool ret = 0;
+	const __be32	*prop;
+
+	prop = of_get_property(np, "#dma-multi-irq", NULL);
+	if (prop)
+		ret = be32_to_cpup(prop);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(of_dma_multi_irq);

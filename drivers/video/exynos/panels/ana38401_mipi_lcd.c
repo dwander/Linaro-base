@@ -40,10 +40,11 @@
 #endif
 
 #define POWER_IS_ON(pwr)				(pwr <= FB_BLANK_NORMAL)
-#define LEVEL_IS_HBM(auto_brightness, brightness)	(auto_brightness >= 6 && brightness == MAX_BRIGHTNESS)
+#define LEVEL_IS_HBM(brightness)			(brightness == EXTEND_BRIGHTNESS)
 #define LEVEL_IS_CAPS_OFF(level)			(level <= IBRIGHTNESS_39NT)
-#define LEVEL_IS_ACL_OFF(auto_brightness, brightness)	(auto_brightness < 6 && brightness == MAX_BRIGHTNESS)
+#define LEVEL_IS_ACL_OFF(brightness)			(MAX_BRIGHTNESS <= brightness && brightness <= EXTEND_BRIGHTNESS - 1)
 
+#define EXTEND_BRIGHTNESS		355
 #define MIN_BRIGHTNESS			0
 #define MAX_BRIGHTNESS			255
 #define DEFAULT_BRIGHTNESS		122
@@ -111,7 +112,6 @@ union elvss_info {
 struct lcd_info {
 	unsigned int			bl;
 	unsigned int			brightness;
-	unsigned int			auto_brightness;
 	unsigned int			acl_enable;
 	unsigned int			siop_enable;
 	unsigned int			current_acl;
@@ -135,7 +135,7 @@ struct lcd_info {
 	unsigned char			elvss_base_table[HBM_MAX][DEFAULT_PARAM_SIZE];
 	struct dynamic_aid_param_t	daid;
 	unsigned char			aor[IBRIGHTNESS_MAX][AID_PARAM_SIZE];
-	unsigned char			inter_aor_info[256][AID_PARAM_SIZE];
+	unsigned char			inter_aor_info[EXTEND_BRIGHTNESS + 1][AID_PARAM_SIZE];
 	unsigned int			connected;
 	unsigned int			connected_fail_cnt;
 
@@ -143,6 +143,9 @@ struct lcd_info {
 	unsigned int			coordinate[2];
 	unsigned char			date[2];
 	unsigned char			dump_info[3];
+
+	int						lux;
+	struct class			*mdnie_class;
 
 	/* temporary sysfs to figure out what causes read problem */
 	unsigned int			panic_enable;
@@ -628,9 +631,7 @@ static int get_backlight_level_from_brightness(int brightness)
 {
 	int backlightlevel = DEFAULT_GAMMA_INDEX;
 
-	backlightlevel = (brightness << 1) + 1;
-
-	backlightlevel = brightness_table[backlightlevel];
+	backlightlevel = brightness_table[brightness];
 
 	return backlightlevel;
 }
@@ -684,7 +685,7 @@ static int ana38401_set_acl(struct lcd_info *lcd, u8 force)
 	if (lcd->siop_enable)
 		goto acl_update;
 
-	if (!lcd->acl_enable && LEVEL_IS_ACL_OFF(lcd->auto_brightness, lcd->brightness))
+	if (!lcd->acl_enable && LEVEL_IS_ACL_OFF(lcd->brightness))
 		level = ACL_STATUS_0P;
 
 acl_update:
@@ -696,7 +697,7 @@ acl_update:
 		ret += ana38401_write(lcd, ACL_OPR_TABLE[level], DEFAULT_PARAM_SIZE);
 
 		lcd->current_acl = ACL_CUTOFF_TABLE[level][1];
-		dev_info(&lcd->ld->dev, "acl: %d, brightness: %d, auto: %d\n", lcd->current_acl, lcd->brightness, lcd->auto_brightness);
+		dev_info(&lcd->ld->dev, "acl: %d, brightness: %d\n", lcd->current_acl, lcd->brightness);
 	}
 
 	if (!ret)
@@ -745,7 +746,7 @@ static int ana38401_set_elvss(struct lcd_info *lcd, u8 force)
 		}
 	}
 
-	if (!lcd->acl_enable && LEVEL_IS_ACL_OFF(lcd->auto_brightness, lcd->brightness))
+	if (!lcd->acl_enable && LEVEL_IS_ACL_OFF(lcd->brightness))
 		acl = ACL_STATUS_0P;
 
 	elvss.offset = lcd->elvss_table[lcd->temperature][acl][elvss_level][1];
@@ -760,7 +761,7 @@ static int ana38401_set_elvss(struct lcd_info *lcd, u8 force)
 elvss_update:
 	ret += ana38401_write(lcd, SEQ_ELVSS_SET_1, DEFAULT_PARAM_SIZE);
 	ret += ana38401_write(lcd, lcd->elvss_table[lcd->temperature][acl][elvss_level], DEFAULT_PARAM_SIZE);
-	dev_info(&lcd->ld->dev, "temperature: %d, elvss: %d, %x, auto: %d\n", lcd->temperature, elvss_level, elvss.value, lcd->auto_brightness);
+	dev_info(&lcd->ld->dev, "temperature: %d, elvss: %d, %x, brightness: %d\n", lcd->temperature, elvss_level, elvss.value, lcd->brightness);
 	lcd->current_elvss.value = elvss.value;
 	if (!ret)
 		ret = -EPERM;
@@ -771,13 +772,13 @@ exit:
 
 static int ana38401_set_elvss_base(struct lcd_info *lcd, u8 force)
 {
-	int ret = 0, level = LEVEL_IS_HBM(lcd->auto_brightness, lcd->brightness);
+	int ret = 0, level = LEVEL_IS_HBM(lcd->brightness);
 
 	if (force || lcd->current_elvss_base != lcd->elvss_base_table[level][1]) {
 		ret += ana38401_write(lcd, SEQ_ELVSS_BASE_SET_1, DEFAULT_PARAM_SIZE);
 		ret += ana38401_write(lcd, lcd->elvss_base_table[level], DEFAULT_PARAM_SIZE);
 		lcd->current_elvss_base = lcd->elvss_base_table[level][1];
-		dev_info(&lcd->ld->dev, "base: %x, auto_brightness: %d\n", lcd->current_elvss_base, lcd->auto_brightness);
+		dev_info(&lcd->ld->dev, "base: %x, brightness: %d\n", lcd->current_elvss_base, lcd->brightness);
 	}
 
 	if (!ret)
@@ -1177,7 +1178,7 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 
 	lcd->bl = get_backlight_level_from_brightness(lcd->brightness);
 
-	if (LEVEL_IS_HBM(lcd->auto_brightness, lcd->brightness))
+	if (LEVEL_IS_HBM(lcd->brightness))
 		lcd->bl = IBRIGHTNESS_500NT;
 
 	if (force || lcd->ldi_enable) {
@@ -1472,45 +1473,13 @@ static ssize_t brightness_table_show(struct device *dev,
 	int i, bl;
 	char *pos = buf;
 
-	for (i = 0; i <= MAX_BRIGHTNESS; i++) {
+	for (i = 0; i <= EXTEND_BRIGHTNESS; i++) {
 		bl = get_backlight_level_from_brightness(i);
+		bl = LEVEL_IS_HBM(i) ? IBRIGHTNESS_500NT : bl;
 		pos += sprintf(pos, "%3d %3d\n", i, index_brightness_table[bl]);
 	}
 
 	return pos - buf;
-}
-
-static ssize_t auto_brightness_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct lcd_info *lcd = dev_get_drvdata(dev);
-
-	sprintf(buf, "%u\n", lcd->auto_brightness);
-
-	return strlen(buf);
-}
-
-static ssize_t auto_brightness_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct lcd_info *lcd = dev_get_drvdata(dev);
-	int value;
-	int rc;
-
-	rc = kstrtoul(buf, (unsigned int)0, (unsigned long *)&value);
-	if (rc < 0)
-		return rc;
-	else {
-		if (lcd->auto_brightness != value) {
-			dev_info(&lcd->ld->dev, "%s: %d, %d\n", __func__, lcd->auto_brightness, value);
-			mutex_lock(&lcd->bl_lock);
-			lcd->auto_brightness = value;
-			mutex_unlock(&lcd->bl_lock);
-			if (lcd->ldi_enable)
-				update_brightness(lcd, 0);
-		}
-	}
-	return size;
 }
 
 static ssize_t siop_enable_show(struct device *dev,
@@ -1736,11 +1705,43 @@ static ssize_t panic_enable_store(struct device *dev,
 	return size;
 }
 
+static ssize_t lux_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+
+	sprintf(buf, "%d\n", lcd->lux);
+
+	return strlen(buf);
+}
+
+static ssize_t lux_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd_info *lcd = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = kstrtoint(buf, 0, &value);
+
+	if (rc < 0)
+		return rc;
+
+	if (lcd->lux != value) {
+		mutex_lock(&lcd->lock);
+		lcd->lux = value;
+		mutex_unlock(&lcd->lock);
+
+		attr_store_for_each(lcd->mdnie_class, attr->attr.name, buf, size);
+	}
+
+	return size;
+}
+
 static DEVICE_ATTR(power_reduce, 0664, power_reduce_show, power_reduce_store);
 static DEVICE_ATTR(lcd_type, 0444, lcd_type_show, NULL);
 static DEVICE_ATTR(window_type, 0444, window_type_show, NULL);
 static DEVICE_ATTR(brightness_table, 0444, brightness_table_show, NULL);
-static DEVICE_ATTR(auto_brightness, 0644, auto_brightness_show, auto_brightness_store);
 static DEVICE_ATTR(siop_enable, 0664, siop_enable_show, siop_enable_store);
 static DEVICE_ATTR(temperature, 0664, temperature_show, temperature_store);
 static DEVICE_ATTR(color_coordinate, 0444, color_coordinate_show, NULL);
@@ -1748,6 +1749,7 @@ static DEVICE_ATTR(manufacture_date, 0444, manufacture_date_show, NULL);
 static DEVICE_ATTR(dump_register, 0664, dump_register_show, dump_register_store);
 static DEVICE_ATTR(write_register, 0222, NULL, write_register_store);
 static DEVICE_ATTR(panic_enable, 0664, panic_enable_show, panic_enable_store);
+static DEVICE_ATTR(lux, 0644, lux_show, lux_store);
 
 static int ana38401_probe(struct mipi_dsim_device *dsim)
 {
@@ -1780,7 +1782,7 @@ static int ana38401_probe(struct mipi_dsim_device *dsim)
 
 	lcd->dev = dsim->dev;
 	lcd->dsim = dsim;
-	lcd->bd->props.max_brightness = MAX_BRIGHTNESS;
+	lcd->bd->props.max_brightness = EXTEND_BRIGHTNESS;
 	lcd->bd->props.brightness = DEFAULT_BRIGHTNESS;
 	lcd->brightness = lcd->current_brightness = DEFAULT_BRIGHTNESS;
 	lcd->bl = DEFAULT_GAMMA_INDEX;
@@ -1792,10 +1794,10 @@ static int ana38401_probe(struct mipi_dsim_device *dsim)
 #else
 	lcd->power = FB_BLANK_UNBLANK;
 #endif
-	lcd->auto_brightness = 0;
 	lcd->connected = 1;
 	lcd->siop_enable = 0;
 	lcd->temperature = TEMP_ABOVE_MINUS_00_DEGREE;
+	lcd->lux = -1;
 
 	ret = device_create_file(&lcd->ld->dev, &dev_attr_power_reduce);
 	if (ret < 0)
@@ -1810,10 +1812,6 @@ static int ana38401_probe(struct mipi_dsim_device *dsim)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
 	ret = device_create_file(&lcd->bd->dev, &dev_attr_brightness_table);
-	if (ret < 0)
-		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
-
-	ret = device_create_file(&lcd->bd->dev, &dev_attr_auto_brightness);
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
@@ -1845,6 +1843,10 @@ static int ana38401_probe(struct mipi_dsim_device *dsim)
 	if (ret < 0)
 		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
+	ret = device_create_file(&lcd->ld->dev, &dev_attr_lux);
+	if (ret < 0)
+		dev_err(&lcd->ld->dev, "failed to add sysfs entries, %d\n", __LINE__);
+
 	mutex_init(&lcd->lock);
 	mutex_init(&lcd->bl_lock);
 
@@ -1872,6 +1874,7 @@ static int ana38401_probe(struct mipi_dsim_device *dsim)
 
 #if defined(CONFIG_DECON_MDNIE_LITE)
 	mdnie_register(&lcd->ld->dev, lcd, (mdnie_w)ana38401_write_set, (mdnie_r)ana38401_read, &tune_info);
+	lcd->mdnie_class = get_mdnie_class();
 #endif
 
 	/* 11-2. Change Gamma_Offset_Index */

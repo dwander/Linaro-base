@@ -1,7 +1,7 @@
 /*
  * DHD PROP_TXSTATUS Module.
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_wlfc.c 496585 2014-08-13 16:37:50Z $
+ * $Id: dhd_wlfc.c 680008 2017-01-18 07:00:48Z $
  *
  */
 
@@ -94,7 +94,7 @@ _dhd_wlfc_prec_enque(struct pktq *pq, int prec, void* p, bool qHead,
 
 
 	ASSERT(prec >= 0 && prec < pq->num_prec);
-	ASSERT(PKTLINK(p) == NULL);         /* queueing chains not allowed */
+	ASSERT(PKTLINK(p) == NULL);		/* queueing chains not allowed */
 
 	ASSERT(!pktq_full(pq));
 	ASSERT(!pktq_pfull(pq, prec));
@@ -2574,19 +2574,28 @@ int
 dhd_wlfc_suspend(dhd_pub_t *dhd)
 {
 
+	uint32 iovbuf[4]; /* Room for "tlv" + '\0' + parameter */
 	uint32 tlv = 0;
 
 	DHD_TRACE(("%s: masking wlfc events\n", __FUNCTION__));
 	if (!dhd->wlfc_enabled)
 		return -1;
 
-	if (!dhd_wl_ioctl_get_intiovar(dhd, "tlv", &tlv, WLC_GET_VAR, FALSE, 0))
+	bcm_mkiovar("tlv", NULL, 0, (char*)iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0) < 0) {
+		DHD_ERROR(("%s: failed to get bdcv2 tlv signaling\n", __FUNCTION__));
 		return -1;
+	}
+	tlv = iovbuf[0];
 	if ((tlv & (WLFC_FLAGS_RSSI_SIGNALS | WLFC_FLAGS_XONXOFF_SIGNALS)) == 0)
 		return 0;
 	tlv &= ~(WLFC_FLAGS_RSSI_SIGNALS | WLFC_FLAGS_XONXOFF_SIGNALS);
-	if (!dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0))
+	bcm_mkiovar("tlv", (char *)&tlv, 4, (char*)iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
+		DHD_ERROR(("%s: failed to set bdcv2 tlv signaling to 0x%x\n",
+			__FUNCTION__, tlv));
 		return -1;
+	}
 
 	return 0;
 }
@@ -2594,20 +2603,29 @@ dhd_wlfc_suspend(dhd_pub_t *dhd)
 	int
 dhd_wlfc_resume(dhd_pub_t *dhd)
 {
+	uint32 iovbuf[4]; /* Room for "tlv" + '\0' + parameter */
 	uint32 tlv = 0;
 
 	DHD_TRACE(("%s: unmasking wlfc events\n", __FUNCTION__));
 	if (!dhd->wlfc_enabled)
 		return -1;
 
-	if (!dhd_wl_ioctl_get_intiovar(dhd, "tlv", &tlv, WLC_GET_VAR, FALSE, 0))
+	bcm_mkiovar("tlv", NULL, 0, (char*)iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0) < 0) {
+		DHD_ERROR(("%s: failed to get bdcv2 tlv signaling\n", __FUNCTION__));
 		return -1;
+	}
+	tlv = iovbuf[0];
 	if ((tlv & (WLFC_FLAGS_RSSI_SIGNALS | WLFC_FLAGS_XONXOFF_SIGNALS)) ==
 		(WLFC_FLAGS_RSSI_SIGNALS | WLFC_FLAGS_XONXOFF_SIGNALS))
 		return 0;
 	tlv |= (WLFC_FLAGS_RSSI_SIGNALS | WLFC_FLAGS_XONXOFF_SIGNALS);
-	if (!dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0))
+	bcm_mkiovar("tlv", (char *)&tlv, 4, (char*)iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, (char*)iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
+		DHD_ERROR(("%s: failed to set bdcv2 tlv signaling to 0x%x\n",
+			__FUNCTION__, tlv));
 		return -1;
+	}
 
 	return 0;
 }
@@ -3083,6 +3101,7 @@ EXIT:
 int
 dhd_wlfc_init(dhd_pub_t *dhd)
 {
+	char iovbuf[14]; /* Room for "tlv" + '\0' + parameter */
 	/* enable all signals & indicate host proptxstatus logic is active */
 	uint32 tlv, mode, fw_caps;
 	int ret = 0;
@@ -3114,22 +3133,29 @@ dhd_wlfc_init(dhd_pub_t *dhd)
 	*/
 
 	/* enable proptxtstatus signaling by default */
-	if (!dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0)) {
+	bcm_mkiovar("tlv", (char *)&tlv, 4, iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
+		DHD_ERROR(("dhd_wlfc_init(): failed to enable/disable bdcv2 tlv signaling\n"));
+	}
+	else {
 		/*
 		Leaving the message for now, it should be removed after a while; once
 		the tlv situation is stable.
 		*/
-		DHD_INFO(("dhd_wlfc_init(): successfully %s bdcv2 tlv signaling, %d\n",
+		DHD_ERROR(("dhd_wlfc_init(): successfully %s bdcv2 tlv signaling, %d\n",
 			dhd->wlfc_enabled?"enabled":"disabled", tlv));
 	}
 
-	mode = 0;
-
 	/* query caps */
-	ret = dhd_wl_ioctl_get_intiovar(dhd, "wlfc_mode", &fw_caps, WLC_GET_VAR, FALSE, 0);
+	ret = bcm_mkiovar("wlfc_mode", (char *)&mode, 4, iovbuf, sizeof(iovbuf));
+	if (ret > 0) {
+		ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
+	}
 
-	if (!ret) {
-		DHD_INFO(("%s: query wlfc_mode succeed, fw_caps=0x%x\n", __FUNCTION__, fw_caps));
+	if (ret >= 0) {
+		fw_caps = *((uint32 *)iovbuf);
+		mode = 0;
+		DHD_ERROR(("%s: query wlfc_mode succeed, fw_caps=0x%x\n", __FUNCTION__, fw_caps));
 
 		if (WLFC_IS_OLD_DEF(fw_caps)) {
 			/* enable proptxtstatus v2 by default */
@@ -3139,7 +3165,10 @@ dhd_wlfc_init(dhd_pub_t *dhd)
 			WLFC_SET_REUSESEQ(mode, WLFC_GET_REUSESEQ(fw_caps));
 			WLFC_SET_REORDERSUPP(mode, WLFC_GET_REORDERSUPP(fw_caps));
 		}
-		ret = dhd_wl_ioctl_set_intiovar(dhd, "wlfc_mode", mode, WLC_SET_VAR, TRUE, 0);
+		ret = bcm_mkiovar("wlfc_mode", (char *)&mode, 4, iovbuf, sizeof(iovbuf));
+		if (ret > 0) {
+			ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+		}
 	}
 
 	dhd_os_wlfc_block(dhd);
@@ -3165,6 +3194,7 @@ dhd_wlfc_init(dhd_pub_t *dhd)
 int
 dhd_wlfc_hostreorder_init(dhd_pub_t *dhd)
 {
+	char iovbuf[14]; /* Room for "tlv" + '\0' + parameter */
 	/* enable only ampdu hostreorder here */
 	uint32 tlv;
 
@@ -3178,7 +3208,8 @@ dhd_wlfc_hostreorder_init(dhd_pub_t *dhd)
 	tlv = WLFC_FLAGS_HOST_RXRERODER_ACTIVE;
 
 	/* enable proptxtstatus signaling by default */
-	if (dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0)) {
+	bcm_mkiovar("tlv", (char *)&tlv, 4, iovbuf, sizeof(iovbuf));
+	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
 		DHD_ERROR(("%s(): failed to enable/disable bdcv2 tlv signaling\n",
 			__FUNCTION__));
 	}
@@ -3246,6 +3277,7 @@ dhd_wlfc_cleanup(dhd_pub_t *dhd, f_processpkt_t fn, void *arg)
 int
 dhd_wlfc_deinit(dhd_pub_t *dhd)
 {
+	char iovbuf[32]; /* Room for "ampdu_hostreorder" or "tlv" + '\0' + parameter */
 	/* cleanup all psq related resources */
 	athost_wl_status_info_t* wlfc;
 	uint32 tlv = 0;
@@ -3267,17 +3299,37 @@ dhd_wlfc_deinit(dhd_pub_t *dhd)
 	dhd_os_wlfc_unblock(dhd);
 
 	/* query ampdu hostreorder */
-	(void) dhd_wl_ioctl_get_intiovar(dhd, "ampdu_hostreorder",
-			&hostreorder, WLC_GET_VAR, FALSE, 0);
+	bcm_mkiovar("ampdu_hostreorder", NULL, 0, iovbuf, sizeof(iovbuf));
+	ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0);
+	if (ret == BCME_OK)
+		hostreorder = *((uint32 *)iovbuf);
+	else {
+		hostreorder = 0;
+		DHD_ERROR(("%s():%d, ampdu_hostreorder get failed Err = %d\n",
+			__FUNCTION__, __LINE__, ret));
+	}
 
 	if (hostreorder) {
 		tlv = WLFC_FLAGS_HOST_RXRERODER_ACTIVE;
 		DHD_ERROR(("%s():%d, maintain HOST RXRERODER flag in tvl\n",
-					__FUNCTION__, __LINE__));
+			__FUNCTION__, __LINE__));
 	}
 
 	/* Disable proptxtstatus signaling for deinit */
-	(void) dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0);
+	bcm_mkiovar("tlv", (char *)&tlv, 4, iovbuf, sizeof(iovbuf));
+	ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
+
+	if (ret == BCME_OK) {
+		/*
+		Leaving the message for now, it should be removed after a while; once
+		the tlv situation is stable.
+		*/
+		DHD_ERROR(("%s():%d successfully %s bdcv2 tlv signaling, %d\n",
+			__FUNCTION__, __LINE__,
+			dhd->wlfc_enabled?"enabled":"disabled", tlv));
+	} else
+		DHD_ERROR(("%s():%d failed to enable/disable bdcv2 tlv signaling Err = %d\n",
+			__FUNCTION__, __LINE__, ret));
 
 	dhd_os_wlfc_block(dhd);
 
@@ -3895,6 +3947,7 @@ int dhd_wlfc_get_module_ignore(dhd_pub_t *dhd, int *val)
 
 int dhd_wlfc_set_module_ignore(dhd_pub_t *dhd, int val)
 {
+	char iovbuf[14]; /* Room for "tlv" + '\0' + parameter */
 	uint32 tlv = 0;
 	bool bChanged = FALSE;
 
@@ -3924,7 +3977,8 @@ int dhd_wlfc_set_module_ignore(dhd_pub_t *dhd, int val)
 
 	if (bChanged) {
 		/* select enable proptxtstatus signaling */
-		if (dhd_wl_ioctl_set_intiovar(dhd, "tlv", tlv, WLC_SET_VAR, TRUE, 0)) {
+		bcm_mkiovar("tlv", (char *)&tlv, 4, iovbuf, sizeof(iovbuf));
+		if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
 			DHD_ERROR(("%s: failed to set bdcv2 tlv signaling to 0x%x\n",
 				__FUNCTION__, tlv));
 		}

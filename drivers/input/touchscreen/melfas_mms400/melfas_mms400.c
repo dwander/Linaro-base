@@ -293,12 +293,10 @@ void mms_tsp_dump(void)
 {
 	printk(KERN_ERR "mms %s: start \n", __func__);
 
-#if defined(CONFIG_SAMSUNG_LPM_MODE)
 	if (lpcharge) {
 		printk(KERN_ERR "%s, ignored ## lpm charging Mode!!\n", __func__);
 		return;
 	}
-#endif
 	if (p_ghost_check == NULL){
 		printk(KERN_ERR "%s, ignored ## tsp probe fail!!\n", __func__);
 		return;
@@ -846,7 +844,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct input_dev *input_dev;
 	int ret = 0;
 
-	pr_err("%s [START]\n", __func__);
+	pr_info("%s [START]\n", __func__);
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C)) {
 		dev_err(&client->dev,
@@ -1140,13 +1138,11 @@ static struct i2c_driver mms_driver = {
  */
 static int __init mms_init(void)
 {
-	pr_err("%s\n", __func__);
-#if defined(CONFIG_SAMSUNG_LPM_MODE)
+	pr_info("%s\n", __func__);
 	if (lpcharge) {
 		pr_notice("%s : LPM Charging Mode!!\n", __func__);
 		return 0;
 	}
-#endif
 	return i2c_add_driver(&mms_driver);
 }
 

@@ -89,6 +89,8 @@ void s5p_mfc_enc_calc_src_size(struct s5p_mfc_ctx *ctx);
 						S5P_FIMV_RET_INSTANCE_ID)
 #define s5p_mfc_get_enc_dpb_count()	readl(dev->regs_base + \
 						S5P_FIMV_E_NUM_DPB)
+#define s5p_mfc_get_enc_scratch_size()	readl(dev->regs_base + \
+						S5P_FIMV_E_MIN_SCRATCH_BUFFER_SIZE)
 #define s5p_mfc_get_enc_strm_size()	readl(dev->regs_base + \
 						S5P_FIMV_E_STREAM_SIZE)
 #define s5p_mfc_get_enc_slice_type()	readl(dev->regs_base + \
@@ -121,7 +123,7 @@ void s5p_mfc_enc_calc_src_size(struct s5p_mfc_ctx *ctx);
 						S5P_FIMV_D_DISPLAY_FIRST_ADDR)
 #define mfc_get_dec_first_addr()	readl(dev->regs_base + \
 						S5P_FIMV_D_DECODED_FIRST_ADDR)
-#define mfc_get_last_disp_info()	((readl(dev->regs_base + 			\
+#define mfc_get_last_disp_info()	((readl(dev->regs_base +			\
 						S5P_FIMV_D_DISPLAY_STATUS)		\
 						>> S5P_FIMV_DISPLAY_LAST_INFO_SHIFT)	\
 						& S5P_FIMV_DISPLAY_LAST_INFO_MASK)
