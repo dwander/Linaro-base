@@ -901,6 +901,7 @@ static int gpio_keys_probe(struct platform_device *pdev)
 	struct input_dev *input;
 	int i, error;
 	int wakeup = 0;
+	char *code_name = "";
 #ifdef CONFIG_OF
 	struct device_node *node, *pp;
 #endif
@@ -1002,7 +1003,6 @@ static int gpio_keys_probe(struct platform_device *pdev)
 
 	for (i = 0; i < pdata->nbuttons; i++) {
 		struct gpio_button_data *bdata = &ddata->data[i];
-		char *code_name;
 
 		if (bdata->button->code == KEY_POWER)
 			code_name = "POWER_KEY";
