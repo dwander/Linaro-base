@@ -327,6 +327,6 @@ void process_pd(void *data, u8 plug_attach_done, u8 *pdic_attach, MSG_IRQ_STATUS
 		pd_noti.sink_status.selected_pdo_num = 0;
 		pd_noti.event = PDIC_NOTIFY_EVENT_DETACH;
 	}
-	pdic_notifier_call(pd_noti);
+	pdic_notifier_call(&pd_noti);
 #endif
 }

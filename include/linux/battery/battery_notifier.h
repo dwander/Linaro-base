@@ -101,6 +101,7 @@ typedef struct _pdic_sink_status {
 	int available_pdo_num; // the number of available PDO
 	int selected_pdo_num; // selected number of PDO to change
 	int current_pdo_num; // current number of PDO
+	int total_pdo_num;
 	unsigned int rp_currentlvl; // rp current level by ccic
 } PDIC_SINK_STATUS;
 

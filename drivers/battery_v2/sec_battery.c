@@ -2989,7 +2989,9 @@ static void sec_bat_time_to_full_work(struct work_struct *work)
 }
 #endif
 
+#ifdef USB_TYPEC_MANAGER_NOTIFIER
 extern bool get_usb_enumeration_state(void);
+#endif
 /* To disaply slow charging when usb charging 100MA*/
 static void sec_bat_check_slowcharging_work(struct work_struct *work)
 {
@@ -2997,8 +2999,12 @@ static void sec_bat_check_slowcharging_work(struct work_struct *work)
 				struct sec_battery_info, slowcharging_work.work);
 
 	if (battery->cable_type == SEC_BATTERY_CABLE_USB) {
+#ifdef USB_TYPEC_MANAGER_NOTIFIER
 		if (!get_usb_enumeration_state() &&
 			(battery->current_event & SEC_BAT_CURRENT_EVENT_USB_100MA)) {
+#else
+		if (battery->current_event & SEC_BAT_CURRENT_EVENT_USB_100MA) {
+#endif
 			sec_bat_set_misc_event(battery, BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE, 0);
 			battery->max_charge_power = battery->input_voltage * battery->current_max;
 		}

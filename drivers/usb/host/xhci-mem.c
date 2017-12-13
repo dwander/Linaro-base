@@ -2367,11 +2367,11 @@ int xhci_mem_init(struct xhci_hcd *xhci, gfp_t flags)
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	INIT_DELAYED_WORK(&xhci->cmd_timer, xhci_handle_command_timeout);
 	init_completion(&xhci->cmd_ring_stop_completion);
-#endif
-
+#else
 	/* init command timeout timer */
 	setup_timer(&xhci->cmd_timer, xhci_handle_command_timeout,
 		    (unsigned long)xhci);
+#endif
 
 	page_size = readl(&xhci->op_regs->page_size);
 	xhci_dbg_trace(xhci, trace_xhci_dbg_init,
