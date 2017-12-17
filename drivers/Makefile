@@ -177,6 +177,9 @@ obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 # Mobicore driver
 obj-$(CONFIG_TRUSTONIC_TEE) += gud/
 
+# hardware acceleration for vision
+obj-$(CONFIG_VISION_SUPPORT)    += vision/ 
+
 # DS5 streamline
 obj-$(CONFIG_GATOR)		+= gator/
 

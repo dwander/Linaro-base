@@ -555,6 +555,30 @@ static struct platform_driver exynos_ion_driver __refdata = {
 	}
 };
 
+struct ion_client *exynos_ion_client_create(const char *name)
+{
+	return ion_client_create(ion_exynos, name);
+}
+
+static void exynos_flush_sg(struct device *dev, size_t size,
+			    struct scatterlist *sgl, int nelems)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i) {
+		size_t sg_len = min_t(size_t, size, sg->length);
+		void *virt = phys_to_virt(dma_to_phys(dev, sg->dma_address));
+
+		__dma_flush_range(virt, virt + sg_len);
+
+		if (size > sg->length)
+			size -= sg->length;
+		else
+			break;
+	}
+}
+
 static int __init exynos_ion_init(void)
 {
 	return platform_driver_register(&exynos_ion_driver);
@@ -617,6 +641,33 @@ static void __exynos_sync_sg_for_cpu(struct device *dev, size_t size,
 	__exynos_sync_sg_for_cpu(dev, size, sg, nents, dir)
 #define exynos_sync_all					flush_all_cpu_caches
 #endif
+
+void exynos_ion_flush_dmabuf_for_device(struct device *dev,
+					struct dma_buf *dmabuf, size_t size)
+{
+	struct ion_buffer *buffer = (struct ion_buffer *)dmabuf->priv;
+
+	if (!ion_buffer_cached(buffer) ||
+		ion_buffer_fault_user_mappings(buffer))
+		return;
+
+	mutex_lock(&buffer->lock);
+
+	pr_debug("%s: flushing for device %s, buffer: %p, size: %zd\n",
+		 __func__, dev ? dev_name(dev) : "null", buffer, size);
+
+	trace_ion_sync_start(_RET_IP_, dev, DMA_BIDIRECTIONAL, size,
+			     buffer->vaddr, 0, size >= ION_FLUSH_ALL_HIGHLIMIT);
+
+	exynos_flush_sg(dev, size, buffer->sg_table->sgl,
+			buffer->sg_table->nents);
+
+	trace_ion_sync_end(_RET_IP_, dev, DMA_BIDIRECTIONAL, size,
+			   buffer->vaddr, 0, size >= ION_FLUSH_ALL_HIGHLIMIT);
+
+	mutex_unlock(&buffer->lock);
+}
+EXPORT_SYMBOL(exynos_ion_flush_dmabuf_for_device);
 
 void exynos_ion_sync_dmabuf_for_device(struct device *dev,
 					struct dma_buf *dmabuf,
